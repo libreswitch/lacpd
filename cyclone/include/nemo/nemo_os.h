@@ -1,0 +1,146 @@
+/*
+ * Copyright (C) 2005-2015 Hewlett-Packard Development Company, L.P.
+ * All Rights Reserved.
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License"); you may
+ *   not use this file except in compliance with the License. You may obtain
+ *   a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ *   WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ *   License for the specific language governing permissions and limitations
+ *   under the License.
+ */
+
+/***************************************************************************
+ *  File         : nemo_os.h                                          
+ *  Description  : The file is used by modules that reside both in
+ *                 userspace (i.e. in simcore) as well as in the real kernel
+ ***************************************************************************/
+#ifndef     _NEMO_OS_H
+#define     _NEMO_OS_H
+
+#ifndef   _KERNEL
+/* user-space stuff (*bsd, linux, solaris) */
+
+#include <assert.h>
+#ifdef __NetBSD__
+#include <inttypes.h> /* required by unistd.h */
+#endif
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <nemo/nemo_types.h> 
+
+/* the n_assert() on the malloc return value will probably be removed in
+   production code */
+#define    NEMO_MALLOC(space,cast,size)   { space = (cast) malloc(size); \
+                                            n_assert(space != NULL);}
+
+#define    NEMO_FREE(x)                   free(x)
+#define    NEMO_BZERO(src,len)            bzero(src,len)
+#define    NEMO_BCOPY(src,dst,len)        bcopy((void *)(src), (void *)(dst),\
+                                                (size_t)(len))
+#define    NEMO_STRCPY(dst,src)           strcpy(dst, src)
+#define    NEMO_STRNCPY(dst,src,n)        strncpy(dst, src, n)
+
+#define    NEMO_STRCMP(dst,src)           strcmp(dst,src)
+#define    NEMO_STRCASECMP(dst,src)       strcasecmp(dst,src)
+#define    KTBL_ENTER_CRITICAL()
+#define    KTBL_EXIT_CRITICAL()
+#define    NEMO_STRDUP(in)                strdup(in)
+
+#define    NEMO_ABORT()                   abort()
+
+    
+#else
+/* This is specific to the NETBSD 1.5 kernel */
+
+#include <machine/stdarg.h>
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/malloc.h>
+
+#ifndef    TRUE
+#define    TRUE                             1
+#endif 
+
+#ifndef    FALSE
+#define    FALSE                            0 
+#endif
+
+
+#define	   NEMO_MALLOC(space,cast,size)   MALLOC(space, cast, size, M_FREE,\
+                                                 M_NOWAIT)
+#define    NEMO_FREE(x)                   FREE(x,M_FREE)
+
+#define	   NEMO_COPYIN(ret,from,to,cast,size) \
+                                          NEMO_MALLOC(to, cast, size);  \
+                                          if (to)                       \
+                                              ret = copyin(from, to, size); \
+                                          else \
+                                              ret = -1;
+
+#define    NEMO_BZERO(src,len)            bzero(src,len)
+#define    NEMO_BCOPY(src,dst,len)        bcopy(src,dst,len)
+#define    NEMO_STRCPY(dst,src)           strcpy(dst,src)
+#define    NEMO_STRNCPY(dst,src,n)        strncpy(dst,src,n)
+#define    NEMO_STRCMP(dst,src)           strcmp(dst,src)
+#define    NEMO_STRCASECMP(dst,src)       strncasecmp(dst,src,strlen(dst))
+#define    KTBL_ENTER_CRITICAL()
+#define    KTBL_EXIT_CRITICAL()
+
+/* a pretty interestingly constructed macro */
+#define NEMO_STRDUP(in)                                            \
+({                                                                 \
+    char *out;                                                     \
+                                                                   \
+    NEMO_MALLOC(out, char *, strlen(in) + 1);                      \
+    strcpy(out, in);                                               \
+})
+
+    
+/*
+ * Define replacements for the logging functions from nlib
+ * for use in the kernel
+ */
+#ifndef STARSHIP
+#define n_assert(stmt) {                                           \
+        if(!(stmt))                                                \
+            panic("Assertion failure in %s: (" #stmt ")\n", __FUNCTION__); \
+    }
+#else
+#define n_assert(stmt) {                                           \
+        extern void nemo_dump_stack(int count);                    \
+        if (!(stmt)) {                                             \
+            printf("\nASSERTION FAILURE IN %s: (" #stmt ")\n", __FUNCTION__); \
+            nemo_dump_stack(5);                                    \
+        }                                                          \
+    }
+#endif
+
+#define NEMO_ABORT() {panic("Abort in %s\n", __FUNCTION__);}
+
+#endif /* _KERNEL */
+
+/* compatibility */
+#define NEM_MALLOC NEMO_MALLOC
+#define NEM_FREE NEMO_FREE
+#define NEM_BZERO NEMO_BZERO
+#define NEM_BCOPY NEMO_BCOPY
+#define NEM_STR_CPY NEMO_STRCPY
+#define NEM_STR_CMP NEMO_STRCMP
+#define NEM_STR_CASE_CMP NEMO_STRCASECMP
+#define NEMO_HTONL64(x) htobe64(x)
+#define NEMO_NTOHL64(x) be64toh(x)
+
+#endif    /* _NEMO_OS_H */
