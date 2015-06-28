@@ -30,21 +30,20 @@
 #include <semaphore.h>
 
 typedef struct qelem {
-	struct qelem   *q_forw;
-	struct qelem   *q_back;
-	void           *q_data;
+    struct qelem   *q_forw;
+    struct qelem   *q_back;
+    void           *q_data;
 } qelem_t;
 
 typedef struct mqueue {
-	qelem_t         q_head;
-	qelem_t         q_tail;
-	pthread_mutex_t q_mutex;
-	sem_t           q_avail;
+    qelem_t         q_head;
+    qelem_t         q_tail;
+    pthread_mutex_t q_mutex;
+    sem_t           q_avail;
 } mqueue_t;
 
-int mqueue_init(mqueue_t *queue);
-int mqueue_send(mqueue_t *queue, void *data);
-int mqueue_wait(mqueue_t *queue, void **data);
-
+extern int mqueue_init(mqueue_t *queue);
+extern int mqueue_send(mqueue_t *queue, void *data);
+extern int mqueue_wait(mqueue_t *queue, void **data);
 
 #endif  /*  __MQUEUE_H__  */

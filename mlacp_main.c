@@ -40,16 +40,13 @@
 #include <hc-utils.h>
 
 #include "lacp_halon_if.h"
-//#include "lagMIB_process.h"
 
 //***********************************************************************
 // Global & extern Variables
 //***********************************************************************
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///sem_t lacpd_snmp_sem;
 
 // Halon Change: Each of the indices below that's needed is moved into
-//          include/lacp_halon.h.
+//               include/lacp_halon.h.
 int mlacp_helper_index = MSGLIB_INVALID_INDEX;
 int diagMgr_index = MSGLIB_INVALID_INDEX;
 int l2Mgr_index   = MSGLIB_INVALID_INDEX;
@@ -86,61 +83,61 @@ extern int mvlan_sport_init(u_long  first_time);
 int
 hc_enet_init_event_rcvr(void)
 {
-	int rc;
+    int rc;
 
-	rc = mqueue_init(&lacpd_main_rcvq);
-	if (rc) {
-		RDEBUG(DL_ERROR, "Failed lacp main receive queue init: %s\n",
-		       strerror(rc));
-	}
+    rc = mqueue_init(&lacpd_main_rcvq);
+    if (rc) {
+        RDEBUG(DL_ERROR, "Failed lacp main receive queue init: %s\n",
+               strerror(rc));
+    }
 
-	return rc;
+    return rc;
 } // hc_enet_init_event_rcvr
 
 int
 ml_send_event(ML_event* event)
 {
-	int rc;
+    int rc;
 
-	rc = mqueue_send(&lacpd_main_rcvq, event);
-	if (rc) {
-		RDEBUG(DL_ERROR,
-		       "Failed to send to lacp main receive queue: %s\n",
-		       strerror(rc));
-	}
+    rc = mqueue_send(&lacpd_main_rcvq, event);
+    if (rc) {
+        RDEBUG(DL_ERROR,
+               "Failed to send to lacp main receive queue: %s\n",
+               strerror(rc));
+    }
 
-	return rc;
+    return rc;
 } // ml_send_event
 
 ML_event *
 ml_wait_for_next_event(void)
 {
-	int rc;
-	ML_event *event = NULL;
+    int rc;
+    ML_event *event = NULL;
 
-	rc = mqueue_wait(&lacpd_main_rcvq, (void**)(void *)&event);
-	if (!rc) {
-		/* Set up event->msg pointer to just after the event
-		 * structure itself. This must be done here since the
-		 * sender's event->msg pointer points sender's memory
-		 * space, and will result in fatal errors if we try to
-		 * access it in LACP process space.
-		 */
-		event->msg = (void*)(event+1);
-	} else {
-		RDEBUG(DL_ERROR, "LACP main receive queue wait error, rc=%d\n",
-		       rc);
-	}
+    rc = mqueue_wait(&lacpd_main_rcvq, (void**)(void *)&event);
+    if (!rc) {
+        /* Set up event->msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
+        event->msg = (void*)(event+1);
+    } else {
+        RDEBUG(DL_ERROR, "LACP main receive queue wait error, rc=%d\n",
+               rc);
+    }
 
-	return event;
+    return event;
 } // ml_wait_for_next_event
 
 void
 ml_event_free(ML_event* event)
 {
-	if (event != NULL) {
-		free(event);
-	}
+    if (event != NULL) {
+        free(event);
+    }
 } // ml_event_free
 
 //***********************************************************************
@@ -149,17 +146,17 @@ ml_event_free(ML_event* event)
 void
 timerHandler(void)
 {
-	ML_event *timerEvent;
+    ML_event *timerEvent;
 
-	timerEvent = (ML_event *)malloc(sizeof(ML_event));
-	if (NULL == timerEvent) {
-		RDEBUG(DL_ERROR, "Out of memory for LACP timer message.\n");
-		return;
-	}
-	memset(timerEvent, 0, sizeof(ML_event));
-	timerEvent->sender.peer = ml_timer_index;
+    timerEvent = (ML_event *)malloc(sizeof(ML_event));
+    if (NULL == timerEvent) {
+        RDEBUG(DL_ERROR, "Out of memory for LACP timer message.\n");
+        return;
+    }
+    memset(timerEvent, 0, sizeof(ML_event));
+    timerEvent->sender.peer = ml_timer_index;
 
-	ml_send_event(timerEvent);
+    ml_send_event(timerEvent);
 } // timerHandler
 
 #if 0 // HALON_TODO
@@ -169,126 +166,126 @@ timerHandler(void)
 void
 register_mcast_addr(port_handle_t lport_handle)
 {
-	int port = PM_HANDLE2PORT(lport_handle);
-	cycl_port_type[port] = PM_HANDLE2LTYPE(lport_handle);
-	mcast_registered_pbm |= PORTNUM_TO_PBM(port);
+    int port = PM_HANDLE2PORT(lport_handle);
+    cycl_port_type[port] = PM_HANDLE2LTYPE(lport_handle);
+    mcast_registered_pbm |= PORTNUM_TO_PBM(port);
 } // register_mcast_addr
 
 void
 deregister_mcast_addr(port_handle_t lport_handle)
 {
-	int port = PM_HANDLE2PORT(lport_handle);
-	mcast_registered_pbm &= ~PORTNUM_TO_PBM(port);
-	cycl_port_type[port] = PM_LPORT_INVALID;
+    int port = PM_HANDLE2PORT(lport_handle);
+    mcast_registered_pbm &= ~PORTNUM_TO_PBM(port);
+    cycl_port_type[port] = PM_LPORT_INVALID;
 } // deregister_mcast_addr
 
 int
 mlacp_send(unsigned char* data, int length, port_handle_t portHandle)
 {
-	proto_packet_t pkt;
-	int totalLength;
+    proto_packet_t pkt;
+    int totalLength;
 
-	// Set up PDU header.  This is from mlacp_send() in mlacp_klib.c.
-	data[0] = 0x01;
-	data[1] = 0x80;
-	data[2] = 0xC2;
-	data[3] = 0x00;
-	data[4] = 0x00;
-	data[5] = 0x02;
+    // Set up PDU header.  This is from mlacp_send() in mlacp_klib.c.
+    data[0] = 0x01;
+    data[1] = 0x80;
+    data[2] = 0xC2;
+    data[3] = 0x00;
+    data[4] = 0x00;
+    data[5] = 0x02;
 
-	data[6] = my_mac_addr[0];
-	data[7] = my_mac_addr[1];
-	data[8] = my_mac_addr[2];
-	data[9] = my_mac_addr[3];
-	data[10] = my_mac_addr[4];
-	data[11] = my_mac_addr[5];
+    data[6] = my_mac_addr[0];
+    data[7] = my_mac_addr[1];
+    data[8] = my_mac_addr[2];
+    data[9] = my_mac_addr[3];
+    data[10] = my_mac_addr[4];
+    data[11] = my_mac_addr[5];
 
-	data[12] = 0x88;
-	data[13] = 0x09;
+    data[12] = 0x88;
+    data[13] = 0x09;
 
-	pkt.header.port = PM_HANDLE2PORT(portHandle);
+    pkt.header.port = PM_HANDLE2PORT(portHandle);
 
-	memcpy(pkt.data, data, length);
+    memcpy(pkt.data, data, length);
 
-	totalLength = length+sizeof(proto_pkt_header_t);
+    totalLength = length+sizeof(proto_pkt_header_t);
 
-	// --- HALON - send via DAL interface ---
-	halon_send_lacpdu((unsigned char *)&pkt, totalLength, pkt.header.port);
+    // --- HALON - send via DAL interface ---
+    halon_send_lacpdu((unsigned char *)&pkt, totalLength, pkt.header.port);
 
-	return 0;
+    return 0;
 } // mlacp_send
 
 void
 halon_lacpdu_rx(proto_packet_t *shalPkt, int count)
 {
-	if (count < 0) {
-		RDEBUG(DL_ERROR, "Invalid LACPDU length len=%d", count);
-		return;
-	}
+    if (count < 0) {
+        RDEBUG(DL_ERROR, "Invalid LACPDU length len=%d", count);
+        return;
+    }
 
-	if (!shal_port_is_valid(shalPkt->header.port)) {
-		// Bad port number.  Ignore this packet.
-		RDEBUG(DL_ERROR,
-		       "LACP rx processing, Invalid port number=%d",
-		       shalPkt->header.port);
-		return;
-	}
+    if (!shal_port_is_valid(shalPkt->header.port)) {
+        // Bad port number.  Ignore this packet.
+        RDEBUG(DL_ERROR,
+               "LACP rx processing, Invalid port number=%d",
+               shalPkt->header.port);
+        return;
+    }
 
-	RDEBUG(DL_LACPDU,
-	       " --- LACP Proto Rx Thread: rx pkt from port=%d  length=%d\n",
-	       shalPkt->header.port, count);
+    RDEBUG(DL_LACPDU,
+           " --- LACP Proto Rx Thread: rx pkt from port=%d  length=%d\n",
+           shalPkt->header.port, count);
 
-	// Ignore any LACPDU from ports that aren't ready to handle LACPDUs.
-	if (!(mcast_registered_pbm & PORTNUM_TO_PBM(shalPkt->header.port))) {
-		return;
-	}
+    // Ignore any LACPDU from ports that aren't ready to handle LACPDUs.
+    if (!(mcast_registered_pbm & PORTNUM_TO_PBM(shalPkt->header.port))) {
+        return;
+    }
 
-	//*********************************************
-	//*	          LACPDU Packet               *
-	//*********************************************
-	if (shalPkt->header.msgType == PROTO_DATA_PKT) {
-		count -= sizeof(proto_pkt_header_t);
+    //*********************************************
+    //*           LACPDU Packet                   *
+    //*********************************************
+    if (shalPkt->header.msgType == PROTO_DATA_PKT) {
+        count -= sizeof(proto_pkt_header_t);
 
-		RDEBUG(DL_LACPDU, " --- LACPDU Received, PDU length=%d\n", count);
+        RDEBUG(DL_LACPDU, " --- LACPDU Received, PDU length=%d\n", count);
 
-		// Allocate a new PDU event message and send it to LACP main.
-		struct MLt_drivers_mlacp__rxPdu *pkt_event;
-		ML_event *event;
-		int total_msg_size;
+        // Allocate a new PDU event message and send it to LACP main.
+        struct MLt_drivers_mlacp__rxPdu *pkt_event;
+        ML_event *event;
+        int total_msg_size;
 
-		if (count <= MAX_LACPDU_PKT_SIZE) {
-			// Cyclone LACPDU size hard-coded to 124 max.
-			// See MLt_drivers_mlacp__rxPdu in include/nemo/protocol/drivers/mlacp.h
+        if (count <= MAX_LACPDU_PKT_SIZE) {
+            // Cyclone LACPDU size hard-coded to 124 max.
+            // See MLt_drivers_mlacp__rxPdu in include/nemo/protocol/drivers/mlacp.h
 
-			total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
-			event = (ML_event*)malloc(total_msg_size);
+            total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
+            event = (ML_event*)malloc(total_msg_size);
 
-			if (event != NULL) {
-				event->sender.peer = ml_bolton_index;
-				// pkt_event = (struct MLt_drivers_mlacp__rxPdu *) &(event->msgBody[0]);
-				pkt_event = (struct MLt_drivers_mlacp__rxPdu *) (event+1);
+            if (event != NULL) {
+                event->sender.peer = ml_bolton_index;
+                // pkt_event = (struct MLt_drivers_mlacp__rxPdu *) &(event->msgBody[0]);
+                pkt_event = (struct MLt_drivers_mlacp__rxPdu *) (event+1);
 
-				// NOT NEEDED.
-				//event->msg = pkt_event;
+                // NOT NEEDED.
+                //event->msg = pkt_event;
 
-				pkt_event->lport_handle = PM_SMPT2HANDLE(0, 0, shalPkt->header.port,
-									 cycl_port_type[shalPkt->header.port]);
-				pkt_event->pktLen = count;
-				memcpy(pkt_event->data, shalPkt->data, count);
+                pkt_event->lport_handle = PM_SMPT2HANDLE(0, 0, shalPkt->header.port,
+                                     cycl_port_type[shalPkt->header.port]);
+                pkt_event->pktLen = count;
+                memcpy(pkt_event->data, shalPkt->data, count);
 
-				ml_send_event(event);
-			} else {
-				RDEBUG(DL_ERROR, "No memory to send PDU!|n");
-			}
-		} else {
-			RDEBUG(DL_ERROR, "LACPDU packet size greater than %d!\n",
-			       MAX_LACPDU_PKT_SIZE);
-		}
-	} else {
-		RDEBUG(DL_ERROR, "Unknown protocol msgType=%d\n", shalPkt->header.msgType);
-	}
+                ml_send_event(event);
+            } else {
+                RDEBUG(DL_ERROR, "No memory to send PDU!|n");
+            }
+        } else {
+            RDEBUG(DL_ERROR, "LACPDU packet size greater than %d!\n",
+                   MAX_LACPDU_PKT_SIZE);
+        }
+    } else {
+        RDEBUG(DL_ERROR, "Unknown protocol msgType=%d\n", shalPkt->header.msgType);
+    }
 
-	return;
+    return;
 } // halon_lacpdu_rx
 #else
 void
@@ -303,14 +300,14 @@ deregister_mcast_addr(port_handle_t lport_handle __attribute__ ((unused)))
 
 int
 mlacp_send(unsigned char* data __attribute__ ((unused)),
-	   int length __attribute__ ((unused)),
-	   int portHandle __attribute__ ((unused)) )
+       int length __attribute__ ((unused)),
+       int portHandle __attribute__ ((unused)) )
 {
-	return 0;
+    return 0;
 }
 void
 halon_lacpdu_rx(void *shalPkt __attribute__((unused)),
-		int count __attribute__((unused)))
+        int count __attribute__((unused)))
 {
 }
 #endif // 0 HALON_TODO
@@ -326,31 +323,23 @@ lacpd_protocol_thread(void *arg __attribute__ ((unused)))
     // Detach thread to avoid memory leak upon exit.
     pthread_detach(pthread_self());
 
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///    /* We're ready so let snmp thread continue.*/
-///    if (sem_post(&lacpd_snmp_sem) < 0) {
-///		uninitialize_snmp_subagent ();
-///		exit (EXIT_FAILURE);
-///    }
-
     RDEBUG(DL_INFO, "%s : waiting for events in the main loop\n", __FUNCTION__);
 
     //*******************************************************************
     // The main receive loop starts
     //*******************************************************************
-
     while (1) {
 
-      pevent = ml_wait_for_next_event();
+        pevent = ml_wait_for_next_event();
 
-      if (lacpd_shutdown) {
-	      break;
-      }
+        if (lacpd_shutdown) {
+            break;
+        }
 
-      if (!pevent) {
-              RDEBUG(DL_ERROR, "Received NULL event!\n");
-              continue;
-      }
+        if (!pevent) {
+            RDEBUG(DL_ERROR, "Received NULL event!\n");
+            continue;
+        }
 
         if (pevent->sender.peer == ml_vlan_index) {
             //***********************************************************
@@ -378,13 +367,13 @@ lacpd_protocol_thread(void *arg __attribute__ ((unused)))
             mlacp_process_api_msg(pevent);
 
         } else if (pevent->sender.peer == ml_timer_index) {
-              struct MLt_msglib__timer *tevent = pevent->msg;
+            struct MLt_msglib__timer *tevent = pevent->msg;
             //***********************************************************
             // XXX Use this later for various LACP timers
             //***********************************************************
-              RDEBUG(DL_TIMERS, "%s : got timer event\n", __FUNCTION__);
+            RDEBUG(DL_TIMERS, "%s : got timer event\n", __FUNCTION__);
 
-              mlacp_process_timer(tevent);
+            mlacp_process_timer(tevent);
 
         } else if (pevent->sender.peer == ml_bolton_index) {
             //***********************************************************
@@ -400,18 +389,11 @@ lacpd_protocol_thread(void *arg __attribute__ ((unused)))
             //***********************************************
             // unknown/unregistered sender
             //***********************************************
-            RDEBUG(DL_ERROR, "%s : message %d from unknown sender %d\n", \
-              __FUNCTION__, pevent->msgnum, pevent->sender.peer);
+            RDEBUG(DL_ERROR, "%s : message %d from unknown sender %d\n",
+                   __FUNCTION__, pevent->msgnum, pevent->sender.peer);
         }
 
         ml_event_free(pevent);
-
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///        // handling missed snmp events
-///        if (process_snmp_events(EVENT_TYPE_ALL_MISSED, NULL)< 0) {
-///            RDEBUG(DL_ERROR,"process_snmp_events() function "
-///                   "failed for event = %d \n",EVENT_TYPE_ALL_MISSED);
-///        }
 
     } // while loop
 
@@ -424,25 +406,20 @@ lacpd_protocol_thread(void *arg __attribute__ ((unused)))
 int
 mlacp_init(u_long  first_time)
 {
-  int       status       = 0;
-#ifndef __linux__
-  struct l3lib_nemo_chassis_macs macs = {{0}};
-#endif
+    int status = 0;
 
     RENTRY();
 
     if (first_time != TRUE) {
-      RDEBUG(DL_FATAL, "Cannot handle revival from dead");
-      status = -1;
-      goto end;
-
+        RDEBUG(DL_FATAL, "Cannot handle revival from dead");
+        status = -1;
+        goto end;
     }
 
     if (lacp_init_done == TRUE) {
-      RDEBUG(DL_WARNING, "Already initialized");
-      status = -1;
-      goto end;
-
+        RDEBUG(DL_WARNING, "Already initialized");
+        status = -1;
+        goto end;
     }
 
     // Halon: Initialize super ports
@@ -454,7 +431,6 @@ mlacp_init(u_long  first_time)
     lacp_init_done  = TRUE;
 
 end:
-
     REXIT();
 
     return(status);
@@ -465,36 +441,36 @@ end:
 static int
 hc_enet_init_lacp(void)
 {
-	int rc;
-	pthread_t lacpd_thread;
-	sigset_t sigset;
+    int rc;
+    pthread_t lacpd_thread;
+    sigset_t sigset;
 
-	// Initialize LACP main task event receiver sockets.
-	hc_enet_init_event_rcvr();
+    // Initialize LACP main task event receiver sockets.
+    hc_enet_init_event_rcvr();
 
-	/**************** Thread Related ***************/
+    /**************** Thread Related ***************/
 
-	// Block all signals so the spawned threads don't receive any.
-	sigemptyset(&sigset);
-	sigfillset(&sigset);
-	pthread_sigmask(SIG_BLOCK, &sigset, NULL);
+    // Block all signals so the spawned threads don't receive any.
+    sigemptyset(&sigset);
+    sigfillset(&sigset);
+    pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-	// Spawn off the main Cyclone LACP protocol thread.
-	rc = pthread_create(&lacpd_thread,
-			    (pthread_attr_t *)NULL,
-			    lacpd_protocol_thread,
-			    NULL);
-	if (rc) {
-		SLOG_EXIT(2, "pthread_create for LACPD main protocol thread failed!\n");
-	}
+    // Spawn off the main Cyclone LACP protocol thread.
+    rc = pthread_create(&lacpd_thread,
+                        (pthread_attr_t *)NULL,
+                        lacpd_protocol_thread,
+                        NULL);
+    if (rc) {
+        SLOG_EXIT(2, "pthread_create for LACPD main protocol thread failed!\n");
+    }
 
-	// Initialize HALON interface.
-	rc = lacp_halon_init();
-	if (rc) {
-		SLOG(SLOG_ERR, "LACP Halon init failed, rc=%d", rc);
-	}
+    // Initialize HALON interface.
+    rc = lacp_halon_init();
+    if (rc) {
+        SLOG(SLOG_ERR, "LACP Halon init failed, rc=%d", rc);
+    }
 
-	return rc;
+    return rc;
 } // hc_enet_init_lacp
 
 static void
@@ -516,8 +492,6 @@ main(int argc, char *argv[])
     sigset_t sigset;
     int signum;
     struct itimerval timerVal;
-///    int rc;
-///    pthread_t snmp_thread;
 
     RENTRY();
     // slog_level = (DBG_FATAL|DBG_ERROR|DBG_WARNING);
@@ -528,36 +502,31 @@ main(int argc, char *argv[])
     //         e.g. msgLib, logging facilities, heartbeat, etc.
 
     while ((option = getopt(argc, argv, "dl:")) != EOF) {
-            switch (option) {
-            case 'd':
-                    debug = 1;
-                    break;
-            case 'l':
-                    slog_level=strtol(optarg, NULL, 0);
-                    SLOG(SLOG_NOTICE,
-                         "slog_level changed from 0x%x, now 0x%x",
-                         DBG_BASIC,
-                         slog_level);
-                    break;
-            default:
-                    usage(argc, argv);
-                    exit(EXIT_FAILURE);
-            }
+        switch (option) {
+        case 'd':
+            debug = 1;
+            break;
+        case 'l':
+            slog_level=strtol(optarg, NULL, 0);
+            SLOG(SLOG_NOTICE,
+                 "slog_level changed from 0x%x, now 0x%x",
+                 DBG_BASIC, slog_level);
+            break;
+        default:
+            usage(argc, argv);
+            exit(EXIT_FAILURE);
+        }
     }
 
     // If there's any extra arguments, fail it.
     if (optind < argc) {
-            usage(argc, argv);
-            exit(EXIT_FAILURE);
+        usage(argc, argv);
+        exit(EXIT_FAILURE);
     }
-
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///    // initialize snmp mib support
-///    initialize_snmp_subagent();
 
     // Daemonize process.
     if (!debug) {
-	    hc_daemonize(HC_DAEMON_LACPD);
+        hc_daemonize(HC_DAEMON_LACPD);
     }
 
     // Record our PID so we can signal the daemon.
@@ -576,54 +545,40 @@ main(int argc, char *argv[])
     timerVal.it_value.tv_usec = 0;
 
     if ((mlacp_tindex = setitimer(ITIMER_REAL, &timerVal, NULL)) != 0) {
-            RDEBUG(DL_ERROR, "mlacp_init: Timer start failed!\n");
+        RDEBUG(DL_ERROR, "mlacp_init: Timer start failed!\n");
     }
-
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///    // spawn SNMP LLDP subagent thread to process snmp packets
-///    rc = pthread_create(&snmp_thread, (pthread_attr_t *)NULL,
-///                            snmp_processing_thread, NULL);
-///
-///    if ( 0 != rc ) {
-///        RDEBUG(DL_ERROR, " pthread_create failed to spawn the thread!\n");
-///        uninitialize_snmp_subagent();
-///        exit(EXIT_FAILURE);
-///    }
 
     // Wait for all signals in an infinite loop.
     sigfillset(&sigset);
     while (!lacpd_shutdown) {
 
-	sigwait(&sigset, &signum);
-	switch(signum) {
+        sigwait(&sigset, &signum);
+        switch (signum) {
 
-	case SIGALRM:
-		timerHandler();
-		break;
+        case SIGALRM:
+            timerHandler();
+            break;
 
-	case SIGTERM:
-	case SIGINT:
-		RDEBUG(DL_WARNING, "%s, sig %d caught", __FUNCTION__, signum);
-		lacpd_shutdown = 1;
-		break;
+        case SIGTERM:
+        case SIGINT:
+            RDEBUG(DL_WARNING, "%s, sig %d caught", __FUNCTION__, signum);
+            lacpd_shutdown = 1;
+            break;
 
-	case SIGUSR1:
-		dump_lacp_halon_info();
-		break;
+        case SIGUSR1:
+            dump_lacp_halon_info();
+            break;
 
-	default:
-		RDEBUG(DL_INFO, "Ignoring signal %d.\n", signum);
-		break;
-	}
+        default:
+            RDEBUG(DL_INFO, "Ignoring signal %d.\n", signum);
+            break;
+        }
     }
-
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///    // stopping snmp sub agent processing.
-///    uninitialize_snmp_subagent();
 
     // ---HALON---
     lacp_halon_cleanup();
 
     exit(EXIT_SUCCESS);
+
 } // main
 #endif /* HALON */

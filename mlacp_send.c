@@ -49,117 +49,118 @@
 #ifndef ETHER_ADDR_LEN
 #define ETHER_ADDR_LEN (6)
 #endif
+
 //***********************************************************************
 // Local function prototypes
 //***********************************************************************
 
 int
-mlacp_blocking_send_select_aggregator(LAG_t *const lag,lacp_per_port_variables_t *lacp_port)
+mlacp_blocking_send_select_aggregator(LAG_t *const lag,
+                                      lacp_per_port_variables_t *lacp_port)
 {
-  struct MLt_vpm_api__lacp_match_params match_params = {0};
-  int status = R_SUCCESS;
+    struct MLt_vpm_api__lacp_match_params match_params = {0};
+    int status = R_SUCCESS;
 
-  match_params.lport_handle   = lacp_port->lport_handle;
+    match_params.lport_handle   = lacp_port->lport_handle;
 
+    //********************************************************************
+    // All flags are present, because of the default values.
+    //********************************************************************
+    match_params.flags = (LACP_LAG_PORT_TYPE_FIELD_PRESENT      |
+                          LACP_LAG_ACTOR_KEY_FIELD_PRESENT      |
+                          LACP_LAG_PARTNER_KEY_FIELD_PRESENT    |
+                          LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT |
+                          LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  |
+                          LACP_LAG_AGGRTYPE_FIELD_PRESENT);
 
-  //********************************************************************
-  // All flags are present, becaz of the default values ?
-  //********************************************************************
-  match_params.flags = (LACP_LAG_PORT_TYPE_FIELD_PRESENT      |
-                        LACP_LAG_ACTOR_KEY_FIELD_PRESENT      |
-                        LACP_LAG_PARTNER_KEY_FIELD_PRESENT    |
-                        LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT |
-                        LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  |
-                        LACP_LAG_AGGRTYPE_FIELD_PRESENT);
+    //********************************************************************
+    // Send all the params for matching.
+    //********************************************************************
+    match_params.port_type         = lag->port_type;
+    match_params.actor_key         = lag->LAG_Id->local_port_key;
+    match_params.partner_key       = lag->LAG_Id->remote_port_key;
+    match_params.local_port_number = lag->LAG_Id->local_port_number;
+    match_params.actor_aggr_type   = lacp_port->actor_oper_port_state.aggregation;
+    match_params.partner_aggr_type = lacp_port->partner_oper_port_state.aggregation;
 
-  //********************************************************************
-  // Send all the params for matching.
-  //********************************************************************
-  match_params.port_type         = lag->port_type;
-  match_params.actor_key         = lag->LAG_Id->local_port_key;
-  match_params.partner_key       = lag->LAG_Id->remote_port_key;
-  match_params.local_port_number = lag->LAG_Id->local_port_number;
-  match_params.actor_aggr_type   = lacp_port->actor_oper_port_state.aggregation;
-  match_params.partner_aggr_type = lacp_port->partner_oper_port_state.aggregation;
+    match_params.partner_system_priority =
+        lacp_port->partner_oper_system_variables.system_priority;
 
-  match_params.partner_system_priority = 
-      lacp_port->partner_oper_system_variables.system_priority;
+    bcopy(lacp_port->partner_oper_system_variables.system_mac_addr,
+          match_params.partner_system_id,
+          sizeof(macaddr_3_t));
 
-  bcopy (lacp_port->partner_oper_system_variables.system_mac_addr,
-         match_params.partner_system_id ,  
-         sizeof(macaddr_3_t));
+    RDEBUG(DL_LACP_SEND, "sending the following params to VLAN/LAG mgr :\n");
+    RDEBUG(DL_LACP_SEND, "port_type %d, actor_key 0x%x, partner_key 0x%x "
+           "partner_sys_pri %d, partner_sys_id %02x:%02x:%02x:%02x:%02x:%02x "
+           "local_port_number 0x%x\n",
+           match_params.port_type,
+           match_params.actor_key,
+           match_params.partner_key,
+           match_params.partner_system_priority,
+           match_params.partner_system_id[0],
+           match_params.partner_system_id[1],
+           match_params.partner_system_id[2],
+           match_params.partner_system_id[3],
+           match_params.partner_system_id[4],
+           match_params.partner_system_id[5],
+           match_params.local_port_number);
 
-  RDEBUG(DL_LACP_SEND, "sending the following params to VLAN/LAG mgr :\n");
-  RDEBUG(DL_LACP_SEND, "port_type %d, actor_key 0x%x, partner_key 0x%x "
-      "partner_sys_pri %d, partner_sys_id %02x:%02x:%02x:%02x:%02x:%02x "
-      "local_port_number 0x%x\n",
-      match_params.port_type,
-      match_params.actor_key,
-      match_params.partner_key,
-      match_params.partner_system_priority,
-      match_params.partner_system_id[0],
-      match_params.partner_system_id[1],
-      match_params.partner_system_id[2],
-      match_params.partner_system_id[3],
-      match_params.partner_system_id[4],
-      match_params.partner_system_id[5],
-      match_params.local_port_number);
+    // Halon: Change to direct function call.  Also sport_handle
+    //        is written directly into match_params struct.
+    status = mvlan_api_select_aggregator(&match_params);
 
+    if (R_SUCCESS == status) {
+        lacp_port->sport_handle = match_params.sport_handle;
 
-   // Halon: Change to direct function call.  Also sport_handle
-   //        is written directly into match_params struct.
-   status = mvlan_api_select_aggregator(&match_params);
+        if (lacp_port->debug_level & DBG_LACP_SEND) {
+            RDBG("%s : Got matching aggr from MVPM "
+                 "(lport 0x%llx, sport 0x%llx) !\n",
+                 __FUNCTION__, lacp_port->lport_handle,
+                 lacp_port->sport_handle);
+        }
+    } else {
+        if (lacp_port->debug_level & DBG_LACP_SEND) {
+            RDBG("%s : Failed to get matching aggr from MVPM "
+                 "(lport 0x%llx) : status %d\n",
+                 __FUNCTION__, lacp_port->lport_handle, status);
+        }
+    }
 
-   if (R_SUCCESS == status) {
-       lacp_port->sport_handle = match_params.sport_handle;
-
-       if (lacp_port->debug_level & DBG_LACP_SEND) {
-           RDBG("%s : Got matching aggr from MVPM "
-              "(lport 0x%llx, sport 0x%llx) !\n",
-              __FUNCTION__, lacp_port->lport_handle, lacp_port->sport_handle);
-       }
-   } else {
-       if (lacp_port->debug_level & DBG_LACP_SEND) {
-           RDBG("%s : Failed to get matching aggr from MVPM "
-              "(lport 0x%llx) : status %d\n",
-              __FUNCTION__, lacp_port->lport_handle, status);
-       }
-   }
-
-   return status;
+    return status;
 } // mlacp_blocking_send_select_aggregator
 
 int
 mlacp_blocking_send_attach_aggregator(lacp_per_port_variables_t *lacp_port)
 {
-  struct MLt_vpm_api__lacp_attach attach = {0};
-  int status = R_SUCCESS;
+    struct MLt_vpm_api__lacp_attach attach = {0};
+    int status = R_SUCCESS;
 
-  attach.lport_handle      = lacp_port->lport_handle;
-  attach.sport_handle      = lacp_port->sport_handle;
-  attach.partner_priority  = lacp_port->partner_oper_system_variables.system_priority;
+    attach.lport_handle      = lacp_port->lport_handle;
+    attach.sport_handle      = lacp_port->sport_handle;
+    attach.partner_priority  = lacp_port->partner_oper_system_variables.system_priority;
 
-  bcopy(lacp_port->partner_oper_system_variables.system_mac_addr,
-        attach.partner_mac_addr,
-        sizeof(macaddr_3_t));
+    bcopy(lacp_port->partner_oper_system_variables.system_mac_addr,
+          attach.partner_mac_addr,
+          sizeof(macaddr_3_t));
 
-  // Halon: Change to direct function call.
-  status = mvlan_api_attach_lport_to_aggregator(&attach);
+    // Halon: Change to direct function call.
+    status = mvlan_api_attach_lport_to_aggregator(&attach);
 
-   if (R_SUCCESS == status) {
-       if (lacp_port->debug_level & DBG_LACP_SEND) {
-	       RDBG("%s : Attached port %d to LAG.%d! (lport 0x%llx sport 0x%llx)\n",
-		    __FUNCTION__, (int)PM_HANDLE2PORT(lacp_port->lport_handle),
-		    (int)PM_HANDLE2LAG(lacp_port->sport_handle),
-		    lacp_port->lport_handle, lacp_port->sport_handle);
-       }
-   } else {
-       if (lacp_port->debug_level & DBG_LACP_SEND) {
-           RDBG("%s : Failed to attach : did the sport vanish ?? "
-              "(lport 0x%llx sport 0x%llx)\n",
-              __FUNCTION__, lacp_port->lport_handle, lacp_port->sport_handle);
-       }
-   }
+    if (R_SUCCESS == status) {
+        if (lacp_port->debug_level & DBG_LACP_SEND) {
+            RDBG("%s : Attached port %d to LAG.%d! (lport 0x%llx sport 0x%llx)\n",
+                 __FUNCTION__, (int)PM_HANDLE2PORT(lacp_port->lport_handle),
+                 (int)PM_HANDLE2LAG(lacp_port->sport_handle),
+                 lacp_port->lport_handle, lacp_port->sport_handle);
+        }
+    } else {
+        if (lacp_port->debug_level & DBG_LACP_SEND) {
+            RDBG("%s : Failed to attach : did the sport vanish ?? "
+                 "(lport 0x%llx sport 0x%llx)\n",
+                 __FUNCTION__, lacp_port->lport_handle, lacp_port->sport_handle);
+        }
+    }
 
    return status;
 } // mlacp_blocking_send_attach_aggregator
@@ -167,156 +168,138 @@ mlacp_blocking_send_attach_aggregator(lacp_per_port_variables_t *lacp_port)
 int
 mlacp_blocking_send_detach_aggregator(lacp_per_port_variables_t *lacp_port)
 {
-  struct MLt_vpm_api__lacp_attach detach = {0};
-  int status = R_SUCCESS;
+    struct MLt_vpm_api__lacp_attach detach = {0};
+    int status = R_SUCCESS;
 
-  detach.lport_handle   = lacp_port->lport_handle;
-  detach.sport_handle   = lacp_port->sport_handle;
+    detach.lport_handle   = lacp_port->lport_handle;
+    detach.sport_handle   = lacp_port->sport_handle;
 
-  // Halon: Change to direct function call.
-  status = mvlan_api_detach_lport_from_aggregator(&detach);
+    // Halon: Change to direct function call.
+    status = mvlan_api_detach_lport_from_aggregator(&detach);
 
-   if (R_SUCCESS == status) {
-       if (lacp_port->debug_level & DBG_LACP_SEND) {
-	       RDBG("%s : Detached port %d from LAG.%d! (lport 0x%llx sport 0x%llx)\n",
-		    __FUNCTION__, (int)PM_HANDLE2PORT(lacp_port->lport_handle),
-		    (int)PM_HANDLE2LAG(lacp_port->sport_handle),
-		    lacp_port->lport_handle, lacp_port->sport_handle);
-       }
-   } else {
-       if (lacp_port->debug_level & DBG_LACP_SEND) {
-           RDBG("%s : Failed to detach ?? (lport 0x%llx sport 0x%llx)\n",
-              __FUNCTION__, lacp_port->lport_handle, lacp_port->sport_handle);
-       }
-   }
+    if (R_SUCCESS == status) {
+        if (lacp_port->debug_level & DBG_LACP_SEND) {
+            RDBG("%s : Detached port %d from LAG.%d! (lport 0x%llx sport 0x%llx)\n",
+                 __FUNCTION__, (int)PM_HANDLE2PORT(lacp_port->lport_handle),
+                 (int)PM_HANDLE2LAG(lacp_port->sport_handle),
+                 lacp_port->lport_handle, lacp_port->sport_handle);
+        }
+    } else {
+        if (lacp_port->debug_level & DBG_LACP_SEND) {
+            RDBG("%s : Failed to detach ?? (lport 0x%llx sport 0x%llx)\n",
+                 __FUNCTION__, lacp_port->lport_handle, lacp_port->sport_handle);
+        }
+    }
 
-   return status;
+    return status;
 } // mlacp_blocking_send_detach_aggregator
 
 int
 mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port)
 {
-  int port;
-  int lag_id;
-  int status = R_SUCCESS;
+    int port;
+    int lag_id;
+    int status = R_SUCCESS;
 
-  // Halon: Add the port to trunk in hardware only
-  //        if it wasn't already done.
-  if (FALSE == lacp_port->hw_attached_to_mux) {
+    // Halon: Add the port to trunk in hardware only
+    //        if it wasn't already done.
+    if (FALSE == lacp_port->hw_attached_to_mux) {
 
-    lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
-    port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
+        lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
+        port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
 #if 1
-    //--- HALON_TODO: enable attach for now since STP is not running... ---
-    //---------------------------------------------------------------
-    // NOTE: lacpd is no longer responsible for attaching/detaching
-    // ports to LAGs in h/w.  stpd is now doing that in order to
-    // maintain STG state consistency and not worry about any race
-    // conditions or missed transient state transitions.
-    //---------------------------------------------------------------
+        //--- HALON_TODO: enable attach for now since STP is not running... ---
+        //---------------------------------------------------------------
+        // NOTE: lacpd is no longer responsible for attaching/detaching
+        // ports to LAGs in h/w.  stpd is now doing that in order to
+        // maintain STG state consistency and not worry about any race
+        // conditions or missed transient state transitions.
+        //---------------------------------------------------------------
 
-    // Add the port to a trunk in hardware
-    halon_attach_port_in_hw(lag_id, port);
+        // Add the port to a trunk in hardware
+        halon_attach_port_in_hw(lag_id, port);
 #endif
 
-    // Update DB with new info.
-    db_add_lag_port(lag_id, port);
+        // Update DB with new info.
+        db_add_lag_port(lag_id, port);
 
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///    if (process_snmp_events(EVENT_TYPE_ADD_PORT_TO_LAG, lacp_port) < 0) {
-///        RDEBUG(DL_ERROR,"process_snmp_events() function "
-///            "failed for event = %d \n",EVENT_TYPE_ADD_PORT_TO_LAG);
-///    }
+        // Set indicator.
+        lacp_port->hw_attached_to_mux = TRUE;
+    }
 
-    // Set indicator.
-    lacp_port->hw_attached_to_mux = TRUE;
-  }
-
-  return status;
+    return status;
 } // mlacp_blocking_send_enable_collecting
 
 int
 mlacp_blocking_send_enable_distributing(lacp_per_port_variables_t *lacp_port)
 {
-  int port;
-  int lag_id;
-  int status = R_SUCCESS;
+    int port;
+    int lag_id;
+    int status = R_SUCCESS;
 
-  if (TRUE == lacp_port->hw_attached_to_mux) {
+    if (TRUE == lacp_port->hw_attached_to_mux) {
 
-    // Halon: Take out egress disable flag from trunk member port flags.
-    lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
-    port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
+        // Halon: Take out egress disable flag from trunk member port flags.
+        lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
+        port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
-    halon_trunk_port_egr_enable(lag_id, port);
+        halon_trunk_port_egr_enable(lag_id, port);
+    }
 
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///    if (process_snmp_events(EVENT_TYPE_ADD_PORT_TO_LAG, lacp_port) < 0) {
-///        RDEBUG(DL_ERROR,"process_snmp_events() function "
-///            "failed for event = %d \n",EVENT_TYPE_ADD_PORT_TO_LAG);
-///    }
-  }
-
-  return status;
+    return status;
 } // mlacp_blocking_send_enable_distributing
 
 int
 mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
 {
-  int port;
-  int lag_id;
-  int status = R_SUCCESS;
+    int port;
+    int lag_id;
+    int status = R_SUCCESS;
 
-  // Halon: Remove the port from trunk in hardware
-  //          only if it wasn't already done.
-  if (TRUE == lacp_port->hw_attached_to_mux) {
+    // Halon: Remove the port from trunk in hardware
+    //          only if it wasn't already done.
+    if (TRUE == lacp_port->hw_attached_to_mux) {
 
-    lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
-    port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
+        lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
+        port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
 #if 1
-    //--- HALON_TODO: enable attach for now since STP is not running... ---
-    //---------------------------------------------------------------
-    // NOTE: lacpd is no longer responsible for attaching/detaching
-    // ports to LAGs in h/w.  stpd is now doing that in order to
-    // maintain STG state consistency and not worry about any race
-    // conditions or missed transient state transitions.
-    //---------------------------------------------------------------
+        //--- HALON_TODO: enable attach for now since STP is not running... ---
+        //---------------------------------------------------------------
+        // NOTE: lacpd is no longer responsible for attaching/detaching
+        // ports to LAGs in h/w.  stpd is now doing that in order to
+        // maintain STG state consistency and not worry about any race
+        // conditions or missed transient state transitions.
+        //---------------------------------------------------------------
 
-    // Detach the port from LAG in h/w
-    halon_detach_port_in_hw(lag_id, port);
+        // Detach the port from LAG in h/w
+        halon_detach_port_in_hw(lag_id, port);
 #endif
 
-    // Update DB with new info.
-    db_delete_lag_port(lag_id, port);
+        // Update DB with new info.
+        db_delete_lag_port(lag_id, port);
 
-/// ---HALON--- SKIP LACP SNMP SUPPORT
-///    if (process_snmp_events(EVENT_TYPE_DELETE_PORT_FROM_LAG, lacp_port) < 0 ) {
-///            RDEBUG(DL_ERROR,"process_snmp_events() function "
-///                "failed for event = %d \n",EVENT_TYPE_DELETE_PORT_FROM_LAG);
-///    }
+        // Clear out indicator.
+        lacp_port->hw_collecting = FALSE;
+        lacp_port->hw_attached_to_mux = FALSE;
+    }
 
-    // Clear out indicator.
-    lacp_port->hw_collecting = FALSE;
-    lacp_port->hw_attached_to_mux = FALSE;
-  }
-
-  return status;
+    return status;
 } // mlacp_blocking_send_disable_collect_dist
 
 // Halon: New function to clear super port.
 int
 mlacp_blocking_send_clear_aggregator(unsigned long long sport_handle)
 {
-  int status = R_SUCCESS;
+    int status = R_SUCCESS;
 
-  status = mvlan_api_clear_sport_params(sport_handle);
+    status = mvlan_api_clear_sport_params(sport_handle);
 
-   if (status != R_SUCCESS) {
-       RDEBUG(DL_ERROR, "Failed to clear sport params for 0x%llx",
-	      sport_handle);
-   }
+    if (status != R_SUCCESS) {
+        RDEBUG(DL_ERROR, "Failed to clear sport params for 0x%llx",
+               sport_handle);
+    }
 
-   return status;
+    return status;
 } // mlacp_blocking_send_clear_aggregator

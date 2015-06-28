@@ -15,17 +15,18 @@
  *   under the License.
  */
 
-#ifndef _MVLAN_SPORT_H
-#define _MVLAN_SPORT_H
 /*****************************************************************************
-   File               : mvlan_sport.h                                          
-   Description        : The file defines the data structures used by the  
+   File               : mvlan_sport.h
+   Description        : The file defines the data structures used by the
                         super port manager to create and maintain super
-                        ports. 
+                        ports.
 
                         Halon NOTE: This is simplified version for Halon to
-                                      support LAGs.
+                                    support LAGs.
 *****************************************************************************/
+
+#ifndef _MVLAN_SPORT_H
+#define _MVLAN_SPORT_H
 
 #include "lacp_halon.h"
 #include <nemo/nemo_types.h>
@@ -52,11 +53,10 @@
 #define STYPE_802_3AD         (0x4)     /*  Is of type IEEE 803.3ad and has multiple logical ports */
 #define STYPE_TRUNK           (0x8)     /*  Is set to be a smart trunk */
 
-
 typedef struct super_port_s super_port_t;
 
 /*********************************************************************
- * Structure defining the super-port information maintained by vpm 
+ * Structure defining the super-port information maintained by vpm
  * in the user-space.
  *********************************************************************/
 
@@ -65,7 +65,7 @@ typedef struct super_port_s super_port_t;
 struct super_port_s
 {
     port_handle_t handle;              /* The handle for this super port */
-    char name[SPORT_MAX_NAME_SIZE+1];  /* 1 byte for null */  
+    char name[SPORT_MAX_NAME_SIZE+1];  /* 1 byte for null */
 
     u_char type;                       /* Type of super port */
     u_long info_flags;                 /* Various bit flags as below */
@@ -73,11 +73,11 @@ struct super_port_s
                                         * (NOTE: Not necessarily a PPP port.)
                                         */
 #define SPORT_DOES_PPP   (1 << 1)      /* Port runs PPP */
-    
+
     u_char admin_state;                /*  The administrative state */
 #define SPORT_ADMIN_UP        (0x01)
 #define SPORT_ADMIN_DOWN      (0x02)
-  
+
     u_char oper_state_bits;            /* These are bit flags that determine
                                         * the operational state of the port for
                                         * various kinds of traffic (bridged/
@@ -92,9 +92,7 @@ struct super_port_s
                                         * oper_state_bits and stp_state_1vst
                                         * (the last for bridged traffic only).
                                         */
-
-
-   int     num_lports;                  /* Number of lports in this list */ 
+   int     num_lports;                  /* Number of lports in this list */
    void    *plport_list;                /* Logical Port Handle List: A list of
                                            ports that are supported. A linklist
                                            of the handles of all the logical
@@ -106,12 +104,12 @@ struct super_port_s
    int     aggr_mode;                   /* Mac, l3, l4 or port based */
 };
 
-int mvlan_sport_init(u_long  first_time);
-int mvlan_sport_create(struct MLt_vpm_api__create_sport  *psport_create,
-                       super_port_t **ppsport);
-int mvlan_sport_delete_validate_generic(super_port_t  *psport);
-int mvlan_sport_delete(super_port_t  *psport);
-int mvlan_destroy_sport(super_port_t *psport);
-int mvlan_get_sport(port_handle_t handle, super_port_t **ppsport, int type);
+extern int mvlan_sport_init(u_long  first_time);
+extern int mvlan_sport_create(struct MLt_vpm_api__create_sport  *psport_create,
+                              super_port_t **ppsport);
+extern int mvlan_sport_delete_validate_generic(super_port_t  *psport);
+extern int mvlan_sport_delete(super_port_t  *psport);
+extern int mvlan_destroy_sport(super_port_t *psport);
+extern int mvlan_get_sport(port_handle_t handle, super_port_t **ppsport, int type);
 
 #endif /* _MVLAN_SPORT_H */

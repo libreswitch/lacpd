@@ -15,12 +15,12 @@
  *   under the License.
  */
 
-#ifndef _h_NEMO_PROTOCOL_INCLUDE_STP_H
-#define _h_NEMO_PROTOCOL_INCLUDE_STP_H 1
+#ifndef __h_NEMO_PROTOCOL_INCLUDE_STP_H__
+#define __h_NEMO_PROTOCOL_INCLUDE_STP_H__
 
 struct MLt_include_stp__debug {
     unsigned long long sport_handle;
     unsigned int debug_level;
 };
 
-#endif  // _h_NEMO_PROTOCOL_INCLUDE_STP_H
+#endif  // __h_NEMO_PROTOCOL_INCLUDE_STP_H__

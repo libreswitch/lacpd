@@ -24,50 +24,7 @@
 #include <nemo/avl.h>
 
 #include "lacp_stubs.h"
-// #include "lacp.h"
-//#include "pgrp_api.h"
 
-//linkGroup_t *LinkGroup[(MLS_MAXPORTS / 2) + 1];
-
-#if 0
-int
-is_pmask_zero(port_mask_t *pmask) 
-{
-    return(1);
-}
-#endif //0
-
-#if 0
-inline cgPort_t *
-LGGetLgrpPortFromPortNum(port_handle_t lport_handle)
-{
-    // return(Ports[port]->cport);
-    return(NULL); // XXX avl_tree shd have this XXX
-}
-inline linkGroup_t *
-LGGetLinkGrpFromLinkId(int linkId) 
-{
-    return(LinkGroup[linkId]);
-}
-
-inline linkGroup_t *
-LGGetLinkGrpFromPort(int port) 
-{
-    linkGroup_t *lnkgrp;
-    int index;
-
-    
-    FOR_ALL_LGRPS(index) {
-        if (!LinkGroup[index])
-            continue;
-        lnkgrp = LinkGroup[index]; 
-        if (MASK_ISSET(&(lnkgrp->pmask), port)) 
-            return(lnkgrp);
-    }
-    return(NULL);
-}
-
-#endif
 //***************************************************************************
 // *  FUNCTION:     L2_hexmac_to_strmac()
 //***************************************************************************
@@ -82,7 +39,6 @@ LGGetLinkGrpFromPort(int port)
 // *                                             -> Cabletron 00:00:05
 // *
 // ***************************************************************************
-
 char *
 L2_hexmac_to_strmac(macaddr_6_t hexMac, char *buffer,
                     size_t buflen, u8_t flag)
@@ -133,10 +89,9 @@ L2_hexmac_to_strmac(macaddr_6_t hexMac, char *buffer,
         { 0x0,         ""          }
     };
 
-
     buffer[0] = '\0';
     if (buflen < L2_MIN_MAC_STR) {
-        return(NULL);
+        return NULL;
     }
 
     if (flag & L2_MAC_VENDOR) {
@@ -145,21 +100,21 @@ L2_hexmac_to_strmac(macaddr_6_t hexMac, char *buffer,
         macVendor.octet[3] = 0;
 
         while ((lookup[index].oui != 0) &&
-               (macVendor.oui != lookup[index].oui))
+               (macVendor.oui != lookup[index].oui)) {
             index++;
+        }
 
         if (lookup[index].oui != 0) {
             char spaces[] = "          ";
-            /* populate the OUI */
+            // Populate the OUI.
             strncpy(buffer, lookup[index].str, L2_MAX_OUI_STR+1);
             strncat(buffer, spaces, (L2_MAX_OUI_STR - strlen(buffer)));
 
-            /* now do the last 3 bytes */
+            // Now do the last 3 bytes.
             sprintf(&buffer[L2_MAX_OUI_STR], " %02X:%02X:%02X",
                     hexMac[3], hexMac[4], hexMac[5]);
 
-
-            return(buffer);
+            return buffer;
         }
     }
 
@@ -167,15 +122,12 @@ L2_hexmac_to_strmac(macaddr_6_t hexMac, char *buffer,
         sprintf(buffer, "%02X%02X%02X:%02X%02X%02X",
                 hexMac[0], hexMac[1], hexMac[2],
                 hexMac[3], hexMac[4], hexMac[5]);
-    }
-
-    else {
+    } else {
         sprintf(buffer, "%02X:%02X:%02X:%02X:%02X:%02X",
                 hexMac[0], hexMac[1], hexMac[2],
                 hexMac[3], hexMac[4], hexMac[5]);
     }
 
-    return(buffer);
-}
+    return buffer;
 
-
+} // L2_hexmac_to_strmac

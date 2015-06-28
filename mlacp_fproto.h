@@ -28,74 +28,68 @@
 //***************************************************************
 // Functions in mlacp_main.c
 //***************************************************************
-void mlacpBoltonRxPdu(struct ML_event *);
-void register_mcast_addr(port_handle_t lport_handle);
-void deregister_mcast_addr(port_handle_t lport_handle);
+extern void mlacpBoltonRxPdu(struct ML_event *);
+extern void register_mcast_addr(port_handle_t lport_handle);
+extern void deregister_mcast_addr(port_handle_t lport_handle);
 
 //***************************************************************
 // Functions in mlacp.c
 //***************************************************************
-int  mlacp_init(u_long);
-void mlacp_process_timer(struct MLt_msglib__timer *tevent);
-void timerHandler(void);
+extern int  mlacp_init(u_long);
+extern void mlacp_process_timer(struct MLt_msglib__timer *tevent);
+extern void timerHandler(void);
 
 //***************************************************************
 // Functions in mlacp_send.c
 //***************************************************************
-int mlacp_blocking_send_select_aggregator(LAG_t *const lag, lacp_per_port_variables_t *lacp_port);
-int mlacp_blocking_send_attach_aggregator(lacp_per_port_variables_t *lacp_port);
-int mlacp_blocking_send_detach_aggregator(lacp_per_port_variables_t *lacp_port);
-int mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port);
-int mlacp_blocking_send_enable_distributing(lacp_per_port_variables_t *lacp_port);
-int mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port);
+extern  int mlacp_blocking_send_select_aggregator(LAG_t *const lag,
+                                                  lacp_per_port_variables_t *lacp_port);
+extern  int mlacp_blocking_send_attach_aggregator(lacp_per_port_variables_t *lacp_port);
+extern  int mlacp_blocking_send_detach_aggregator(lacp_per_port_variables_t *lacp_port);
+extern  int mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port);
+extern  int mlacp_blocking_send_enable_distributing(lacp_per_port_variables_t *lacp_port);
+extern  int mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port);
 
 // Halon: New function to clear super port.
-int mlacp_blocking_send_clear_aggregator(unsigned long long sport_handle);
+extern int mlacp_blocking_send_clear_aggregator(unsigned long long sport_handle);
 
 //***************************************************************
 // Functions in mlacp related portion of FSM files
 //***************************************************************
-void mlacp_task_init(void);
-void mlacp_process_rxPdu(port_handle_t sport_handle, unsigned char *data);
+extern void mlacp_task_init(void);
+extern void mlacp_process_rxPdu(port_handle_t sport_handle, unsigned char *data);
 
 //***************************************************************
 // Functions in mlacp_task.c
 //***************************************************************
+extern int lacp_lag_port_match(void *v1, void *v2);
 
-int lacp_lag_port_match(void *v1, void *v2);
 //***************************************************************
 // Functions in mlacp_recv.c
 //***************************************************************
-void mlacp_process_vlan_msg(struct ML_event *);
-void mlacp_process_api_msg(struct ML_event *);
-void mlacp_process_showmgr_msg(struct ML_event *);
-void mlacp_process_diagmgr_msg(struct ML_event *);
-
-void mlacpVapiLportEvent(struct ML_event *pevent);
-
-
-//***************************************************************
-// Functions in mlacp_klib.c
-//***************************************************************
-int mLacpLibInit(void);
+extern void mlacp_process_vlan_msg(struct ML_event *);
+extern void mlacp_process_api_msg(struct ML_event *);
+extern void mlacp_process_showmgr_msg(struct ML_event *);
+extern void mlacp_process_diagmgr_msg(struct ML_event *);
+extern void mlacpVapiLportEvent(struct ML_event *pevent);
 
 //***************************************************************
 // Functions in lacp_support.c
 //***************************************************************
-void mlacpVapiLinkDown(port_handle_t lport_handle);
-void mlacpVapiLinkUp(port_handle_t lport_handle, int speed);
-void LACP_disable_lacp(port_handle_t lport_handle);
-void mlacpVapiSportParamsChange(int msg,
-                    struct MLt_vpm_api__lacp_sport_params *pin_lacp_params);
-//***************************************************************
-// Functions in selection.c 
-//***************************************************************
-void LAG_attached_to_aggregator(port_handle_t lport_handle,int result);
-
+extern void mlacpVapiLinkDown(port_handle_t lport_handle);
+extern void mlacpVapiLinkUp(port_handle_t lport_handle, int speed);
+extern void LACP_disable_lacp(port_handle_t lport_handle);
+extern void mlacpVapiSportParamsChange(int msg,
+                                       struct MLt_vpm_api__lacp_sport_params *pin_lacp_params);
 
 //***************************************************************
-// Functions in mux_fsm.c 
+// Functions in selection.c
 //***************************************************************
-void stop_wait_while_timer(lacp_per_port_variables_t *plpinfo);
+extern void LAG_attached_to_aggregator(port_handle_t lport_handle,int result);
+
+//***************************************************************
+// Functions in mux_fsm.c
+//***************************************************************
+extern void stop_wait_while_timer(lacp_per_port_variables_t *plpinfo);
 
 #endif //_MLACP_FPROTO_H

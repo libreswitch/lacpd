@@ -15,8 +15,8 @@
  *   under the License.
  */
 
-#ifndef NLIB_H_
-#define NLIB_H_
+#ifndef __NLIB_H__
+#define __NLIB_H__
 
 /* various utility functions. The interface is remarkably like that of GLib
    (http://www.gtk.org), because I like GLib. I wrote prototypes for the GLib
@@ -27,19 +27,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#if 0
-} // the __cplusplus curly confuses indentation in emacs
-#endif
 
 #ifdef STARSHIP
-
-/* XXX: Find a better place. */
 #ifndef BASE_OFFSET
-
 #define BASE_OFFSET(param, type, member) (type *) (((char *)param) - ((size_t) &(((type *)0)->member)))
-
 #endif
-
 #endif
 
 extern int bitmap_debug;
@@ -47,18 +39,17 @@ extern int bitmap_debug;
 /***********************************************************************/
 /* convenient macros for bitwise arithmetic operators */
 
-#define	N_BIT_SET(f, b)	((f) |= b)
-#define	N_BIT_RESET(f, b)	((f) &= ~(b))
-#define	N_BIT_FLIP(f, b)	((f) ^= (b))
-#define	N_BIT_TEST(f, b)	((f) & (b))
-#define	N_BIT_MATCH(f, b)	(((f) & (b)) == (b))
-#define	N_BIT_COMPARE(f, b1, b2)	(((f) & (b1)) == b2)
-#define	N_BIT_MASK_MATCH(f, g, b)	(!(((f) ^ (g)) & (b)))
-#define	N_BYTE_MASK              (0xFF)
+#define N_BIT_SET(f, b)             ((f) |= b)
+#define N_BIT_RESET(f, b)           ((f) &= ~(b))
+#define N_BIT_FLIP(f, b)            ((f) ^= (b))
+#define N_BIT_TEST(f, b)            ((f) & (b))
+#define N_BIT_MATCH(f, b)           (((f) & (b)) == (b))
+#define N_BIT_COMPARE(f, b1, b2)    (((f) & (b1)) == b2)
+#define N_BIT_MASK_MATCH(f, g, b)   (!(((f) ^ (g)) & (b)))
+#define N_BYTE_MASK                 (0xFF)
 
 /***********************************************************************/
 /* moderately memory-efficient bitmap allocation routines */
-
 
 struct NBitmap;
 struct NBitmap_create_options {
@@ -68,35 +59,32 @@ struct NBitmap_create_options {
 
 struct NBitmap *n_bitmap_create(unsigned int start, unsigned int size,
                                 struct NBitmap_create_options *opts);
-void n_bitmap_free(struct NBitmap *bitmap);
+extern void n_bitmap_free(struct NBitmap *bitmap);
 
 /* returns 1 for success, 0 for failure (no free bits) */
-int n_bitmap_alloc_bit(struct NBitmap *bitmap, int *bit);
+extern int n_bitmap_alloc_bit(struct NBitmap *bitmap, int *bit);
 
 /* returns 1 for success, 0 for failure ('numbits' contiguous bits not free) */
-int n_bitmap_alloc_n_bits(struct NBitmap *bitmap, int numbits,
-                          int *first_bit);
+extern int n_bitmap_alloc_n_bits(struct NBitmap *bitmap, int numbits,
+                                 int *first_bit);
 /* returns 1 for success, 0 for failure ('numbits' contiguous bits not free) */
-int n_bitmap_alloc_n_bits_align(struct NBitmap *b, int align_bits, 
-				int *which);
+extern int n_bitmap_alloc_n_bits_align(struct NBitmap *b, int align_bits,
+                                       int *which);
 /* returns 1 for success, 0 for failure (bit wasn't allocated) */
-int n_bitmap_free_bit(struct NBitmap *bitmap, int bit);
-
-int n_bitmap_numfree(struct NBitmap *bitmap);
-
-void n_bitmap_set_bit(struct NBitmap *bitmap, int bit);
-void n_bitmap_clear_bit(struct NBitmap *bitmap, int bit);
+extern int n_bitmap_free_bit(struct NBitmap *bitmap, int bit);
+extern int n_bitmap_numfree(struct NBitmap *bitmap);
+extern void n_bitmap_set_bit(struct NBitmap *bitmap, int bit);
+extern void n_bitmap_clear_bit(struct NBitmap *bitmap, int bit);
 /* n_bitmap_test_bit can be used on both types */
-int n_bitmap_test_bit(struct NBitmap *bitmap, int bit);
-void n_bitmap_debug(struct NBitmap *b, char *debug, int opts);
-void n_bitmap_printbits (unsigned char *bitmap, unsigned int blocknum, 
-			 unsigned int num_words);
-int n_bitmap_find_last_set_bit(struct NBitmap *b, int bit);
+extern int n_bitmap_test_bit(struct NBitmap *bitmap, int bit);
+extern void n_bitmap_debug(struct NBitmap *b, char *debug, int opts);
+extern void n_bitmap_printbits (unsigned char *bitmap, unsigned int blocknum,
+                                unsigned int num_words);
+extern int n_bitmap_find_last_set_bit(struct NBitmap *b, int bit);
+extern int n_bitmap_free_n_bits(struct NBitmap *b, int which, int numbits);
 
-
-int n_bitmap_free_n_bits(struct NBitmap *b, int which, int numbits);
-int pid_open(char *process_name);
-int pid_check(char *process_name);
+extern int pid_open(char *process_name);
+extern int pid_check(char *process_name);
 
 /* This is for the location of servers such as the ML Nameserver, the
    Log Dispatcher and the Error Dispatcher */
@@ -105,10 +93,10 @@ struct Host {
     int   host_port;
 };
 
-int is_env_valid(char *env);
-int get_name_and_port(char *env, struct Host *host);
+extern int is_env_valid(char *env);
+extern int get_name_and_port(char *env, struct Host *host);
 
-extern const int BITS_IN_WORD;  /* In nlib/bitmap.c */ 
+extern const int BITS_IN_WORD;  /* In nlib/bitmap.c */
 
 /***********************************************************************/
 /* doubly-linked lists */
@@ -133,35 +121,34 @@ struct NList {
 
 #define NLIST_FOREACH(list, ptr)                      \
 do {                                                  \
-       struct NList *_elem_, *_elem_next_;            \
-       _elem_ = list;                                 \
+    struct NList *_elem_, *_elem_next_;               \
+    _elem_ = list;                                    \
                                                       \
-       while (_elem_) {                               \
-       	   _elem_next_ = _elem_->next;                \
-	   ptr = (__typeof__ (ptr)) (_elem_->data);   \
-  
-        /* User code goes here. "ptr" is the element. 
-         * Use "break" to terminate loop early. It is 
-         * safe to "return" from the middle. 
+    while (_elem_) {                                  \
+        _elem_next_ = _elem_->next;                   \
+        ptr = (__typeof__ (ptr)) (_elem_->data);      \
+
+        /* User code goes here. "ptr" is the element.
+         * Use "break" to terminate loop early. It is
+         * safe to "return" from the middle.
          */
 
-#define NLIST_FOREACH_END(list, ptr)                 \
- 	  if (_elem_next_ == list) {                 \
-	      break;                                 \
-	  }                                          \
-	  _elem_ = _elem_next_;                      \
-       }                                             \
-} while(0);                                          \
+#define NLIST_FOREACH_END(list, ptr)                  \
+        if (_elem_next_ == list) {                    \
+            break;                                    \
+        }                                             \
+        _elem_ = _elem_next_;                         \
+    }                                                 \
+} while(0);
 
 #endif
 
 /*
  *  Queue item structure
  */
-struct qentry
-{
-        struct qentry *next;
-        void *data;
+struct qentry {
+    struct qentry *next;
+    void *data;
 };
 
 /*
@@ -169,20 +156,19 @@ struct qentry
  *
  *  This structure encapsulates a linked list of qentry items.
  */
-struct NQueue
-{
-        struct qentry *begin, *end;
+struct NQueue {
+    struct qentry *begin, *end;
 };
 
 struct NQueue *n_queue_init(void);
-void n_queue_done(struct NQueue *queue);
-int n_queue_push(struct NQueue *queue, void *data);
-void *n_queue_pop(struct NQueue *queue);
-int n_queue_size(struct NQueue *queue);
-int nlog_empty_queue(int block);
-int errlog_empty_queue(int block);
+extern void n_queue_done(struct NQueue *queue);
+extern int n_queue_push(struct NQueue *queue, void *data);
+extern void *n_queue_pop(struct NQueue *queue);
+extern int n_queue_size(struct NQueue *queue);
+extern int nlog_empty_queue(int block);
+extern int errlog_empty_queue(int block);
 
-#define N_QUEUE_FOREACH(queue, ptr)                            \
+#define N_QUEUE_FOREACH(queue, ptr)                             \
 {                                                               \
     struct qentry *n_queue_foreach_elem;                        \
     n_queue_foreach_elem = queue->begin;                        \
@@ -193,23 +179,22 @@ int errlog_empty_queue(int block);
         /* User code goes here. "ptr" is the element. Use "break" to
            terminate loop early. It is safe to "return" from the middle. */
 
-#define N_QUEUE_FOREACH_END(queue, ptr)                        \
-        if (n_queue_foreach_elem == queue->end)                 \
+#define N_QUEUE_FOREACH_END(queue, ptr)                         \
+        if (n_queue_foreach_elem == queue->end) {               \
             break;                                              \
+        }                                                       \
         n_queue_foreach_elem = n_queue_foreach_elem->next;      \
     }                                                           \
-}                                                               \
+}
 
-typedef struct trace_metadata
-{
+typedef struct trace_metadata {
     char *data;
     int   bytes_written;
     int   bytes_left;
 } trace_metadata_t;
 
 #define LOG_MAGIC_COOKIE 0xDEADBEEF
-typedef struct buffer_entry 
-{
+typedef struct buffer_entry {
     int flags;
 #define BUFFER_ENTRY_FLAG_COOKIE_SENT      (1<<0)
 #define BUFFER_ENTRY_FLAG_LEN_SENT         (1<<1)
@@ -222,7 +207,7 @@ typedef struct buffer_entry
 #define BUFFER_ENTRY_FLAG_NEXT_PKT_DROPPED (1<<8)
 #define BUFFER_ENTRY_FLAG(be, f)           ((be)->flags & (f))
 #define BUFFER_ENTRY_SET_FLAG(be, f)       ((be)->flags |= (f))
-#define BUFFER_ENTRY_CLR_FLAG(be, f)       ((be)->flags &= ~(f))    
+#define BUFFER_ENTRY_CLR_FLAG(be, f)       ((be)->flags &= ~(f))
 #define BUFFER_ENTRY_CLR_FLAGS(be)         ((be)->flags = 0)
     unsigned short log;
 #define BUFFER_ENTRY_LOG_DEVLOG 1
@@ -249,56 +234,53 @@ typedef int (*NCompareFunc)(void *thing1, void *thing2);
 typedef int (*NMatchFunc)(void *thing, void *data);
 
 /* should probably be made internal */
-struct NList *n_list_alloc(void); // efficient allocator of elements
-void n_list_free(struct NList *element); // doesn't free *data for you
-
-struct NList *n_list_append(struct NList *list, void *data);
-struct NList *n_list_prepend(struct NList *list, void *data);
-struct NList *n_list_insert(struct NList *list, void *data, int position);
+extern struct NList *n_list_alloc(void); // efficient allocator of elements
+extern struct NList *n_list_append(struct NList *list, void *data);
+extern struct NList *n_list_prepend(struct NList *list, void *data);
+extern struct NList *n_list_insert(struct NList *list, void *data, int position);
+extern void n_list_free(struct NList *element); // doesn't free *data for you
 
 // returns 1 for success and 0 for failure
-int n_list_insert_after(struct NList *prevelem, void *data);
+extern int n_list_insert_after(struct NList *prevelem, void *data);
 
-#if 1
 // returns 1 for success and 0 for failure
 // of course, list_to_insert is allowed to be an empty or singleton list
-int n_list_insert_list_after(struct NList *prevelem,
-                             struct NList *list_to_insert);
-#endif
+extern int n_list_insert_list_after(struct NList *prevelem,
+                                    struct NList *list_to_insert);
 
-struct NList *n_list_insert_sorted(struct NList *list, void *data,
-                                   NCompareFunc func);
+extern struct NList *n_list_insert_sorted(struct NList *list, void *data,
+                                          NCompareFunc func);
 
 // Calls func(elem->data, data) for each element.
 // Returns elem when func returns 1. Returns NULL if it never does.
-struct NList *n_list_find_data(struct NList *list, NMatchFunc func,
-                               void *data);
-// Returns elem when data == elem->data. Returns NULL if it never does.
-struct NList *n_list_find_opaque_data(struct NList *list,
+extern struct NList *n_list_find_data(struct NList *list, NMatchFunc func,
                                       void *data);
+// Returns elem when data == elem->data. Returns NULL if it never does.
+extern struct NList *n_list_find_opaque_data(struct NList *list,
+                                             void *data);
 // remove the first element for which elem->data == data
-struct NList *n_list_remove_data(struct NList *list, void *data);
+extern struct NList *n_list_remove_data(struct NList *list, void *data);
 
 // remove an element from the list
-struct NList *n_list_remove_node(struct NList *list, struct NList *elem);
+extern struct NList *n_list_remove_node(struct NList *list, struct NList *elem);
 
 // n_list_free_list frees whole list, doesn't do *data
-struct NList *n_list_free_list(struct NList *list);
+extern struct NList *n_list_free_list(struct NList *list);
 
 // removes first item, puts data in *data
-struct NList *n_list_pop(struct NList *list, void **data);
+extern struct NList *n_list_pop(struct NList *list, void **data);
 
-struct NList *n_list_nth(struct NList *list, int n);
-void *n_list_nth_data(struct NList *list, int n);
-int n_list_length(struct NList *list);
+extern struct NList *n_list_nth(struct NList *list, int n);
+extern void *n_list_nth_data(struct NList *list, int n);
+extern int n_list_length(struct NList *list);
 
 #ifdef STARSHIP
-int n_list_isempty(struct NList *list);
-struct NList *n_list_traverse_delete(struct NList *list,
-                                     NMatchFunc    func,
-                                     void         *data);
-struct NList *n_list_traverse(struct NList *list, NMatchFunc func, 
-                              void *data);
+extern int n_list_isempty(struct NList *list);
+extern struct NList *n_list_traverse_delete(struct NList *list,
+                                            NMatchFunc    func,
+                                            void         *data);
+extern struct NList *n_list_traverse(struct NList *list, NMatchFunc func,
+                                     void *data);
 #endif /* STARSHIP */
 
 #define N_LIST_NEXT(list) (((struct NList *) list)->next)
@@ -330,8 +312,7 @@ struct NList *n_list_traverse(struct NList *list, NMatchFunc func,
         if (n_list_foreach_elem == list)                        \
             break;                                              \
     }                                                           \
-}                                                               \
-(void)0
+}
 
 /***********************************************************************/
 #ifndef _KERNEL
@@ -360,41 +341,38 @@ struct NLogbuf_new_options {
     something which calls plain old 'free()'.
     FREEFUNC_DATA is given to freefunc.
 */
-struct NLogbuf *n_logbuf_new(char *name, int maxsize,
-                             struct NLogbuf_new_options *opts);
-void n_logbuf_rename(struct NLogbuf *logbuf, char *newname);
-void n_logbuf_set_maxsize(struct NLogbuf *logbuf, int maxsize);
+extern struct NLogbuf *n_logbuf_new(char *name, int maxsize,
+                                    struct NLogbuf_new_options *opts);
+extern void n_logbuf_rename(struct NLogbuf *logbuf, char *newname);
+extern void n_logbuf_set_maxsize(struct NLogbuf *logbuf, int maxsize);
 /* Once you give a chunk of data to the logbuf, the logbuf owns that chunk.
    Do not reference that data afterwards, and do not give it a static buffer.
 */
-void n_logbuf_add(struct NLogbuf *logbuf, void *data, int dsize);
-
-int n_logbuf_size(struct NLogbuf *logbuf);
-int n_logbuf_chunks(struct NLogbuf *logbuf);
+extern void n_logbuf_add(struct NLogbuf *logbuf, void *data, int dsize);
+extern int n_logbuf_size(struct NLogbuf *logbuf);
+extern int n_logbuf_chunks(struct NLogbuf *logbuf);
 /* extract chunk number WHICH (from 0 to n_logbuf_chunks()-1). Returns a
    pointer to the data and stuffs the chunksize in *sizeptr. The data pointer
    is to logbuf-owned memory: you may only use it until the next call to an
    n_logbuf function for this logbuf. */
-void *n_logbuf_extract_chunk(struct NLogbuf *logbuf, int which, int *dsizeptr);
-
+extern void *n_logbuf_extract_chunk(struct NLogbuf *logbuf, int which,
+                                    int *dsizeptr);
 /* free(): release everything in the logbuf */
-void n_logbuf_free(struct NLogbuf *logbuf);
+extern void n_logbuf_free(struct NLogbuf *logbuf);
 
 /* trigger an upload of all eligible logbufs */
-void n_logbuf_upload(void);
+extern void n_logbuf_upload(void);
 
 /* set program info */
-void n_logbuf_set_proginfo(char *binary_name, char *appname, int instance,
-                           int cpunum);
-
-void n_logbuf_init(char *name);
+extern void n_logbuf_set_proginfo(char *binary_name, char *appname, int instance,
+                                  int cpunum);
+extern void n_logbuf_init(char *name);
 
 /***********************************************************************/
 
 /* n_log: error/debug logging functions.
                   NOT TO BE USED FOR USER-VISIBLE TEXT!
    This is for development debug logging only.
-
 */
 
 // Definitions for cleanup later
@@ -493,61 +471,64 @@ struct NLog_facility_options {
     int no_new_line;
 };
 
-unsigned long long nlog_md5num(char *facname);
+extern unsigned long long nlog_md5num(char *facname);
 
-int n_log_facility_create(char *name, /* NAME is copied internally */
-                          struct NLog_facility_options *options);
-void n_log_facility_rename(int facility, char *name);
-void n_log_set_severity(int facility, enum NLog_Vector_Type type,
-                        unsigned int category, enum NLog_Severity severity);
-void n_log_set_severity_all(int facility, enum NLog_Vector_Type type,
-                            enum NLog_Severity severity);
-void n_log_set_severity_some(int facility, enum NLog_Vector_Type type,
-                             enum NLog_Severity severity,
-                             unsigned int categories, ...);
+extern int n_log_facility_create(char *name, /* NAME is copied internally */
+                                 struct NLog_facility_options *options);
+extern void n_log_facility_rename(int facility, char *name);
+extern void n_log_set_severity(int facility, enum NLog_Vector_Type type,
+                               unsigned int category, enum NLog_Severity severity);
+extern void n_log_set_severity_all(int facility, enum NLog_Vector_Type type,
+                                   enum NLog_Severity severity);
+extern void n_log_set_severity_some(int facility, enum NLog_Vector_Type type,
+                                    enum NLog_Severity severity,
+                                    unsigned int categories, ...);
 #ifdef STARSHIP
-void n_log_set_severity_by_mask(int facility, enum NLog_Vector_Type type,
-                                unsigned int category_mask, enum NLog_Severity severity);
-enum NLog_Severity n_log_cnvsev(char *severity);
+extern void n_log_set_severity_by_mask(int facility, enum NLog_Vector_Type type,
+                                       unsigned int category_mask,
+                                       enum NLog_Severity severity);
+extern enum NLog_Severity n_log_cnvsev(char *severity);
 #endif
 
-unsigned int n_log_num_to_bit_mask(int num);
-int n_log_bit_mask_to_num(unsigned int bit_mask);
-unsigned int n_log_cat_list_to_cat_mask(int list_size, ...);
+extern unsigned int n_log_num_to_bit_mask(int num);
+extern int n_log_bit_mask_to_num(unsigned int bit_mask);
+extern unsigned int n_log_cat_list_to_cat_mask(int list_size, ...);
 
-struct NLog_Facility *n_log_get_facility_from_name(char *facility_name);
-int n_log_get_facnum_from_name(char *facility_name);
+extern struct NLog_Facility *n_log_get_facility_from_name(char *facility_name);
+extern int n_log_get_facnum_from_name(char *facility_name);
 
 /* n_log is the most general-purpose routine, and probably the least-used.
    You'll want to #define your own local versions to avoid giving the
    facility number over and over again. */
-void n_log(int facility, unsigned int category, enum NLog_Severity severity,
-           char *fmt, ...) __attribute__ ((format (printf, 4, 5)));
+extern void n_log(int facility, unsigned int category, enum NLog_Severity severity,
+                  char *fmt, ...) __attribute__ ((format (printf, 4, 5)));
 
-void n_log_multiple(int facility, unsigned int category_mask,
-                    enum NLog_Severity severity,
-                    char *format, ...) __attribute__ ((format (printf, 4, 5)));
+extern void n_log_multiple(int facility, unsigned int category_mask,
+                           enum NLog_Severity severity,
+                           char *format, ...) __attribute__ ((format (printf, 4, 5)));
 /* n_log_linefile and n_log_linefile_multiple just pretty-prepends the
    line/file/func text to the msg. */
-void n_log_linefile(int facility, unsigned int category, enum NLog_Severity severity,
-                    char *file, int line, char *function, char *fmt, ...)
-     __attribute__ ((format (printf, 7, 8)));
+extern void n_log_linefile(int facility, unsigned int category,
+                           enum NLog_Severity severity, char *file,
+                           int line, char *function, char *fmt, ...)
+                           __attribute__ ((format (printf, 7, 8)));
 
-void n_log_linefile_multiple(int facility, unsigned int category_mask,
-                             enum NLog_Severity severity,
-                             char *file, int line, char *function, char *fmt, ...)
-     __attribute__ ((format (printf, 7, 8)));
+extern void n_log_linefile_multiple(int facility, unsigned int category_mask,
+                                    enum NLog_Severity severity,
+                                    char *file, int line, char *function,
+                                    char *fmt, ...)
+                                    __attribute__ ((format (printf, 7, 8)));
 #define n_log_line(facility, category, severity, fmt, args...)  \
-  n_log_linefile(facility, category, severity,                  \
-                 __FILE__, __LINE__, __FUNCTION__,              \
-                 fmt, ## args)
+    n_log_linefile(facility, category, severity,                \
+                   __FILE__, __LINE__, __FUNCTION__,            \
+                   fmt, ## args)
 #define n_log_line_multiple(facility, category_mask, severity, fmt, args...)  \
-  n_log_linefile_multiple(facility, category_mask, severity,                  \
-                 __FILE__, __LINE__, __FUNCTION__,                            \
-                 fmt, ## args)
+    n_log_linefile_multiple(facility, category_mask, severity,                \
+                   __FILE__, __LINE__, __FUNCTION__,                          \
+                   fmt, ## args)
 
-#define n_log_fatal(facility, fmt, args...)                             \
-  printf(fmt, args)
+#define n_log_fatal(facility, fmt, args...) \
+    printf(fmt, args)
 
 
 #ifndef STARSHIP
@@ -559,7 +540,8 @@ void n_log_linefile_multiple(int facility, unsigned int category_mask,
 #endif
 
 // returns 1 if message should be generated
-int n_log_generate(int facility, unsigned int category, enum NLog_Severity severity);
+extern int n_log_generate(int facility, unsigned int category,
+                          enum NLog_Severity severity);
 
 struct NLog_handler_block {
     int facility;
@@ -570,12 +552,11 @@ struct NLog_handler_block {
 };
 typedef void (*NLog_Handler)(struct NLog_handler_block *block,
                              char *text, int len);
-void n_log_default_handler(struct NLog_handler_block *block,
-                           char *text, int len);
-void n_log_set_handler(NLog_Handler handler);
-
-void nlog_mlsend_init(void);
-void errlog_mlsend_init(void);
+extern void n_log_default_handler(struct NLog_handler_block *block,
+                                  char *text, int len);
+extern void n_log_set_handler(NLog_Handler handler);
+extern void nlog_mlsend_init(void);
+extern void errlog_mlsend_init(void);
 
 #else
 
@@ -699,24 +680,24 @@ extern int n_log_force_print;
  * post: return number of bytes read
  * or on error return -1
  */
-int read_stream(int s, char *buf, int n);
+extern int read_stream(int s, char *buf, int n);
 
 /* pre: s is a connected socket
  *      pointer to the buffer of n bytes
  * post: return number of bytes sent
  * or on error return -1
  */
-int write_stream(int s, char *buf, int n);
+extern int write_stream(int s, char *buf, int n);
 
-void communicate(int sfd, int cfd);
+extern void communicate(int sfd, int cfd);
 
-void ch_get_version_from_filename(char *dirName, const char *prefix, 
-                             const char *suffix, /* OUT */ char *verstr, int);
-
+extern void ch_get_version_from_filename(char *dirName, const char *prefix,
+                                         const char *suffix,
+                                         /* OUT */ char *verstr, int);
 extern char *verSuffix;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif /* __NLIB_H__ */

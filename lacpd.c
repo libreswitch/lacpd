@@ -68,6 +68,7 @@ VLOG_DEFINE_THIS_MODULE(lacpd);
 
 static unixctl_cb_func lacpd_unixctl_dump;
 static unixctl_cb_func halon_lacpd_exit;
+
 /**
  * ovs-appctl interface callback function to dump internal debug information.
  * This top level debug dump function calls other functions to dump lacpd
@@ -90,8 +91,9 @@ lacpd_unixctl_dump(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 } /* lacpd_unixctl_dump */
+
 /**
- * lacpd daemons main initializtion function.
+ * lacpd daemons main initialization function.
  *
  * @param db_path pathname for OVSDB connection.
  */
@@ -209,7 +211,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
  */
 static void
 halon_lacpd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                  const char *argv[] OVS_UNUSED, void *exiting_)
+                 const char *argv[] OVS_UNUSED, void *exiting_)
 {
     bool *exiting = exiting_;
     *exiting = true;
@@ -237,7 +239,7 @@ main(int argc, char *argv[])
     proctitle_init(argc, argv);
     fatal_ignore_sigpipe();
 
-    /* Parse commandline args and get the name of the OVSDB socket. */
+    /* Parse command line args and get the name of the OVSDB socket. */
     ovsdb_sock = parse_options(argc, argv, &appctl_path);
 
     /* Initialize the metadata for the IDL cache. */

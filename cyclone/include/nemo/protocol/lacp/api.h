@@ -22,15 +22,10 @@
 //                   the CLI/Show manager task on the mcpu.
 //**************************************************************************
 
-#include <nemo/protocol/include/lacp.h>
-//%protocol lacp/api
+#ifndef __h_NEMO_PROTOCOL_LACP_API_H__
+#define __h_NEMO_PROTOCOL_LACP_API_H__
 
-/*
-  struct ML_version MLv_lacp_api[] = 
-  {
-    { 1, 0 },
-  };
-*/
+#include <nemo/protocol/include/lacp.h>
 
 enum MLm_lacp_api {
     MLm_lacp_api__getLportParams = 0,         //% MLt_lacp_api__lport_params
@@ -91,7 +86,6 @@ struct MLt_lacp_api__lport_params {
     int  partner_distributing;
     int  partner_defaulted;
     int  partner_expired;
-
 };
 
 struct MLt_lacp_api__lport_protocol {
@@ -129,40 +123,43 @@ struct MLt_lacp_api__debugLevel {
     int error;
     int debug_level;
 };
- 
+
 struct MLt_lacp_api__debugOnLport {
     int error;
     unsigned long long lport_handle;
     int debug_level;
 };
- 
+
 struct MLt_lacp_api__lportsBeingDebugged {
     int error;
-    int numLports; struct MLt_include_lacp__debug *lportsArray;
+    int numLports;
+    struct MLt_include_lacp__debug *lportsArray;
 };
- 
+
 struct MLt_lacp_api__actorSysPriority {
     int actor_system_priority;
 };
 
 struct MLt_lacp_api__lport_info {
-   unsigned long long    local_lport;
-   int    remote_lport;
-   char   remote_mac[6];
-   int    link_state;
-   int    local_port_key;
-   int    remote_port_key;
-   int    error;
+   unsigned long long local_lport;
+   int  remote_lport;
+   char remote_mac[6];
+   int  link_state;
+   int  local_port_key;
+   int  remote_port_key;
+   int  error;
 };
 
 struct MLt_lacp_api__lag_tuple_info {
-   int    error;
-   int    numLags; struct MLt_include_lacp__lag_tuple *lagTuple;
+   int error;
+   int numLags;
+    struct MLt_include_lacp__lag_tuple *lagTuple;
 };
 
 struct MLt_lacp_api__key_group_info {
-   int    error;
-   int    numKeys; struct MLt_include_lacp__key_group *keyGroup;
+   int error;
+   int numKeys;
+    struct MLt_include_lacp__key_group *keyGroup;
 };
 
 // This message is used for task restart.
@@ -172,7 +169,8 @@ struct MLt_lacp_api__key_group_info {
 // re-executes all commands associated with
 // 'LACP' task.
 struct MLt_lacp_api__restarted_send_config {
-    int moduleNameLen;  char *moduleName;
+    int moduleNameLen;
+    char *moduleName;
 };
 
 struct MLt_lacp_api__test_attach_detach {
@@ -183,3 +181,5 @@ struct MLt_lacp_api__test_attach_detach {
     int delay;
     int error;
 };
+
+#endif  // __h_NEMO_PROTOCOL_LACP_API_H__

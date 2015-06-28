@@ -22,15 +22,10 @@
 //                   the CLI/Show manager task on the mcpu.
 //**************************************************************************
 
-#include <nemo/protocol/include/stp.h>
-//%protocol stp/api
+#ifndef __h_NEMO_PROTOCOL_STP_API_H__
+#define __h_NEMO_PROTOCOL_STP_API_H__
 
-/*
-  struct ML_version MLv_stp_api[] = 
-  {
-    { 1, 0 },
-  };
-*/
+#include <nemo/protocol/include/stp.h>
 
 enum MLm_stp_api {
     MLm_stp_api__setProtocolVersion = 0,    //% MLt_stp_api__protocolVersion
@@ -48,10 +43,6 @@ enum MLm_stp_api {
 
     MLm_stp_api__getPortInfo = 9,           //% MLt_stp_api__portInfo
     MLm_stp_api__getNextPortInfo = 10,       //% MLt_stp_api__portInfo
-
-// XXX will it be L2TM API ?? XXX
-//    MLm_stp_api__setVlanAging = 11,       //% MLt_stp_api__vlanAging
-//    MLm_stp_api__getVlanAging = 12,       //% MLt_stp_api__vlanAging
 
     MLm_stp_api__setDebugLevel = 13,        //% MLt_stp_api__debugLevel
     MLm_stp_api__unsetDebugLevel = 14,        //% MLt_stp_api__debugLevel
@@ -71,8 +62,8 @@ struct MLt_stp_api__protocolVersion {
 
 struct MLt_stp_api__bridgeInfo {
     int mvst_instance;
-    char my_bridge_id[8]; 
-    char root_bridge_id[8]; 
+    char my_bridge_id[8];
+    char root_bridge_id[8];
     int priority;  // figures again, for the sake of Set CLI ...
     int am_i_root;
     int root_port_id;
@@ -115,17 +106,12 @@ struct MLt_stp_api__ProtocolVersion {
     char version[10];
 };
 
-// #if 0
-// Shd it be sport_handle ??
-
 struct MLt_stp_api__vlanAging {
     int slotNum;
     int portNum;
     int vlanId;
     int timeout;
 };
-
-// #endif 0
 
 struct MLt_stp_api__debugLevel {
     int error;
@@ -142,7 +128,8 @@ struct MLt_stp_api__debugOnSport {
 struct MLt_stp_api__sportsBeingDebugged {
     int error;
     int mvst_inst;
-    int numSports; struct MLt_include_stp__debug *sportsArray;
+    int numSports;
+    struct MLt_include_stp__debug *sportsArray;
 };
 
 // This message is used for task restart.
@@ -152,19 +139,21 @@ struct MLt_stp_api__sportsBeingDebugged {
 // re-executes all commands associated with
 // 'PM' task.
 struct MLt_stp_api__restarted_send_config {
-    int moduleNameLen;  char *moduleName;
+    int moduleNameLen;
+    char *moduleName;
 };
 
 struct MLt_stp_api__flush_arp {
-    int num_sports; unsigned long long *sport_handles;
+    int num_sports;
+    unsigned long long *sport_handles;
     int mvst_instance;
 };
 
 struct MLt_stp_api__port_fsm_log {
-    unsigned short      seq_no;
-    int                 state;
-    int                 event;
-    char                fname[50];
+    unsigned short seq_no;
+    int  state;
+    int  event;
+    char fname[50];
 };
 
 struct MLt_stp_api__sport_stp_info {
@@ -174,8 +163,8 @@ struct MLt_stp_api__sport_stp_info {
     int                     status;
 
     char                    port_name[20];
-    unsigned short          port_id;             
-    int                     state;               
+    unsigned short          port_id;
+    int                     state;
     unsigned long           path_cost;
     unsigned char           designated_root[8];
     int                     designated_cost;
@@ -184,11 +173,11 @@ struct MLt_stp_api__sport_stp_info {
     unsigned char           topology_change_ack;
     unsigned char           stp_enable_flag;
     int                     state_set_by_mgmt;
-    int                     link_state;      
-    int                     phy_state; 
-    unsigned long           normal_age_time; 
-    unsigned char           status_flag; 
-    unsigned long           no_of_forward_transitions;      
+    int                     link_state;
+    int                     phy_state;
+    unsigned long           normal_age_time;
+    unsigned char           status_flag;
+    unsigned long           no_of_forward_transitions;
     unsigned long           no_of_bpdus_sent;
     unsigned long           no_of_bpdus_rcvd;
 
@@ -201,7 +190,7 @@ struct MLt_stp_api__sport_stp_info {
     unsigned short          info;
     unsigned short          rcvdInfo;
     unsigned short          rcvdTcn;
-    unsigned short          rcvdTc;    
+    unsigned short          rcvdTc;
     unsigned short          rcvdTcAck;
     unsigned short          rcvdDi;
     unsigned short          rcvdDc;
@@ -210,7 +199,7 @@ struct MLt_stp_api__sport_stp_info {
     unsigned short          txmtInfo;
     unsigned short          txmtTcn;
     unsigned short          txmtTc;
-    unsigned short          txmtTcAck;        
+    unsigned short          txmtTcAck;
     unsigned short          rcvdNew;
     unsigned short          rcvdOld;
     unsigned short          sendNew;
@@ -229,5 +218,8 @@ struct MLt_stp_api__sport_stp_info {
     unsigned short          rbWhile;
     unsigned short          msyncWhile;
 
-    int num_logs; struct MLt_stp_api__port_fsm_log *log;
+    int num_logs;
+    struct MLt_stp_api__port_fsm_log *log;
 };
+
+#endif  // __h_NEMO_PROTOCOL_STP_API_H__

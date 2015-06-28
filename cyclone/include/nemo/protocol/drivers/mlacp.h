@@ -15,16 +15,8 @@
  *   under the License.
  */
 
-//%protocol drivers/mlacp
 #ifndef __MLACP_H__
 #define __MLACP_H__
-
-/*
-  struct ML_version MLv_drivers_mlacp[] = 
-  {
-    { 1, 0 },
-  };
-*/
 
 #define MAX_LACPDU_PKT_SIZE  124
 
@@ -34,7 +26,7 @@ enum MLm_drivers_mlacp {
 
 struct MLt_drivers_mlacp__rxPdu {
     unsigned long long lport_handle;
-    int  pktLen; 
+    int  pktLen;
     char data[MAX_LACPDU_PKT_SIZE];
 };
 

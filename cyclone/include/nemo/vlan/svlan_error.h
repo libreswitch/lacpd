@@ -15,17 +15,17 @@
  *   under the License.
  */
 
-#ifndef _SVLAN_ERROR_H
-#define _SVLAN_ERROR_H
+#ifndef __SVLAN_ERROR_H__
+#define __SVLAN_ERROR_H__
+
 /*****************************************************************************
-   File               : svlan_error.h                                          
+   File               : svlan_error.h
    Description        : The file contains all  the error codes that will
                         be used in the slave vlan module.
-                                                                        
 *****************************************************************************/
 /*****************************************************************************
  * Defines for error codes
- *****************************************************************************/ 
+ *****************************************************************************/
 #define      R_SVLAN_GLOB_ERROR_BASE              (950000)
 
 #define      R_SVLAN_LPORT_ERROR_BASE             (R_SVLAN_GLOB_ERROR_BASE + 0)
@@ -37,7 +37,6 @@
 #define      SVLAN_LPORT_ERROR_ALLOCATING_ID      (R_SVLAN_LPORT_ERROR_BASE + 6)
 #define      SVLAN_LPORT_ADMIN_ALREADY_UP         (R_SVLAN_LPORT_ERROR_BASE + 7)
 #define      SVLAN_LPORT_ADMIN_ALREADY_DOWN       (R_SVLAN_LPORT_ERROR_BASE + 8)
-
 
 #define      R_SVLAN_SPORT_ERROR_BASE             (R_SVLAN_GLOB_ERROR_BASE + 1000)
 #define      SVLAN_SPORT_NOT_HANDLED              (R_SVLAN_SPORT_ERROR_BASE + 1)
@@ -75,4 +74,4 @@
 
 #endif
 
-#endif /* _SVLAN_ERROR_H */
+#endif /* __SVLAN_ERROR_H__ */

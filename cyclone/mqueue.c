@@ -30,69 +30,72 @@
 int
 mqueue_init(mqueue_t *queue)
 {
-	pthread_mutex_init(&(queue->q_mutex), NULL);
+    pthread_mutex_init(&(queue->q_mutex), NULL);
 
-	queue->q_head.q_forw = &(queue->q_tail);
-	queue->q_head.q_back = NULL;
-	queue->q_head.q_data = NULL;
-	queue->q_tail.q_forw = NULL;
-	queue->q_tail.q_back = &(queue->q_head);
-	queue->q_tail.q_data = NULL;
+    queue->q_head.q_forw = &(queue->q_tail);
+    queue->q_head.q_back = NULL;
+    queue->q_head.q_data = NULL;
+    queue->q_tail.q_forw = NULL;
+    queue->q_tail.q_back = &(queue->q_head);
+    queue->q_tail.q_data = NULL;
 
-	if (sem_init(&(queue->q_avail), 0, 0) != 0) {
-		return errno;
-	}
+    if (sem_init(&(queue->q_avail), 0, 0) != 0) {
+        return errno;
+    }
 
-	return 0;
-}
+    return 0;
+
+} // mqueue_init
 
 int
 mqueue_send(mqueue_t *queue, void* data)
 {
-	qelem_t *new_elem;
+    qelem_t *new_elem;
 
-	if ((NULL == queue) || (NULL == data)) {
-		return EINVAL;
-	}
+    if ((NULL == queue) || (NULL == data)) {
+        return EINVAL;
+    }
 
-	if ((new_elem = (qelem_t *) malloc(sizeof(qelem_t))) == NULL) {
-		return ENOMEM;
-	}
+    if ((new_elem = (qelem_t *) malloc(sizeof(qelem_t))) == NULL) {
+        return ENOMEM;
+    }
 
-	new_elem->q_data = data;
+    new_elem->q_data = data;
 
-	pthread_mutex_lock(&(queue->q_mutex));
-	insque(new_elem, queue->q_tail.q_back);
+    pthread_mutex_lock(&(queue->q_mutex));
+    insque(new_elem, queue->q_tail.q_back);
 
-	if (sem_post(&(queue->q_avail)) != 0) {
-		pthread_mutex_unlock(&(queue->q_mutex));
-		return errno;
-	}
-	pthread_mutex_unlock(&(queue->q_mutex));
+    if (sem_post(&(queue->q_avail)) != 0) {
+        pthread_mutex_unlock(&(queue->q_mutex));
+        return errno;
+    }
+    pthread_mutex_unlock(&(queue->q_mutex));
 
-	return 0;
-}
+    return 0;
+
+} // mqueue_send
 
 int
 mqueue_wait(mqueue_t *queue, void **data)
 {
-	qelem_t *new_elem;
+    qelem_t *new_elem;
 
-	if ((NULL == queue) || (NULL == data)) {
-		return EINVAL;
-	}
+    if ((NULL == queue) || (NULL == data)) {
+        return EINVAL;
+    }
 
-	/* Block until a new event is available. */
-	sem_wait(&(queue->q_avail));
+    // Block until a new event is available.
+    sem_wait(&(queue->q_avail));
 
-	pthread_mutex_lock(&(queue->q_mutex));
-	new_elem = queue->q_head.q_forw;
-	remque(queue->q_head.q_forw);
-	pthread_mutex_unlock(&(queue->q_mutex));
+    pthread_mutex_lock(&(queue->q_mutex));
+    new_elem = queue->q_head.q_forw;
+    remque(queue->q_head.q_forw);
+    pthread_mutex_unlock(&(queue->q_mutex));
 
-	*data = new_elem->q_data;
+    *data = new_elem->q_data;
 
-	free(new_elem);
+    free(new_elem);
 
-	return 0;
-}
+    return 0;
+
+} // mqueue_wait

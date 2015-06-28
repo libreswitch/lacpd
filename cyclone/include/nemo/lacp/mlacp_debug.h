@@ -19,24 +19,23 @@
    File               : mlacp_debug.h
    Description        : The file contains all definitions necessary for
                         debugging the mcpu LACP module.
-
 *****************************************************************************/
-#ifndef _MLACP_DEBUG_H_
-#define _MLACP_DEBUG_H_
+#ifndef __MLACP_DEBUG_H__
+#define __MLACP_DEBUG_H__
 
 //----------------------slog daemon/library identification strings------
-#define LACPD_ID		"lacpd"
+#define LACPD_ID        "lacpd"
 
 /*****************************************************************************
  * Debug macros
  *****************************************************************************/
 // daemon-specific mask values all of which translate to LOG_DEBUG
 //    lacpd specific mask values =
-//		SLOG_MAKE_SERVICEPRI(23) >= pri >= SLOG_MAKE_SERVICEPRI(0)
+//      SLOG_MAKE_SERVICEPRI(23) >= pri >= SLOG_MAKE_SERVICEPRI(0)
 //    use:
-//			SLOG(SLOG_LACPD_LACP_TASK, "task info=%d", x);
-//		will translate to...
-//			syslog(LOG_DEBUG, "task info=%d", x);
+//          SLOG(SLOG_LACPD_LACP_TASK, "task info=%d", x);
+//      will translate to...
+//          syslog(LOG_DEBUG, "task info=%d", x);
 
 // Port-based debug level
 #define  DBG_FATAL        (SLOG_EMERG)
@@ -83,7 +82,6 @@
 #define RDEBUG(category, m...)  SLOG(category, m)
 #define RDBG(m...)  SLOG(SLOG_NOTICE, m)
 
-//#if 1
 #if 0
 #define RENTRY()     RDEBUG(DBG_F_ENTRY, "Entry: %s", __FUNCTION__);
 #define REXIT()      RDEBUG(DBG_F_ENTRY, "Exit: %s", __FUNCTION__);
@@ -94,4 +92,4 @@
 #define REXITS(s)
 #endif
 
-#endif //_MLACP_DEBUG_H_
+#endif //__MLACP_DEBUG_H__

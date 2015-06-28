@@ -17,7 +17,7 @@
 
 /************************************************************************//**
  * @defgroup lacpd LACP Daemon
- * The lacpd platform daemon manages link aggregation groups (LAGs) on
+ * The lacpd platform daemon manages Link Aggregation Groups (LAGs) on
  * Open Halon platform.
  *
  * The lacpd daemon is responsible for handling user level LAG (bond)
@@ -158,10 +158,11 @@ extern void lacpd_ovsdb_if_exit(void);
  *
  *****************************************************************************/
 extern void lacpd_wait(void);
+
 /**************************************************************************//**
  * Process data on lacpd daemon's file descriptors.
- * Called by lacpd's main loop to process daemon specific handlers to process
- * data received on any of the polling file descriptors.
+ * Called by lacpd's main loop to process daemon specific handlers to
+ * process data received on any of the polling file descriptors.
  *
  *****************************************************************************/
 extern void lacpd_run(void);

@@ -15,17 +15,17 @@
  *   under the License.
  */
 
-#ifndef _MVLAN_ERROR_H
-#define _MVLAN_ERROR_H
+#ifndef __MVLAN_ERROR_H__
+#define __MVLAN_ERROR_H__
+
 /*****************************************************************************
-   File               : mvlan_error.h                                          
+   File               : mvlan_error.h
    Description        : The file contains all  the error codes that will
                         be used in the vlan module.
-                                                                        
 *****************************************************************************/
 /*****************************************************************************
  * Defines for error codes
- *****************************************************************************/ 
+ *****************************************************************************/
 #include     <nemo/glob_error_base.h>
 
 #define      R_MVLAN_LINE_ERROR_BASE              (R_MVLAN_GLOB_ERROR_BASE + 0)
@@ -38,8 +38,6 @@
 #define      MVLAN_LINE_INVALID_OPERATION         (R_MVLAN_LINE_ERROR_BASE +7)
 #define      MVLAN_LINE_PM_DEAD                   (R_MVLAN_LINE_ERROR_BASE +8)
 #define      MVPM_OUT_OF_MEMORY                   (R_MVLAN_LINE_ERROR_BASE +9)
-
-
 
 #define      R_MVLAN_VLAN_ERROR_BASE              (R_MVLAN_GLOB_ERROR_BASE + 1000)
 #define      MVLAN_VLAN_NOT_HANDLED               (R_MVLAN_VLAN_ERROR_BASE + 1)
@@ -184,15 +182,13 @@
 #define      MVLAN_IMPLICIT_NOT_ALLOWED_ON_LACP_ENABLED_PORTS \
                                                    (R_MVLAN_SPORT_ERROR_BASE + 37)
 #define      MVLAN_SPORT_NO_VLAN                   (R_MVLAN_SPORT_ERROR_BASE + 38)
-#define      MVLAN_CANT_MAKE_MEMBER_VLAN_AS_NATIVE (R_MVLAN_SPORT_ERROR_BASE + 39) 
+#define      MVLAN_CANT_MAKE_MEMBER_VLAN_AS_NATIVE (R_MVLAN_SPORT_ERROR_BASE + 39)
 
 #define      R_MVLAN_SEND_ERROR_BASE               (R_MVLAN_GLOB_ERROR_BASE  + 4000)
 #define      MVLAN_SEND_LINECARD_ABSENT            (R_MVLAN_SEND_ERROR_BASE + 1)
 #define      MVLAN_SEND_BAD_SUBSCRIPTION           (R_MVLAN_SEND_ERROR_BASE + 2)
 #define      MVLAN_SEND_PM_DEAD                    (R_MVLAN_SEND_ERROR_BASE + 3)
 #define      MVLAN_SEND_NO_MORE_EPTI               (R_MVLAN_SEND_ERROR_BASE + 4)
-
-
 
 #define      R_MVLAN_CFG_ERROR_BASE                (R_MVLAN_GLOB_ERROR_BASE  + 5000)
 #define      MVLAN_CFG_ALREADY_INITED              (R_MVLAN_CFG_ERROR_BASE + 1)
@@ -240,7 +236,6 @@
 #define      MVLAN_MVST_FAILED_ENFORCING_MAX_AGE_TO_FWD_DELAY\
                                                    (R_MVLAN_STP_ERROR_BASE + 25)
 #define      MVLAN_STP_ALREADY_ENABLED_ON_PORT     (R_MVLAN_STP_ERROR_BASE + 26)
-                                                    
 
 #define      R_MVLAN_LACP_ERROR_BASE               (R_MVLAN_GLOB_ERROR_BASE + 7000)
 #define      MVLAN_LACP_SPORT_PARAMS_SET           (R_MVLAN_LACP_ERROR_BASE + 0)
@@ -266,4 +261,4 @@
 #define      MVLAN_IGMP_SNOOP_UNKNOWN_REQ          (R_MVLAN_IGMP_SNOOP_ERROR_BASE + 3)
 #endif
 
-#endif /* _MVLAN_ERROR_H */
+#endif /* __MVLAN_ERROR_H__ */

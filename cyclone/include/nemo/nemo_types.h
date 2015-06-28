@@ -16,14 +16,14 @@
  */
 
 /*****************************************************************************
- *  File               : nemo_types.h                                          
- *  Description        : The file contains all ctypes needed by the system. 
- *                       Derived from RS code base file: mls_types.h  
- *                                                                        
+ *  File               : nemo_types.h
+ *  Description        : The file contains all ctypes needed by the system.
+ *                       Derived from RS code base file: mls_types.h
+ *
  *****************************************************************************/
 
-#ifndef _nEMO_TYPES_H_
-#define _nEMO_TYPES_H_
+#ifndef _NEMO_TYPES_H_
+#define _NEMO_TYPES_H_
 
 #ifndef NULL
 #define NULL (0L)
@@ -33,7 +33,7 @@
 typedef int  bool;     /* boolean: NOTE: will conflict with C99 builtin bool, dont' use THIS */
 #define bool int
 #endif
-typedef  int  boolean;
+typedef int boolean;
 
 /* MAC Addresses */
 /* length in bytes */
@@ -46,15 +46,14 @@ typedef unsigned short        macaddr_3_t[MAC_SHORTADDR_SIZE];
 /* MAC address in 6 elements (bytes)  */
 typedef unsigned char         macaddr_6_t[MAC_BYTEADDR_SIZE];
 
-typedef union macaddr_u
-{
+typedef union macaddr_u {
     unsigned char  c_mac[MAC_BYTEADDR_SIZE];
     unsigned short s_mac[MAC_SHORTADDR_SIZE];
     struct {
         unsigned long  uu_mac;
         unsigned short ss_mac;
     } aa_mac;
-#define u_mac aa_mac.uu_mac    
+#define u_mac aa_mac.uu_mac
 } macaddr_t;
 
 /* IPv4 and v6 address in bytes */
@@ -77,20 +76,20 @@ typedef union macaddr_u
 #define R_ERROR       (-1)
 #define R_ERROR_NOMEM (-2)
 
-typedef	char                     INT8;
-typedef	unsigned char		 UINT8;
-typedef	short			 INT16;
-typedef	unsigned short		 UINT16;
-typedef	long 			 INT32;
-typedef	unsigned long		 UINT32;
+typedef char                INT8;
+typedef unsigned char       UINT8;
+typedef short               INT16;
+typedef unsigned short      UINT16;
+typedef long                INT32;
+typedef unsigned long       UINT32;
 /* LONGLONG */
-typedef	long long		 INT64;
+typedef long long           INT64;
 /* LONGLONG */
-typedef	unsigned long long	 UINT64;
+typedef unsigned long long  UINT64;
 
-#ifndef	__uint_t
-typedef	unsigned int	uint_t;
-#define	__uint_t
+#ifndef __uint_t
+typedef unsigned int        uint_t;
+#define __uint_t
 #endif
 
-#endif /* _nEMO_TYPES_H_ */
+#endif /* _NEMO_TYPES_H_ */

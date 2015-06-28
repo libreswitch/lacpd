@@ -29,69 +29,71 @@
 int
 speed_str_to_speed(char *cfg_speed)
 {
-	int speed = 0;
+    int speed = 0;
 
-	if (cfg_speed != NULL) {
-	        if (strcmp(cfg_speed, "40000") == 0) {
-			speed = 40000;
-		} else if (strcmp(cfg_speed, "20000") == 0) {
-			speed = 20000;
-		} else if (strcmp(cfg_speed, "10000") == 0) {
-			speed = 10000;
-	        } else if (strcmp(cfg_speed, "1000") == 0) {
-			speed = 1000;
-		} else if (strcmp(cfg_speed, "2500") == 0) {
-			speed = 2500;
-		} else if (strcmp(cfg_speed, "100") == 0) {
-			speed = 100;
-		} else if (strcmp(cfg_speed, "10") == 0) {
-			speed = 10;
-		}
-	}
+    if (cfg_speed != NULL) {
+        if (strcmp(cfg_speed, "40000") == 0) {
+            speed = 40000;
+        } else if (strcmp(cfg_speed, "20000") == 0) {
+            speed = 20000;
+        } else if (strcmp(cfg_speed, "10000") == 0) {
+            speed = 10000;
+        } else if (strcmp(cfg_speed, "1000") == 0) {
+            speed = 1000;
+        } else if (strcmp(cfg_speed, "2500") == 0) {
+            speed = 2500;
+        } else if (strcmp(cfg_speed, "100") == 0) {
+            speed = 100;
+        } else if (strcmp(cfg_speed, "10") == 0) {
+            speed = 10;
+        }
+    }
 
-	return speed;
-}
+    return speed;
+
+} // speed_str_to_speed
 
 enum PM_lport_type
 speed_to_lport_type(int speed)
 {
-	enum PM_lport_type ptype = PM_LPORT_INVALID;
+    enum PM_lport_type ptype = PM_LPORT_INVALID;
 
-	if (40000 == speed) {
-		ptype = PM_LPORT_40GIGE;
-	} else if (20000 == speed) {
-		ptype = PM_LPORT_20GIGE;
-	} else if (10000 == speed) {
-		ptype = PM_LPORT_10GIGE;
-	} else if (1000 == speed) {
-		ptype = PM_LPORT_GIGE;
-	} else if (2500 == speed) {
-		ptype = PM_LPORT_2_5GIGE;
-	} else if (100 == speed) {
-		ptype = PM_LPORT_FAE;
-	} else if (10 == speed) {
-		ptype = PM_LPORT_10E;
-	}
+    if (40000 == speed) {
+        ptype = PM_LPORT_40GIGE;
+    } else if (20000 == speed) {
+        ptype = PM_LPORT_20GIGE;
+    } else if (10000 == speed) {
+        ptype = PM_LPORT_10GIGE;
+    } else if (1000 == speed) {
+        ptype = PM_LPORT_GIGE;
+    } else if (2500 == speed) {
+        ptype = PM_LPORT_2_5GIGE;
+    } else if (100 == speed) {
+        ptype = PM_LPORT_FAE;
+    } else if (10 == speed) {
+        ptype = PM_LPORT_10E;
+    }
 
-	return ptype;
-}
+    return ptype;
+
+} // speed_to_lport_type
 
 int
 lport_type_to_speed(enum PM_lport_type ptype)
 {
-	int speed = 0;
+    int speed = 0;
 
-	switch (ptype) {
-	case PM_LPORT_10E:	speed = 10;	break;
-	case PM_LPORT_FAE:	speed = 100;	break;
-	case PM_LPORT_GIGE:	speed = 1000;	break;
-	case PM_LPORT_2_5GIGE:	speed = 2500;	break;
-	case PM_LPORT_10GIGE:	speed = 10000;	break;
-	case PM_LPORT_20GIGE:	speed = 20000;	break;
-	case PM_LPORT_40GIGE:	speed = 40000;	break;
+    switch (ptype) {
+    case PM_LPORT_10E:      speed = 10;     break;
+    case PM_LPORT_FAE:      speed = 100;    break;
+    case PM_LPORT_GIGE:     speed = 1000;   break;
+    case PM_LPORT_2_5GIGE:  speed = 2500;   break;
+    case PM_LPORT_10GIGE:   speed = 10000;  break;
+    case PM_LPORT_20GIGE:   speed = 20000;  break;
+    case PM_LPORT_40GIGE:   speed = 40000;  break;
+    default:                speed = 0;      break;
+    }
 
-	default:		speed = 0;	break;
-	}
+    return speed;
 
-	return speed;
-}
+} // lport_type_to_speed

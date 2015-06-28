@@ -21,24 +21,8 @@
 //*******************************************************************
 // XXX Nemo Changes Start
 //*******************************************************************
-
-#define MASK_ZERO(m) bzero((char *)(m), sizeof (*(m)))
-
-#define MLS_MAXPORTS (512)
-#define LGRP_MASK (512)
-#define MLS_MAXPORTSinkId (100)
-
-#define PORT_MASK (16) // 512/32
-typedef struct port_mask {
-    ulong mask[PORT_MASK];
-} port_mask_t;
-
-typedef struct linkgroup_mask {
-    ulong mask[LGRP_MASK];
-} lgrp_mask_t;
-
 #define NBIW (sizeof(unsigned long) * 8) /* number of bits in integer word */
-#define NBIB 8                  /* Number of bits in byte */
+#define NBIB 8                           /* Number of bits in byte */
 
 /* Manipulation Macros */
 #define MASK_ISSET(m, b) ((m)->mask[(b) / NBIW] & (1 << ((b) % NBIW)))
@@ -48,19 +32,15 @@ typedef struct linkgroup_mask {
 // #define MASK_CPY(f, t) bcopy((char *)(f), (char *)(t), sizeof(*(t)))
 // #define MASK_CMP(m1, m2) ( bcmp((const void *)m1, (const void *)m2, sizeof(*m1)))
 
-#define LINK_UP (1)
-#define LINK_DOWN (0)
-
 typedef unsigned char u8_t;
 typedef unsigned short u16_t;
 typedef unsigned int u32_t;
 
 #define L2_MIN_MAC_STR  (20)
 #define L2_MAX_OUI_STR  (9)
-#define L2_MAC_VENDOR      2        /* display MACs in Yago  :ABCDEF format */
-#define L2_MAC_TWOxSIX     1        /* display MACs in 111111:222222 format */
+#define L2_MAC_VENDOR    2        /* display MACs in Yago  :ABCDEF format */
+#define L2_MAC_TWOxSIX   1        /* display MACs in 111111:222222 format */
 
-char *
-L2_hexmac_to_strmac(macaddr_6_t hexMac, char *buffer,
-                    size_t buflen, u8_t flag);
+extern char * L2_hexmac_to_strmac(macaddr_6_t hexMac, char *buffer,
+                                  size_t buflen, u8_t flag);
 #endif  //__LACP_STUBS_H

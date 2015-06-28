@@ -15,13 +15,13 @@
  *   under the License.
  */
 
-#ifndef _VLAN_CMN_H_
-#define _VLAN_CMN_H_
+#ifndef __VLAN_CMN_H__
+#define __VLAN_CMN_H__
+
 /*****************************************************************************
-   File               : vlan_cmn.h                                          
-   Description        : The file  contains the common defines that will be 
+   File               : vlan_cmn.h
+   Description        : The file  contains the common defines that will be
                         referenced outside of the vlan module.
-                                                                        
 *****************************************************************************/
 
 #define IMPLCIT_VLAN_IMPLEMENTED 1
@@ -65,14 +65,14 @@
 #define VLAN_STATUS_SUSPENDED 1
 
 /* Global Customer ID for all non-customer specific vlans */
-#define                 VLAN_GLOBAL_CID                    (00)
+#define VLAN_GLOBAL_CID (00)
 
 
-#define STYPE_REGULAR         (0x1)     /*  Super port has exactly one 
+#define STYPE_REGULAR         (0x1)     /*  Super port has exactly one
                                             logical port */
 #define STYPE_MLPPP           (0x2)     /*  Is a type of WAN port and
                                             has multiple logical ports */
-#define STYPE_802_3AD         (0x4)     /*  Is of type IEEE 803.3ad and has 
+#define STYPE_802_3AD         (0x4)     /*  Is of type IEEE 803.3ad and has
                                             multiple logical ports */
 #define STYPE_TRUNK           (0x8)     /*  Is set to be a smart trunk */
 
@@ -86,8 +86,6 @@
 #define     MVLAN_STP_DEFAULT_MAX_AGE           (20)
 #define     MVLAN_STP_DEFAULT_FORWARD_DELAY     (15)
 #define     MVLAN_STP_DEFAULT_HELLO_TIME        (2)
-
-
 
 #define     MVLAN_NUM_VSTP_ENTRIES_PER_FLIPPER (4096)
 
@@ -155,7 +153,7 @@ extern unsigned char vstpBitMap[];
 #define MPLS_MARTINI_VCTYPE_ETHERNET       5
 
 enum TRANSPORT_tnnl_type {
-    TRANSPORT_RSVPTE =1,
+    TRANSPORT_RSVPTE = 1,
     TRANSPORT_LDP,
     TRANSPORT_ANY,
     TRANSPORT_NONE,
@@ -175,4 +173,4 @@ enum TRANSPORT_tnnl_type {
 #define DOT1Q_ETHERTYPE_PRESENT       0x1
 #define SVLAN_DOT1Q_ETHERTYPE_PRESENT 0x2
 
-#endif /* _VLAN_CMN_H_ */
+#endif /* __VLAN_CMN_H__ */

@@ -27,14 +27,8 @@
 // XXX XXX XXX Thile file ought to be in vlan XXX XXX XXX
 //**************************************************************************
 
-//%protocol stp/vlan
-
-/*
-  struct ML_version MLv_stp_vlan[] = 
-  {
-    { 1, 0 },
-  };
-*/
+#ifndef __h_NEMO_PROTOCOL_STP_VLAN_H__
+#define __h_NEMO_PROTOCOL_STP_VLAN_H__
 
 enum MLm_stp_vlan {
     MLm_stp_vlan__enable = 0,              //% MLt_stp_vlan__enable
@@ -47,7 +41,8 @@ enum MLm_stp_vlan {
 struct MLt_stp_vlan__enable {
     int slotNum;
     int slotType;
-    int numPorts; unsigned long long *portHandles;
+    int numPorts;
+    unsigned long long *portHandles;
 };
 
 struct MLt_stp_vlan__makeRoot {
@@ -67,3 +62,5 @@ struct MLt_stp_vlan__portCost {
     int port;
     int cost;
 };
+
+#endif  // __h_NEMO_PROTOCOL_STP_VLAN_H__

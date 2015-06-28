@@ -39,7 +39,6 @@
  *
  *
  *----------------------------------------------------------------------------*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -55,13 +54,6 @@
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
 
-
-/*****************************************************************************
- *                    Global Variables Definition
- ****************************************************************************/
-
-
-
 /*****************************************************************************
  *   Static Variables
  ****************************************************************************/
@@ -70,9 +62,8 @@
 static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
                                       [MUX_FSM_NUM_STATES] =
 {
-
 /*****************************************************************************
- * Input Event E1 - selected = SELECTED 
+ * Input Event E1 - selected = SELECTED
  *****************************************************************************/
   {{MUX_FSM_RETAIN_STATE,       NO_ACTION},         // Begin state
    {MUX_FSM_WAITING_STATE,      ACTION_WAITING},    // detached
@@ -80,7 +71,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_RETAIN_STATE,       NO_ACTION},         // attached
    {MUX_FSM_RETAIN_STATE,       NO_ACTION},         // collecting
    {MUX_FSM_RETAIN_STATE,       NO_ACTION}},        // collecting_distributing
-
 
 /*****************************************************************************
  * Input Event E2 - selected = UNSELECTED
@@ -92,7 +82,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED},    // collecting
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED}},   // collecting_distributing
 
-
 /*****************************************************************************
  * Input Event E3 - selected = SELECTED and Ready = TRUE
  *****************************************************************************/
@@ -102,7 +91,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_RETAIN_STATE,      NO_ACTION},          // attached
    {MUX_FSM_RETAIN_STATE,      NO_ACTION},          // collecting
    {MUX_FSM_RETAIN_STATE,      NO_ACTION}},         // collecting_distributing
-
 
 /*****************************************************************************
  * Input Event E4 - selected = StandBy
@@ -114,7 +102,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED},    // collecting
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED}},   // collecting_distributing
 
-
 /*****************************************************************************
  * Input Event E5 - selected = SELECTED and partner.sync = True
  *****************************************************************************/
@@ -124,7 +111,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_COLLECTING_STATE,  ACTION_COLLECTING}, // attached
    {MUX_FSM_RETAIN_STATE,      NO_ACTION},         // collecting
    {MUX_FSM_RETAIN_STATE,      NO_ACTION}},        // collecting_distributing
-
 
 /*****************************************************************************
  * Input Event E6 -  partner.sync = False
@@ -136,7 +122,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED},     // collecting
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED}},    // collecting_distributing
 
-
 /*****************************************************************************
  * Input Event E7 - Begin = True
  *****************************************************************************/
@@ -146,7 +131,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_DETACHED_STATE,      ACTION_DETACHED},  // attached
    {MUX_FSM_DETACHED_STATE,      ACTION_DETACHED},  // collecting
    {MUX_FSM_DETACHED_STATE,      ACTION_DETACHED}}, // collecting_distributing
-
 
 /*****************************************************************************
  * Input Event E8 - selected = SELECTED, partner.sync = True and
@@ -159,7 +143,6 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_COLLECTING_DISTRIBUTING_STATE, ACTION_COLLECTING_DISTRIBUTING},  // collecting
    {MUX_FSM_RETAIN_STATE,      NO_ACTION}},         // collecting_distributing
 
-
 /*****************************************************************************
  * Input Event E9 - selected = SELECTED, partner.sync = True and
  *                  partner.collecting = FALSE
@@ -170,9 +153,7 @@ static FSM_ENTRY mux_machine_fsm_table[MUX_FSM_NUM_INPUTS]
    {MUX_FSM_RETAIN_STATE,      NO_ACTION},          // attached
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED},    // collecting
    {MUX_FSM_ATTACHED_STATE,    ACTION_ATTACHED}}    // collecting_distributing
-
 };
-
 
 /*****************************************************************************
  *                 Prototypes for global functions
@@ -195,106 +176,98 @@ static void enable_distributing(lacp_per_port_variables_t *);
 
 /*----------------------------------------------------------------------
  * Function: LACP_mux_fsm(int event, int current_state, int port_number)
- * Synopsis: Entry routine for mux state machine. 
- * Input  :  
+ * Synopsis: Entry routine for mux state machine.
+ * Input  :
  *           event = the event that occured
  *           current_state = the current state of the fsm
  *           port_number = port number on which to act upon.
  * Returns:  void
  *----------------------------------------------------------------------*/
 void
-LACP_mux_fsm(int event, 
-              int current_state, 
-              lacp_per_port_variables_t *plpinfo)
+LACP_mux_fsm(int event,
+             int current_state,
+             lacp_per_port_variables_t *plpinfo)
 {
+    int action;
+    char previous_state_string[STATE_STRING_SIZE];
+    char current_state_string[STATE_STRING_SIZE];
 
-  int action;
-  char previous_state_string[STATE_STRING_SIZE];
-  char current_state_string[STATE_STRING_SIZE];
+    RENTRY();
+    RDEBUG(DL_MUX_FSM, "MuxFSM: event %d current_state %d\n", event, current_state);
 
+    GET_FSM_TABLE_CELL_CONTENTS(mux_machine_fsm_table,
+                                event,
+                                current_state,
+                                action);
 
-  RENTRY();
-  RDEBUG(DL_MUX_FSM, "MuxFSM: event %d current_state %d\n", event, current_state);
+    if (current_state != MUX_FSM_RETAIN_STATE) {
+        if (plpinfo->debug_level & DBG_MUX_FSM) {
 
-  GET_FSM_TABLE_CELL_CONTENTS(mux_machine_fsm_table,
-			  event,
-			  current_state,
-			  action);
+            //***********************************************************
+            // receive_fsm  debug is DBG_RX_FSM
+            // periodic_fsm debug is DBG_TX_FSM
+            // mux_fsm      debug is DBG_MUX_FSM
+            //***********************************************************
+            mux_state_string(plpinfo->mux_fsm_state, previous_state_string);
+            mux_state_string(current_state, current_state_string);
 
+            RDBG("%s : transitioning from %s to %s, action %d "
+                 "(lport 0x%llx)\n",
+                 __FUNCTION__,
+                 previous_state_string,
+                 current_state_string,
+                 action,
+                 plpinfo->lport_handle);
+        }
 
-  if (current_state != MUX_FSM_RETAIN_STATE) {
-    // if (plpinfo->mux_machine_debug == TRUE)
-    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        plpinfo->prev_mux_fsm_state = plpinfo->mux_fsm_state;
+        plpinfo->mux_fsm_state = current_state;
 
-      //***********************************************************
-      // receive_fsm  debug is DBG_RX_FSM
-      // periodic_fsm debug is DBG_TX_FSM
-      // mux_fsm      debug is DBG_MUX_FSM
-      //***********************************************************
-
-      mux_state_string(plpinfo->mux_fsm_state, previous_state_string);
-      
-      mux_state_string(current_state, current_state_string);
-      
-      RDBG("%s : transitioning from %s to %s, action %d "
-            "(lport 0x%llx)\n",
-             __FUNCTION__,
-             previous_state_string,
-             current_state_string,
-             action,
-             plpinfo->lport_handle);
-
+    } else {
+        if (plpinfo->debug_level & DBG_MUX_FSM) {
+            RDBG("%s : retain old state (%d)\n",
+                 __FUNCTION__, plpinfo->mux_fsm_state);
+        }
     }
-    plpinfo->prev_mux_fsm_state = plpinfo->mux_fsm_state; // YAGqa36972
-    plpinfo->mux_fsm_state = current_state;
-  } else {
-      if (plpinfo->debug_level & DBG_MUX_FSM) {
-         RDBG("%s : retain old state (%d)\n", __FUNCTION__, plpinfo->mux_fsm_state);
-      }
-  }
-  
-  switch(action)
-    {
-      
-    case ACTION_DETACHED :
-      {
-	detached_state_action(plpinfo);
-      }
-    break;
-    
-    case ACTION_WAITING :
-      {
-	waiting_state_action(plpinfo);
-      }
-    break;
 
-    case ACTION_ATTACHED :
-      {
-	attached_state_action(plpinfo);
-      }
-    break;
-    
-     case ACTION_COLLECTING :
-       {
-	 collecting_state_action(plpinfo);
-       }
-     break;
+    switch (action) {
+        case ACTION_DETACHED:
+        {
+            detached_state_action(plpinfo);
+        }
+        break;
 
-     case ACTION_COLLECTING_DISTRIBUTING :
-       {
-	 collecting_distributing_state_action(plpinfo);
-       }
-     break;
+        case ACTION_WAITING:
+        {
+            waiting_state_action(plpinfo);
+        }
+        break;
 
-    case NO_ACTION :
-    default :
-      break;
-      
+        case ACTION_ATTACHED:
+        {
+            attached_state_action(plpinfo);
+        }
+        break;
+
+        case ACTION_COLLECTING:
+        {
+            collecting_state_action(plpinfo);
+        }
+        break;
+
+        case ACTION_COLLECTING_DISTRIBUTING:
+        {
+            collecting_distributing_state_action(plpinfo);
+        }
+        break;
+
+        case NO_ACTION:
+        default:
+        break;
     }
 
     REXIT();
-
-}
+} // LACP_mux_fsm
 
 //******************************************************************
 // Function : detached_state_action
@@ -302,48 +275,45 @@ LACP_mux_fsm(int event,
 static void
 detached_state_action(lacp_per_port_variables_t *plpinfo)
 {
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
+    detach_mux_from_aggregator(plpinfo);
 
-  detach_mux_from_aggregator(plpinfo);
-  
-  plpinfo->actor_oper_port_state.synchronization = FALSE;
-  
-  plpinfo->actor_oper_port_state.collecting = FALSE;
+    plpinfo->actor_oper_port_state.synchronization = FALSE;
+    plpinfo->actor_oper_port_state.collecting = FALSE;
 
-  disable_collecting_distributing(plpinfo);
-  
-  plpinfo->actor_oper_port_state.distributing = FALSE;  
+    disable_collecting_distributing(plpinfo);
 
-  plpinfo->lacp_control.ntt = TRUE;
+    plpinfo->actor_oper_port_state.distributing = FALSE;
+    plpinfo->lacp_control.ntt = TRUE;
 
-  /*********************************************************************
-   * call the routine to transmit a LACPdu on the port
-   *********************************************************************/
-  LACP_async_transmit_lacpdu(plpinfo);
+    /*********************************************************************
+     * Call the routine to transmit a LACPDU on the port.
+     *********************************************************************/
+    LACP_async_transmit_lacpdu(plpinfo);
 
+    /**********************************************************************
+     * Check if the forward exit condition prevail.
+     **********************************************************************/
+    if ((plpinfo->lacp_control.selected == SELECTED)) {
+        LACP_mux_fsm(E1,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  /**********************************************************************
-   * Check if the forward exit condition prevail.
-   **********************************************************************/
-  if ((plpinfo->lacp_control.selected == SELECTED)) {
-    LACP_mux_fsm(E1, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
+    if ((plpinfo->lacp_control.selected == STANDBY)) {
+        LACP_mux_fsm(E4,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  if ((plpinfo->lacp_control.selected == STANDBY)) {
-    LACP_mux_fsm(E4, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
-  
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : exit\n", __FUNCTION__);
-  }
-}
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : exit\n", __FUNCTION__);
+    }
+} // detached_state_action
 
 //******************************************************************
 // Function : waiting_state_action
@@ -351,32 +321,33 @@ detached_state_action(lacp_per_port_variables_t *plpinfo)
 static void
 waiting_state_action(lacp_per_port_variables_t *plpinfo)
 {
-  // XXX LAG_t *lag = lacp_lags[port_number];
-  LAG_t *lag = plpinfo->lag;
+    LAG_t *lag = plpinfo->lag;
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
 
-  start_wait_while_timer(plpinfo);
+    start_wait_while_timer(plpinfo);
 
-  if ((plpinfo->lacp_control.selected == UNSELECTED)) {
-    LACP_mux_fsm(E2, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
+    if ((plpinfo->lacp_control.selected == UNSELECTED)) {
+        LACP_mux_fsm(E2,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  /**********************************************************************
-   * Check if the forward exit condition prevail.
-   **********************************************************************/
-  if ((plpinfo->lacp_control.selected == SELECTED) && 
-          lag && (lag->ready == TRUE)) {
-    LACP_mux_fsm(E3, plpinfo->mux_fsm_state, plpinfo);
-  }
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : exit\n", __FUNCTION__);
-  }
-}
+    /**********************************************************************
+     * Check if the forward exit condition prevail.
+     **********************************************************************/
+    if ((plpinfo->lacp_control.selected == SELECTED) &&
+        lag && (lag->ready == TRUE)) {
+        LACP_mux_fsm(E3, plpinfo->mux_fsm_state, plpinfo);
+    }
+
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : exit\n", __FUNCTION__);
+    }
+} // waiting_state_action
 
 //******************************************************************
 // Function : attached_state_action
@@ -384,54 +355,52 @@ waiting_state_action(lacp_per_port_variables_t *plpinfo)
 static void
 attached_state_action(lacp_per_port_variables_t *plpinfo)
 {
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
+    attach_mux_to_aggregator(plpinfo);
 
-  attach_mux_to_aggregator(plpinfo);
+    plpinfo->actor_oper_port_state.synchronization = TRUE;
+    plpinfo->actor_oper_port_state.collecting = FALSE;
 
-  plpinfo->actor_oper_port_state.synchronization = TRUE;
+    disable_collecting_distributing(plpinfo);
 
-  plpinfo->actor_oper_port_state.collecting = FALSE;
+    plpinfo->actor_oper_port_state.distributing = FALSE;
+    plpinfo->lacp_control.ntt = TRUE;
 
-  disable_collecting_distributing(plpinfo);
-  
-  plpinfo->actor_oper_port_state.distributing = FALSE;
+    /**********************************************************************
+     * Call the routine to transmit a LACPDU on the port.
+     **********************************************************************/
+    LACP_async_transmit_lacpdu(plpinfo);
 
-  plpinfo->lacp_control.ntt = TRUE;
+    if ((plpinfo->lacp_control.selected == UNSELECTED)) {
+        LACP_mux_fsm(E2,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  /**********************************************************************
-   * call the routine to transmit a LACPdu on the port
-   **********************************************************************/
-  LACP_async_transmit_lacpdu(plpinfo);
+    if ((plpinfo->lacp_control.selected == STANDBY)) {
+        LACP_mux_fsm(E4,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  if ((plpinfo->lacp_control.selected == UNSELECTED)) {
-    LACP_mux_fsm(E2, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
+    /**********************************************************************
+     * Check if the forward exit condition prevail.
+     **********************************************************************/
+    if ((plpinfo->partner_oper_port_state.synchronization == TRUE) &&
+        (plpinfo->lacp_control.selected == SELECTED)) {
+        LACP_mux_fsm(E5,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  if ((plpinfo->lacp_control.selected == STANDBY)) {
-    LACP_mux_fsm(E4, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
-
-  /**********************************************************************
-   * Check if the forward exit condition prevail.
-   **********************************************************************/
-  if ((plpinfo->partner_oper_port_state.synchronization == TRUE) &&
-      (plpinfo->lacp_control.selected == SELECTED)) {
-    LACP_mux_fsm(E5, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
-
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : exit\n", __FUNCTION__);
-  }
-}
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : exit\n", __FUNCTION__);
+    }
+} // attached_state_action
 
 //******************************************************************
 // Function : collecting_state_action
@@ -439,68 +408,65 @@ attached_state_action(lacp_per_port_variables_t *plpinfo)
 static void
 collecting_state_action(lacp_per_port_variables_t *plpinfo)
 {
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
+    plpinfo->actor_oper_port_state.distributing = FALSE;
 
-  plpinfo->actor_oper_port_state.distributing = FALSE;
+    enable_collecting(plpinfo);
 
-  enable_collecting(plpinfo);
+    if (plpinfo->hw_collecting) {
+        plpinfo->actor_oper_port_state.collecting = TRUE;
+    } else {
+        plpinfo->actor_oper_port_state.collecting = FALSE;
+    }
 
-  if (plpinfo->hw_collecting) {
-      plpinfo->actor_oper_port_state.collecting = TRUE;
-  } else {
-      plpinfo->actor_oper_port_state.collecting = FALSE;
-  }
+    plpinfo->lacp_control.ntt = TRUE;
 
-  plpinfo->lacp_control.ntt = TRUE;
+    /**********************************************************************
+     * Call the routine to transmit a LACPDU on the port.
+     **********************************************************************/
+    LACP_async_transmit_lacpdu(plpinfo);
 
-  /**********************************************************************
-   * call the routine to transmit a LACPdu on the port
-   **********************************************************************/
-  LACP_async_transmit_lacpdu(plpinfo);
+    /**********************************************************************
+     * Check if any of the backward exit conditions prevail.
+     **********************************************************************/
+    if ((plpinfo->lacp_control.selected == UNSELECTED)) {
+        LACP_mux_fsm(E2,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
+    if ((plpinfo->lacp_control.selected == STANDBY)) {
+        LACP_mux_fsm(E4,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  /**********************************************************************
-   * Check if any of the backward exit conditions prevail.
-   **********************************************************************/
-  if ((plpinfo->lacp_control.selected == UNSELECTED)) {
-    LACP_mux_fsm(E2, 
-                 plpinfo->mux_fsm_state,
-                 plpinfo);
-  }
+    if (plpinfo->partner_oper_port_state.synchronization == FALSE) {
+        LACP_mux_fsm(E6,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  if ((plpinfo->lacp_control.selected == STANDBY)) {
-    LACP_mux_fsm(E4, 
-                 plpinfo->mux_fsm_state,
-                 plpinfo);
-  }
+    /**********************************************************************
+     * Check if the forward exit condition prevail.
+     **********************************************************************/
+    if ((plpinfo->lacp_control.selected == SELECTED) &&
+        (plpinfo->partner_oper_port_state.synchronization == TRUE) &&
+        (plpinfo->partner_oper_port_state.collecting == TRUE) &&
+        (plpinfo->actor_oper_port_state.collecting == TRUE)) {
+        LACP_mux_fsm(E8,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-
-  if (plpinfo->partner_oper_port_state.synchronization == FALSE) {
-    LACP_mux_fsm(E6, 
-                 plpinfo->mux_fsm_state,
-                 plpinfo);
-  }
-
-  /**********************************************************************
-   * Check if the forward exit condition prevail.
-   **********************************************************************/
-  if ((plpinfo->lacp_control.selected == SELECTED) &&
-      (plpinfo->partner_oper_port_state.synchronization == TRUE) &&
-      (plpinfo->partner_oper_port_state.collecting == TRUE) &&
-      (plpinfo->actor_oper_port_state.collecting == TRUE)) {
-
-    LACP_mux_fsm(E8, 
-                 plpinfo->mux_fsm_state,
-                 plpinfo);
-  }
-
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : exit\n", __FUNCTION__);
-  }
-}
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : exit\n", __FUNCTION__);
+    }
+} // collecting_state_action
 
 //******************************************************************
 // Function : collecting_distributing_state_action
@@ -508,68 +474,65 @@ collecting_state_action(lacp_per_port_variables_t *plpinfo)
 static void
 collecting_distributing_state_action(lacp_per_port_variables_t *plpinfo)
 {
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
+    plpinfo->actor_oper_port_state.distributing = TRUE;
 
-  plpinfo->actor_oper_port_state.distributing = TRUE;
+    enable_distributing(plpinfo);
 
-  enable_distributing(plpinfo);
+    plpinfo->lacp_control.ntt = TRUE;
 
+    /**********************************************************************
+     * Call the routine to transmit a LACPDU on the port.
+     **********************************************************************/
+    LACP_async_transmit_lacpdu(plpinfo);
 
-  plpinfo->lacp_control.ntt = TRUE;
+    /**********************************************************************
+     * Check if any of the backward exit conditions prevail.
+     **********************************************************************/
+    if ((plpinfo->lacp_control.selected == UNSELECTED)) {
+        LACP_mux_fsm(E2,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  /**********************************************************************
-   * call the routine to transmit a LACPdu on the port
-   **********************************************************************/
-  LACP_async_transmit_lacpdu(plpinfo);
+    if ((plpinfo->lacp_control.selected == STANDBY)) {
+        LACP_mux_fsm(E4,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
+    if (plpinfo->partner_oper_port_state.synchronization == FALSE) {
+        LACP_mux_fsm(E6,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  /**********************************************************************
-   * Check if any of the backward exit conditions prevail.
-   **********************************************************************/
-  if ((plpinfo->lacp_control.selected == UNSELECTED)) {
-    LACP_mux_fsm(E2, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
+    if ((plpinfo->partner_oper_port_state.synchronization == TRUE) &&
+        (plpinfo->partner_oper_port_state.collecting == FALSE)) {
+        LACP_mux_fsm(E9,
+                     plpinfo->mux_fsm_state,
+                     plpinfo);
+    }
 
-  if ((plpinfo->lacp_control.selected == STANDBY)) {
-    LACP_mux_fsm(E4, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
-
-  if (plpinfo->partner_oper_port_state.synchronization == FALSE) {
-    LACP_mux_fsm(E6, 
-                 plpinfo->mux_fsm_state,
-		 plpinfo);
-  }
-
-  if ((plpinfo->partner_oper_port_state.synchronization == TRUE) &&
-      (plpinfo->partner_oper_port_state.collecting == FALSE)) {
-    LACP_mux_fsm(E9, 
-                 plpinfo->mux_fsm_state,
-                 plpinfo);
-  }
-
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : exit\n", __FUNCTION__);
-  }
-}
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : exit\n", __FUNCTION__);
+    }
+} // collecting_distributing_state_action
 
 void
 start_wait_while_timer(lacp_per_port_variables_t *plpinfo)
 {
-
-  plpinfo->wait_while_timer_expiry_counter = AGGREGATE_WAIT_COUNT;
+    plpinfo->wait_while_timer_expiry_counter = AGGREGATE_WAIT_COUNT;
 }
+
 void
 stop_wait_while_timer(lacp_per_port_variables_t *plpinfo)
 {
-
-  plpinfo->wait_while_timer_expiry_counter = 0;
+    plpinfo->wait_while_timer_expiry_counter = 0;
 }
 
 //******************************************************************
@@ -579,32 +542,35 @@ stop_wait_while_timer(lacp_per_port_variables_t *plpinfo)
 static void
 disable_collecting_distributing(lacp_per_port_variables_t *plpinfo)
 {
-  (void)mlacp_blocking_send_disable_collect_dist(plpinfo);
+    (void)mlacp_blocking_send_disable_collect_dist(plpinfo);
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-    RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
-}
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
+} // disable_collecting_distributing
 
 static void
 enable_collecting(lacp_per_port_variables_t *plpinfo)
 {
-  (void)mlacp_blocking_send_enable_collecting(plpinfo);
+    (void)mlacp_blocking_send_enable_collecting(plpinfo);
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-    RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
-}
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
+} // enable_collecting
 
 static void
 enable_distributing(lacp_per_port_variables_t *plpinfo)
 {
-  (void)mlacp_blocking_send_enable_distributing(plpinfo);
+    (void)mlacp_blocking_send_enable_distributing(plpinfo);
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-	  RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
-}
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
+} // enable_distributing
 
 //******************************************************************
 // Function : attach_mux_to_aggregator
@@ -613,61 +579,36 @@ int
 attach_mux_to_aggregator(lacp_per_port_variables_t *plpinfo)
 {
     LAG_t *lag;
-    int    status   = R_SUCCESS;
-
+    int status = R_SUCCESS;
 
     RENTRY();
 
     if (plpinfo->debug_level & DBG_MUX_FSM) {
-       RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
+        RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
     }
-  // YAGqa36972 : Don't send lport_attach during the reverse transition
-  if ((plpinfo->prev_mux_fsm_state == MUX_FSM_COLLECTING_STATE) ||
-      (plpinfo->prev_mux_fsm_state == MUX_FSM_COLLECTING_DISTRIBUTING_STATE)) {
+    // YAGqa36972 : Don't send lport_attach during the reverse transition
+    if ((plpinfo->prev_mux_fsm_state == MUX_FSM_COLLECTING_STATE) ||
+        (plpinfo->prev_mux_fsm_state == MUX_FSM_COLLECTING_DISTRIBUTING_STATE)) {
 
-     if (plpinfo->debug_level & DBG_MUX_FSM) {
-        RDBG("%s : prev_mux_fsm_state is COLLECTING_DISTRIBUTING "
-         "and so returning (lport 0x%llx)\n", __FUNCTION__, plpinfo->lport_handle);
-     }
-     return(status);
-  }
+        if (plpinfo->debug_level & DBG_MUX_FSM) {
+            RDBG("%s : prev_mux_fsm_state is COLLECTING_DISTRIBUTING "
+                 "and so returning (lport 0x%llx)\n",
+                 __FUNCTION__, plpinfo->lport_handle);
+        }
+        return (status);
+    }
 
     lag = plpinfo->lag;
- /* XXX PI
-    if (!lag || !lag->lnk) */
     if (!lag) {
-
-      goto end;
+        goto end;
     }
 
-    /* XXX Extract the lag & hand over to SmartTrunk module ?? XXX
-
-    aggr = lag->lnk->aggregator;
-    if (!aggr)
-        return;
-    */
-
-
-    /*
-     * Complete the aggregator initialization by what is now known
-     * through protocol hand shaking. 
-       PI Done in the blocking send
-    
-     XXX Ports[port]->Get_IP_Router_MAC(port, &aggr->mac_address);
-
-    memcpy((macaddr_3_t *)(aggr->partner_system_mac_addr),
-           lacp_port->partner_oper_system_variables.system_mac_addr,
-           MAC_ADDR_LENGTH);
-    
-    aggr->partner_system_priority =
-        lacp_port->partner_oper_system_variables.system_priority;
-    */
-
     status = mlacp_blocking_send_attach_aggregator(plpinfo);
+
 end:
     REXITS(status);
-    return status;    
-}
+    return status;
+} // attach_mux_to_aggregator
 
 //******************************************************************
 // Function : detach_mux_from_aggregator
@@ -676,26 +617,27 @@ int
 detach_mux_from_aggregator(lacp_per_port_variables_t *plpinfo)
 {
     LAG_t *lag;
-    int          status  = R_SUCCESS;
+    int status = R_SUCCESS;
 
-            
     RENTRY();
 
-  if (plpinfo->debug_level & DBG_MUX_FSM) {
-     RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
+    if (plpinfo->debug_level & DBG_MUX_FSM) {
+        RDBG("%s : lport_handle 0x%llx\n",
+             __FUNCTION__, plpinfo->lport_handle);
+    }
 
     lag = plpinfo->lag;
-/* XXX PI    if (!lag || !lag->lnk) */
-    if (!lag ) {
 
-      goto end;
+    if (!lag) {
+        goto end;
     }
+
     status = mlacp_blocking_send_detach_aggregator(plpinfo);
     if(status == R_SUCCESS) {
-      plpinfo->sport_handle = 0;
+        plpinfo->sport_handle = 0;
     }
+
 end:
     REXITS(status);
-    return status;    
-}
+    return status;
+} // detach_mux_from_aggregator

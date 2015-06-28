@@ -33,12 +33,10 @@
  *
  *    March 5, 2000
  *
- *
  *----------------------------------------------------------------------*/
 
-#ifndef _LACP_FSM_H_
-#define _LACP_FSM_H_
-
+#ifndef __LACP_FSM_H__
+#define __LACP_FSM_H__
 
 /*****************************************************************************
  *                   EVENT NUMBERS
@@ -54,7 +52,6 @@
 #define E9 8
 #define E10 9
 #define NO_ACTION 0
-
 
 /*****************************************************************************/
 /*                   MACROS DEFINING ACTIONS FOR RECV FSM                    */
@@ -121,13 +118,9 @@
                                     ACTION = FSM[INPUT][STATE].action; \
                                     STATE = FSM[INPUT][STATE].next_state;
 
-
-typedef struct fsm_entry
-{
+typedef struct fsm_entry {
   unsigned int next_state;
   unsigned int action;
 } FSM_ENTRY;
 
-
-#endif /* _LACP_FSM_H_ */
-
+#endif /* __LACP_FSM_H__ */

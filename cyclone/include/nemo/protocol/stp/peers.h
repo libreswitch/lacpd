@@ -20,17 +20,10 @@
 //  Description    : This file contains the definition of the protocol
 //                   messages exchanged between the master STP task and
 //                   the helper STP daemons on the line card CPUs.
-//
 //**************************************************************************
 
-//%protocol stp/peers
-
-/*
-  struct ML_version MLv_stp_peers[] = 
-  {
-    { 1, 0 },
-  };
-*/
+#ifndef __h_NEMO_PROTOCOL_STP_PEERS_H__
+#define __h_NEMO_PROTOCOL_STP_PEERS_H__
 
 enum MLm_stp_peers {
     MLm_stp_peers__hello = 0,              //% MLt_stp_peers__hello
@@ -49,15 +42,17 @@ struct MLt_stp_peers__byebye {
 };
 
 struct MLt_stp_peers__txPdu {
-    int slotNum;
-    int portNum;
-    int pktLen; char *data;
+    int  slotNum;
+    int  portNum;
+    int  pktLen;
+    char *data;
 };
 
 struct MLt_stp_peers__rxPdu {
-    int slotNum;
-    int portNum;
-    int pktLen; char *data;
+    int  slotNum;
+    int  portNum;
+    int  pktLen;
+    char *data;
 };
 
 struct MLt_stp_peers__vStpState {
@@ -65,3 +60,5 @@ struct MLt_stp_peers__vStpState {
      int vstpIndex;
      int state;
 };
+
+#endif  // __h_NEMO_PROTOCOL_STP_PEERS_H__

@@ -19,26 +19,18 @@
 // File : pm_cmn.h
 // This file has the structures and #defines accessed by various modules.
 //*********************************************************************
-#ifndef  PM_CMN_H_
-#define  PM_CMN_H_
+#ifndef  __PM_CMN_H__
+#define  __PM_CMN_H__
 
-// Halon
-//#include <nemo/protocol/include/port.h>
-
-#define PORT_BITS           5
-#define NODE_BITS           6
+#define PORT_BITS  5
+#define NODE_BITS  6
 
 #define GET_CPU_HW_PORT_NUM(slot) ((slot) << PORT_BITS)
-
 #define GET_HW_PORT_NUM(slot,port,ifl,mdi) \
-             ((((mdi) & 0x3) << 8) | (((ifl) & 0x1) << 16) | ((slot) << PORT_BITS) | (port))
-
+           ((((mdi) & 0x3) << 8) | (((ifl) & 0x1) << 16) | ((slot) << PORT_BITS) | (port))
 #define GET_HW_PORT_SLOT(hw_port_num) (((hw_port_num) >> PORT_BITS) & 0x0000003F)
-
 #define GET_HW_PORT_PORT(hw_port_num) ((hw_port_num) & 0x0000001F)
-
 #define GET_HW_PORT_IFL(hw_port_num) (((hw_port_num) >> 16) & 0x00000001)
-
 #define GET_HW_PORT_MDI(hw_port_num) (((hw_port_num) >> 24) & 0x00000003)
 
 //******************************************************
@@ -59,7 +51,7 @@
 //#define PM_PORT_LINK_DOWN (0)
 #define PM_PORT_HW_SPEED_1000    (3<<24)
 #define PM_PORT_HW_SPEED_100     (2<<24)
-#define PM_PORT_HW_SPEED_10	     (1<<24)
+#define PM_PORT_HW_SPEED_10      (1<<24)
 #define PM_PORT_HW_SPEED_MASK    (3<<24)
 
 #define PM_AUTONEGO_OFF  (1)
@@ -90,7 +82,6 @@
 #define PM_MAC_SLAVE_MODE       2
 #define PM_DEFAULT_MAC_MASTER_SLAVE_MODE    (PM_MAC_MASTER_MODE)
 
-
 #define PM_MAC_CLOCK_SOURCE_EXTERNAL        1
 #define PM_MAC_CLOCK_SOURCE_INTERNAL        2
 #define PM_DEFAULT_MAC_CLOCK_SOURCE         (PM_MAC_CLOCK_SOURCE_EXTERNAL)
@@ -102,6 +93,7 @@
 #define PM_MAX_PORTS (768)
 #define PM_MAX_SUBSLOTS (2)
 #define PM_MAX_SLOTS (32)
+
 //***********************************************************
 // #define constants XXX are they supposed to be enum ?
 //***********************************************************
@@ -174,17 +166,17 @@
 #endif
 /********************* CPU BITMASK ***********************/
 
-typedef	struct MLt_include_port__cpu_mask cpu_mask_t;
+typedef struct MLt_include_port__cpu_mask cpu_mask_t;
 
-#define	PM_CPUMASK_SET(n, p)	\
+#define PM_CPUMASK_SET(n, p)    \
     ((p)->cpu_bits[(n)/32] |= (1 << ((n) % 32)))
-#define	PM_CPUMASK_CLR(n, p)	\
+#define PM_CPUMASK_CLR(n, p)    \
     ((p)->cpu_bits[(n)/32] &= ~(1 << ((n) % 32)))
-#define	PM_CPUMASK_ISSET(n, p)	\
+#define PM_CPUMASK_ISSET(n, p)  \
     ((p)->cpu_bits[(n)/32] & (1 << ((n) % 32)))
-#define	PM_CPUMASK_ISZERO(p)	((p)->cpu_bits[0] == 0)
-#define	PM_CPUMASK_ZERO(p)	(void)memset((p), 0, sizeof(*(p)))
-#define	PM_CPUMASK_CMP(p1, p2)	memcmp(p1, p2, sizeof(*(p1)))
+#define PM_CPUMASK_ISZERO(p)    ((p)->cpu_bits[0] == 0)
+#define PM_CPUMASK_ZERO(p)  (void)memset((p), 0, sizeof(*(p)))
+#define PM_CPUMASK_CMP(p1, p2)  memcmp(p1, p2, sizeof(*(p1)))
 /* p1 and p2 are 2 cpumasks. Compute p0 which is the mask of bits that are
    different in the 2 masks */
 #define PM_CPUMASK_DIFF(p0, p1, p2) ((p0)->cpu_bits[0] = \
@@ -227,8 +219,7 @@ typedef	struct MLt_include_port__cpu_mask cpu_mask_t;
 
 // if this enum is modified, please update libs/cli/port_mgt.c
 // struct npc port_info[]
-enum PM_lport_type
-{
+enum PM_lport_type {
     PM_LPORT_INVALID  = 0x0,
     PM_LPORT_FAE      = 0x1,
     PM_LPORT_GIGE     = 0x2,
@@ -257,8 +248,7 @@ enum PM_lport_type
 
 // if this enum is modified, please update libs/cli/port_mgt.c
 // struct npc port_info[]
-enum PM_sport_type
-{
+enum PM_sport_type {
     PM_SPORT_REGULAR  = 0x0,
     PM_SPORT_LAG      = 0x1,
     PM_SPORT_MLPPP    = 0x2,
@@ -341,7 +331,6 @@ typedef unsigned long long port_handle_t;
 #define PM_IS_SPORT(handle)   ((handle >> 63) == 1)
 #define PM_IS_SVLAN(handle)   (PM_IS_LPORT(handle) & ((handle >> 43) & 0x1))
 
-
 /* Generate PPP unit from a port handle */
 #define PM_HANDLE2PPP(handle) \
     ((PM_HANDLE2SLOT(handle) << 27) | (PM_HANDLE2MODULE(handle) << 25) | \
@@ -353,7 +342,7 @@ typedef unsigned long long port_handle_t;
  * WARNING: We must define a new GE LPORT type for new cards
  * that do not require a port number swap
  */
-#define PM__LPORT_GIGE_LAST_PORT_NUM		9
+#define PM__LPORT_GIGE_LAST_PORT_NUM        9
 
 extern int pm_port2hport_map[];
 extern int pm_hport2port_map[];
@@ -367,7 +356,7 @@ extern int pm_hport2port_map[];
 
 #define PM_PORT_2_HPORT(_port_)     pm_port2hport_map[_port_]
 
-#define PM_HPORT_2_PORT(_hport_)	pm_hport2port_map[_hport_]
+#define PM_HPORT_2_PORT(_hport_)    pm_hport2port_map[_hport_]
 
 #else
 
@@ -375,7 +364,7 @@ extern int pm_hport2port_map[];
 
 #define PM_PORT_2_HPORT(_port_)     _port_
 
-#define PM_HPORT_2_PORT(_hport_)	_hport_
+#define PM_HPORT_2_PORT(_hport_)    _hport_
 
 #endif
 
@@ -502,4 +491,4 @@ enum PM_MEDIA_MODULE_TYPES {
 #define PM_MAX_NUM_PORT_PER_LAG     DRFT_FTE_MAX_MULTIPATHS
 #define PM_MAX_NUM_MAC_PER_PORT     2
 
-#endif  // PM_CMN_H_
+#endif  // __PM_CMN_H__

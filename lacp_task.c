@@ -23,8 +23,8 @@
  *  SUB-SYSTEM:
  *
  *  ABSTRACT
- *    This file contains the lacp task's main function and other
- *    supporting functions
+ *    This file contains the LACP task's main function and other
+ *    supporting functions.
  *
  *  EXPORTED LOCAL ROUTINES:
  *
@@ -39,7 +39,6 @@
  *    March 5, 2000
  *
  *----------------------------------------------------------------------*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -64,49 +63,28 @@
 /****************************************************************************
  *                    Global Variables Definition
  ****************************************************************************/
-const char lacp_mcast_addr[MAC_ADDR_LENGTH] = 
+const char lacp_mcast_addr[MAC_ADDR_LENGTH] =
 {0x01, 0x80, 0xc2, 0x00, 0x00, 0x02};
 
-//*********************************************************************
-// XXX Currently duplicate definition resides in nemosh/sysmgt/lag.c XXX
-// how to share it across modules ? can't put in lacp_cmn.h
-//
-// This has to be non-zero as per YAGqa26150 ?
-//*********************************************************************
-// MAC_ADDR_LENGTH
-
-// YAGqa34309 : should be all zeroes
 const char default_partner_system_mac[6] = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-                        
+
 extern unsigned char my_mac_addr[];
-
-/****************************************************************************
- *   Static Variables
- ****************************************************************************/
-/* the queue for receiveing LACP Pdus */
-
 
 /****************************************************************************
  *   Prototypes for static functions
  ****************************************************************************/
-void LACP_periodic_tx(void);  // XXX global
-
+void LACP_periodic_tx(void);
 static void periodic_tx_timer_expiry(lacp_per_port_variables_t *);
-// XXX global + diff params
 void LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *, int len);
-
-void LACP_current_while_expiry(void);  // XXX global
-
+void LACP_current_while_expiry(void);
 static void current_while_timer_expiry(lacp_per_port_variables_t *);
-
 static void mux_wait_while_timer_expiry(lacp_per_port_variables_t *);
 static int LACP_marker_responder(lacp_per_port_variables_t *, void *);
 static marker_pdu_payload_t *LACP_build_marker_response_payload(
-        port_handle_t, marker_pdu_payload_t *);
-static void LACP_transmit_marker_response(
-        port_handle_t, void *);
-static int is_pkt_from_same_system(
-        lacp_per_port_variables_t *, lacpdu_payload_t *);
+                                           port_handle_t, marker_pdu_payload_t *);
+static void LACP_transmit_marker_response(port_handle_t, void *);
+static int is_pkt_from_same_system(lacp_per_port_variables_t *, lacpdu_payload_t *);
+int lacp_lag_port_match(void *, void *);
 
 
 /**************************************************************
@@ -117,7 +95,7 @@ static int is_pkt_from_same_system(
  * Function: LACP_periodic_tx()
  * Synopsis: Goes thro' all the ports in all LACP link groups and does
  *           periodic Tx on each one of them depending upon their states.
- * Input  :  
+ * Input  :
  * Returns:  void
  *----------------------------------------------------------------------*/
 void
@@ -129,14 +107,12 @@ LACP_periodic_tx(void)
 
     plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
 
-    while (plpinfo) 
-    {
+    while (plpinfo) {
         if (plpinfo->debug_level & DBG_TX_FSM) {
             print_lacp_fsm_state(plpinfo->lport_handle);
         }
 
-        if (plpinfo->lacp_up == TRUE) {	/* LACP port is initialized */
-            // XXX No need LACP_poll_link_state(plpinfo);
+        if (plpinfo->lacp_up == TRUE) { /* LACP port is initialized */
             periodic_tx_timer_expiry(plpinfo);
             mux_wait_while_timer_expiry(plpinfo);
         }
@@ -144,9 +120,8 @@ LACP_periodic_tx(void)
     }
 
     REXIT();
-		    
-}
 
+} /* LACP_periodic_tx */
 
 /*----------------------------------------------------------------------
  * Function: periodic_tx_timer_expiry(int)
@@ -156,66 +131,60 @@ LACP_periodic_tx(void)
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
-periodic_tx_timer_expiry(lacp_per_port_variables_t *plpinfo) // XXX
+periodic_tx_timer_expiry(lacp_per_port_variables_t *plpinfo)
 {
-  RENTRY();
+    RENTRY();
 
-  /********************************************************************
-   * If the state is no periodic do nothing  
-   ********************************************************************/
-  if (plpinfo->periodic_tx_fsm_state == 
-      PERIODIC_TX_FSM_NO_PERIODIC_STATE) {
+    /********************************************************************
+     * If the state is no periodic do nothing.
+     ********************************************************************/
+    if (plpinfo->periodic_tx_fsm_state == PERIODIC_TX_FSM_NO_PERIODIC_STATE) {
+        if (plpinfo->debug_level & DBG_TX_FSM) {
+            RDBG("%s : do nothing (lport 0x%llx)\n",
+                 __FUNCTION__, plpinfo->lport_handle);
+        }
+    } else {
+        RDEBUG(DL_TIMERS, "decrement the expiry counter (lport 0x%llx)\n",
+               plpinfo->lport_handle);
 
-    /* Do nothing */
+        /*********************************************************************
+         * Decrement the expiry counter if greater than 0.
+         *********************************************************************/
+        if (plpinfo->periodic_tx_timer_expiry_counter > 0) {
 
-    if (plpinfo->debug_level & DBG_TX_FSM) {
-       RDBG("%s : do nothing (lport 0x%llx)\n", __FUNCTION__, plpinfo->lport_handle);
-    }
+            plpinfo->periodic_tx_timer_expiry_counter--;
 
-  } else { 
+            /*********************************************************************
+             * Since the lowest expiry time is 1 second, we clear the async Tx
+             * counter every 1 second.
+             *********************************************************************/
+            plpinfo->async_tx_count = 0;
 
-    RDEBUG(DL_TIMERS, "decrement the expiry counter (lport 0x%llx)\n",
-           plpinfo->lport_handle);
+            /*********************************************************************
+             * If expiry counter is 0, generate the appropriate event.
+             *********************************************************************/
+            if (plpinfo->periodic_tx_timer_expiry_counter == 0) {
 
-    /*********************************************************************
-     *    Decrement the expiry counter if greater than 0  
-     *********************************************************************/
-    if (plpinfo->periodic_tx_timer_expiry_counter > 0) {
+                /* Generate periodic Tx timer expired event (E3) */
+                LACP_periodic_tx_fsm(E3,
+                                     plpinfo->periodic_tx_fsm_state,
+                                     plpinfo);
 
-      plpinfo->periodic_tx_timer_expiry_counter--;
+            } else if (TRUE == plpinfo->lacp_control.ntt) {
+                // Halon FIX: if "async_tx_count" reached the max while
+                // NTT was true, then LACPDUs would not have been
+                // transmitted.  We need to transmit it now if NTT is
+                // still true and periodic_tx_timer didn't expire in this
+                // round (i.e. long timeout).
+                LACP_async_transmit_lacpdu(plpinfo);
+            }
 
-      /*********************************************************************
-       * Since the lowest expiry time is 1 second, we clear the async Tx
-       * counter every 1 second.
-       *********************************************************************/
-      plpinfo->async_tx_count = 0;
-      
-      /*********************************************************************
-       *   If expiry counter is 0, generate the appropriate event  
-       *********************************************************************/
-      if (plpinfo->periodic_tx_timer_expiry_counter == 0) {
+        } // if (plpinfo->periodic_tx_timer_expiry_counter > 0)
+    } // else - (FSM state != PERIODIC_TX_FSM_NO_PERIODIC_STATE)
 
-	/* Generate periodic Tx timer expired event (E3) */
-	LACP_periodic_tx_fsm(E3, 
-                             plpinfo->periodic_tx_fsm_state, 
-                             plpinfo);
+    REXIT();
 
-      } else if (TRUE == plpinfo->lacp_control.ntt) {
-	      // Halon FIX: if "async_tx_count" reached the max while
-	      // NTT was true, then LACPDUs would not have been
-	      // transmitted.  We need to transmit it now if NTT is
-	      // still true and periodic_tx_timer didn't expire in this
-	      // round (i.e. long timeout).
-	      LACP_async_transmit_lacpdu(plpinfo);
-      }
-
-    } // if (plpinfo->periodic_tx_timer_expiry_counter > 0 )
-
-  } // else - (FSM state != PERIODIC_TX_FSM_NO_PERIODIC_STATE)
-
-  REXIT();
-		    
-}
+} /* periodic_tx_timer_expiry */
 
 /*----------------------------------------------------------------------
  * Function: mux_wait_while_timer_expiry(int)
@@ -229,85 +198,76 @@ mux_wait_while_timer_expiry(lacp_per_port_variables_t *lacp_port)
 {
     LAG_t *lag;
     lacp_per_port_variables_t *plp;
-    int lacp_lag_port_match(void *, void *);
 
     RENTRY();
 
     RDEBUG(DL_TIMERS, "%s: lport 0x%llx\n", __FUNCTION__, lacp_port->lport_handle);
 
-#if 0 // XXX will not happen for us 
-    if (!PORT_EXISTS(port))
-        return;
-#endif
-    
     lag = lacp_port->lag;
-    if (!lag) return;
+    if (!lag) {
+        return;
+    }
 
-    if (lag->pplist == NULL) return; // XXX extra, useful check ...
-    // if (!MASK_ISSET(&lag->pmask, lacp_port->lport_handle)) return; // XXXXXX
+    if (lag->pplist == NULL) {
+        return;
+    }
 
-    if (n_list_find_data(lag->pplist, 
-                         &lacp_lag_port_match, 
-                         &lacp_port->lport_handle) == NULL)
-    {
+    if (n_list_find_data(lag->pplist,
+                         &lacp_lag_port_match,
+                         &lacp_port->lport_handle) == NULL) {
         RDEBUG(DL_ERROR, "lport (ox%llx) not set ??\n", lacp_port->lport_handle);
         return;
     }
-    
-    if (lacp_port->wait_while_timer_expiry_counter > 0 ) {
+
+    if (lacp_port->wait_while_timer_expiry_counter > 0) {
 
         RDEBUG(DL_TIMERS, "decrement wait_while_timer (lport 0x%llx)\n",
                lacp_port->lport_handle);
 
         lacp_port->wait_while_timer_expiry_counter--;
+
         /*
          * If expiry counter is 0, check for ready and selected variables.
-         * If selected is SELECTED for the port and ready is TRUE for the 
+         * If selected is SELECTED for the port and ready is TRUE for the
          * link group, then generate event E3 for the port's mux fsm.
          */
-
         if (lacp_port->wait_while_timer_expiry_counter <= 0) {
-            // XXX int p;
-        
+
             lacp_port->lacp_control.ready_n = TRUE;
-            
-            lag->ready = TRUE;		/* assume */
-        
+            lag->ready = TRUE;      /* assume */
+
             for (plp = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
                  plp;
-                 plp = NEMO_AVL_NEXT(plp->avlnode))
-            {
-               // if (!MASK_ISSET(&lag->pmask, lacp_port->lport_handle)) 
-                      // continue;
-               
-               if (n_list_find_data(lag->pplist, 
-                                    &lacp_lag_port_match, 
-                                    &plp->lport_handle) == NULL)
-                   continue;
+                 plp = NEMO_AVL_NEXT(plp->avlnode)) {
 
-               if (plp->lacp_control.ready_n == FALSE) 
-               {
-                   lag->ready = FALSE;
-                   break;
-               }
+                if (n_list_find_data(lag->pplist,
+                                     &lacp_lag_port_match,
+                                     &plp->lport_handle) == NULL) {
+                    continue;
+                }
+
+                if (plp->lacp_control.ready_n == FALSE) {
+                    lag->ready = FALSE;
+                    break;
+                }
             }
 
             if (lag->ready == TRUE &&
                 lacp_port->lacp_control.selected ==  SELECTED) {
-          
-                LACP_mux_fsm(E3, 
-                             lacp_port->mux_fsm_state, 
+                LACP_mux_fsm(E3,
+                             lacp_port->mux_fsm_state,
                              lacp_port);
-            } else
+            } else {
                 start_wait_while_timer(lacp_port);
+            }
 
             lag->ready = FALSE;
         }
     }
 
     REXIT();
-		    
-}
+
+} /* mux_wait_while_timer_expiry */
 
 
 /*********************************************************************
@@ -317,9 +277,9 @@ mux_wait_while_timer_expiry(lacp_per_port_variables_t *lacp_port)
 /*----------------------------------------------------------------------
  * Function: LACP_current_while_expiry()
  * Synopsis: Goes thro' all the ports in all LACP link groups and does
- *           current while expiry action on each one of them depending upon 
- *           their states.
- * Input  :  
+ *           current while expiry action on each one of them depending
+ *           upon their states.
+ * Input  :
  * Returns:  void
  *----------------------------------------------------------------------*/
 void
@@ -330,10 +290,9 @@ LACP_current_while_expiry(void)
     RENTRY();
 
     lacp_port = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
-    while (lacp_port)
-    {
-        if (lacp_port->lacp_up == TRUE)		/* LACP port is initialized */
-        {
+    while (lacp_port) {
+        if (lacp_port->lacp_up == TRUE) { /* LACP port is initialized */
+
             RDEBUG(DL_TIMERS, "invoke current_while_timer_expiry.  lport=0x%llx\n", 
                    lacp_port->lport_handle);
 
@@ -344,138 +303,128 @@ LACP_current_while_expiry(void)
     }
 
     REXIT();
-		    
-}
+
+} /* LACP_current_while_expiry */
 
 /*----------------------------------------------------------------------
  * Function: current_while_timer_expiry(int port_number)
  * Synopsis: Decrements the expiry counter, if greater than 0.
  *           If counter reaches 0, generates a current_while timer
  *           expired event (E2).
- *           
- * Input  :  
+ *
+ * Input  :
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
 current_while_timer_expiry(lacp_per_port_variables_t *plpinfo)
 {
+    RENTRY();
 
-  RENTRY();
+    RDEBUG(DL_TIMERS, "%s: lport 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
 
-  RDEBUG(DL_TIMERS, "%s: lport 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
+    if (plpinfo->current_while_timer_expiry_counter > 0) {
 
-  if (plpinfo->current_while_timer_expiry_counter > 0 )
-  {
+        RDEBUG(DL_TIMERS, "current_while_timer %d lport 0x%llx\n",
+               plpinfo->current_while_timer_expiry_counter,
+               plpinfo->lport_handle);
 
-     RDEBUG(DL_TIMERS, "current_while_timer %d lport 0x%llx\n",
-            plpinfo->current_while_timer_expiry_counter,
-            plpinfo->lport_handle);
+        /********************************************************************
+         * Decrement the expiry counter and if it has reached 0, generate
+         * Event E2.
+         ********************************************************************/
+        plpinfo->current_while_timer_expiry_counter--;
 
-    /********************************************************************
-     * Decrement the expiry counter and if it has reached 0, generate 
-     * Event E2.
-     ********************************************************************/
-    plpinfo->current_while_timer_expiry_counter--;
+        if (plpinfo->current_while_timer_expiry_counter == 0) {
+            /*********************************************************************
+             *  Generate current while timer expired event (E2).
+             *********************************************************************/
+            if (plpinfo->debug_level & DBG_RX_FSM) {
+                RDBG("%s : Generate E2 (lport 0x%llx)\n", __FUNCTION__, plpinfo->lport_handle);
+            }
 
-    if (plpinfo->current_while_timer_expiry_counter == 0 ) {
-
-      /*********************************************************************
-       *  Generate current while timer expired event (E2).
-       *********************************************************************/
-     if (plpinfo->debug_level & DBG_RX_FSM) {
-        RDBG("%s : Generate E2 (lport 0x%llx)\n", __FUNCTION__, plpinfo->lport_handle);
-     }
-
-      LACP_receive_fsm(E2, 
-                       plpinfo->recv_fsm_state, 
-                       NULL, 
-                       plpinfo);
+            LACP_receive_fsm(E2,
+                             plpinfo->recv_fsm_state,
+                             NULL,
+                             plpinfo);
+        }
     }
-  }
 
-  REXIT();
-}
+    REXIT();
 
+} /* current_while_timer_expiry */
 
 /********************************************************************
- *     Function which is called when a LACPdu is received
+ * Function which is called when a LACPDU is received
  ********************************************************************/
 void
 LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *data, int len)
 {
-
     lacpdu_payload_t *lacpdu_payload;
     lacp_per_port_variables_t *plpinfo;
 
     RENTRY();
 
     plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
-    if (plpinfo == NULL || plpinfo->lacp_up == FALSE)
-    {
-       RDEBUG(DL_WARNING, "Got LACPDU, but LACP not enabled (port 0x%llx)\n",
-              lport_handle);
-       return;
+    if (plpinfo == NULL || plpinfo->lacp_up == FALSE) {
+        RDEBUG(DL_WARNING, "Got LACPDU, but LACP not enabled (port 0x%llx)\n",
+               lport_handle);
+        return;
     }
 
     if (plpinfo->debug_level & DBG_LACPDU) {
-      int ii;
-      char buf[512];
+        int ii;
+        char buf[512];
 
-      buf[0] = '\n'; 
-      buf[1] = '\0';
-      RDBG("%s : Received %d bytes on lport 0x%llx\n", 
-         __FUNCTION__, len, plpinfo->lport_handle);
-      RDBG("\n######################################\n");
-      for (ii = 0; ii < len; ii++)
-      {
-          sprintf(&buf[strlen(buf)], "%02x ", data[ii]);
-          if ( ((ii + 1) % 16) == 0) {
-              sprintf(&buf[strlen(buf)], "\n");
-          }
-      }
-      RDBG("%s", buf);
-      RDBG("\n######################################\n");
+        buf[0] = '\n';
+        buf[1] = '\0';
+        RDBG("%s : Received %d bytes on lport 0x%llx\n",
+             __FUNCTION__, len, plpinfo->lport_handle);
+        RDBG("\n######################################\n");
+        for (ii = 0; ii < len; ii++) {
+            sprintf(&buf[strlen(buf)], "%02x ", data[ii]);
+            if ( ((ii + 1) % 16) == 0) {
+                sprintf(&buf[strlen(buf)], "\n");
+            }
+        }
+        RDBG("%s", buf);
+        RDBG("\n######################################\n");
     }
 
-   /*********************************************************************
-    *  If LACP is initialized and up, and if the packet is a Marker PDU,
-    *  then send a Marker response.
-    *
-    *  The function will return TRUE, if the frame was indeed a Marker
-    *  PDU, else it will return FALSE. 
-    *********************************************************************/
-
+    /*********************************************************************
+     * If LACP is initialized and up, and if the packet is a Marker PDU,
+     * then send a Marker response.
+     *
+     * The function will return TRUE, if the frame was indeed a Marker
+     * PDU, else it will return FALSE.
+     *********************************************************************/
     if (LACP_marker_responder(plpinfo, data) == TRUE) {
-        // XXX free(data);
         if (plpinfo->debug_level & DBG_LACPDU) {
-           RDBG("%s : marker_responder action done (lport 0x%llx)\n", 
-              __FUNCTION__, lport_handle);
+            RDBG("%s : marker_responder action done (lport 0x%llx)\n",
+                 __FUNCTION__, lport_handle);
         }
         return;
     }
 
     /********************************************************************
-     *   Check if the Pdu type is LACP
+     * Check if the PDU type is LACP.
      ********************************************************************/
     lacpdu_payload = (lacpdu_payload_t *)data;
     if (lacpdu_payload->subtype != LACP_SUBTYPE) {
-        // XXX free(data);
         return;
     }
 
     /*
      * Discard if a loop back packet.
      */
-    if (is_pkt_from_same_system(plpinfo, lacpdu_payload))
-    {
-        if (plpinfo->rx_lacpdu_display == TRUE)
-            RDEBUG(DL_LACPDU, "Rx LACPdu on port 0x%llx discarded - "
-               "ls it's in loop back.\n", lport_handle);
-        // XXX free(data);
+    if (is_pkt_from_same_system(plpinfo, lacpdu_payload)) {
+        if (plpinfo->rx_lacpdu_display == TRUE) {
+            RDEBUG(DL_LACPDU, "Rx LACPDU on port 0x%llx discarded - "
+                   "ls it's in loop back.\n", lport_handle);
+        }
         return;
     }
 
-    /* 
+    /*
      * Halon: discard LACPDU if it contains following invalid data:
      *    actor port = 0
      *    actor key  = 0
@@ -486,182 +435,159 @@ LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *data, int len)
      *    our box to work with Procurve 3400 box.
      */
     if (lacpdu_payload->actor_port == 0) {
-            RDEBUG(DL_LACPDU, "Rx LACPdu on port 0x%llx discarded - "
-		   "port (%d) is 0.\n",
-		   lport_handle, lacpdu_payload->actor_port);
-	    return;
+        RDEBUG(DL_LACPDU, "Rx LACPDU on port 0x%llx discarded - "
+               "port (%d) is 0.\n",
+               lport_handle, lacpdu_payload->actor_port);
+        return;
     }
 
-
     /*********************************************************************
-     * If the Rx lacpdu display is on, then display the received packet.
+     * If the Rx LACPDU display is on, then display the received packet.
      *********************************************************************/
     if (plpinfo->rx_lacpdu_display == TRUE) {
-	  
-        printf("Rx LACPdu on port %llx:\n", lport_handle);
-        printf("=====================\n\n");
-        // display_lacpdu(lacpdu_payload, (char *)ph->ph_smac, 
-                       // (char *)ph->ph_dmac, LACP_ETYPE);
 
-        // XXX data[0]/[6] shd be DA/SA ?? XXX
+        printf("Rx LACPDU on port %llx:\n", lport_handle);
+        printf("=====================\n\n");
         display_lacpdu(lacpdu_payload, (char *)&data[6],
                        (char *)&data[0], LACP_ETYPE);
         printf("\n\n");
     }
 
     /*********************************************************************
-     *   Process the LACPdu
+     * Process the LACPDU.
      *********************************************************************/
     LACP_process_lacpdu(plpinfo, data);
-	
-    REXIT();
-		    
-    // XXX free(data);
-}
 
+    REXIT();
+
+} /* LACP_process_input_pkt */
 
 /*----------------------------------------------------------------------
  * Function: LACP_marker_responder(int port_number, void *data)
- * Synopsis: Checks if the recvd Pdu is a marker Pdu, if so
- *           transmits a marker response Pdu.
- *           
- * Input  :  int - port number, void * - pointer to recvd Pdu Data.
- * Returns:  TRUE if the recvd Pdu was indeed a marker Pdu 
- *           FALSE if the recvd PSu was not a marker Pdu.
+ * Synopsis: Checks if the recvd PDU is a marker PDU, if so
+ *           transmits a marker response PDU.
+ *
+ * Input  :  int - port number, void * - pointer to recvd PDU Data.
+ * Returns:  TRUE if the recvd PDU was indeed a marker PDU.
+ *           FALSE if the recvd PDU was not a marker PDU.
  *----------------------------------------------------------------------*/
 static int
 LACP_marker_responder(lacp_per_port_variables_t *plpinfo, void *data)
 {
+    int status = FALSE;
+    marker_pdu_payload_t *marker_payload;
+    marker_pdu_payload_t *marker_response_payload;
 
-  int status = FALSE; 
-  marker_pdu_payload_t *marker_payload;
-  marker_pdu_payload_t *marker_response_payload;
+    RENTRY();
 
+    if (plpinfo->debug_level & DBG_LACPDU) {
+        RDBG("%s : lport 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
+    }
 
-  RENTRY();
+    marker_payload = (marker_pdu_payload_t *)data;
 
-  if (plpinfo->debug_level & DBG_LACPDU) {
-     RDBG("%s : lport 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
-  }
+    if (marker_payload->subtype != MARKER_SUBTYPE) {
+        goto exit;
+    }
 
-  marker_payload = (marker_pdu_payload_t *)data;
+    plpinfo->marker_pdus_received++;
+    status = TRUE;
 
-  if (marker_payload->subtype != MARKER_SUBTYPE) {
-    goto exit;
-  }
+    if (!(marker_response_payload =
+          LACP_build_marker_response_payload(plpinfo->lport_handle, data))) {
+        /* Report error and exit with status as TRUE */
+        RDEBUG(DL_ERROR, "CANT TX MARKER RESPONSE\n");
+        goto exit;
+    }
 
-  plpinfo->marker_pdus_received++;
-  status = TRUE;
-
-  if (!(marker_response_payload = 
-	LACP_build_marker_response_payload(plpinfo->lport_handle, data))) {
-
-    /* Report error and exit with status as TRUE */
-    // XXX ERR_errlog(ERR_FORCEFATAL, lacp_efacid, LACP_E_CANTTXMARKERRESPONSE, 0);
-    RDEBUG(DL_ERROR, "CANT TX MARKER RESPONSE\n");
-    goto exit;
-  }
-
-  LACP_transmit_marker_response(plpinfo->lport_handle, 
-                                (void *)marker_response_payload);
-  free((void *)marker_response_payload);
+    LACP_transmit_marker_response(plpinfo->lport_handle,
+                                  (void *)marker_response_payload);
+    free((void *)marker_response_payload);
 
 exit:
+    REXIT();
 
-  REXIT();
-		    
-  return (status);
+    return (status);
 
-}
-
-
+} /* LACP_marker_responder */
 
 /*----------------------------------------------------------------------
  * Function: LACP_build_lacpdu(int port_number)
  * Synopsis: Function to construct the lacpdu.
- * Input  :  
+ * Input  :
  *           port_number = port number on which to act upon.
- * Returns:  pointer to the constructed lacpdu payload or NULL in case 
+ * Returns:  pointer to the constructed lacpdu payload or NULL in case
  *           of error.
  *----------------------------------------------------------------------*/
 static marker_pdu_payload_t *
 LACP_build_marker_response_payload(port_handle_t lport_handle,
-			      marker_pdu_payload_t *marker_pdu)
+                                   marker_pdu_payload_t *marker_pdu)
 {
+    marker_pdu_payload_t *marker_response_payload;
 
+    RENTRY();
 
-  marker_pdu_payload_t *marker_response_payload;
+    // DL4 (not per-port debug) as this is not common.
+    RDEBUG(DL_LACPDU, "%s: lport 0x%llx\n", __FUNCTION__, lport_handle);
 
-  
-  RENTRY();
+    /***************************************************************************
+     * Allocate memory for the lacpdu.
+     ***************************************************************************/
+    marker_response_payload = (marker_pdu_payload_t *)malloc(sizeof(marker_pdu_payload_t));
+    if (marker_response_payload == NULL) {
+        /* Report error */
+        RDEBUG(DL_ERROR, "%s : LACP_E_NOMEMMARKERRESPONSE\n", __FUNCTION__);
+        goto exit;
+    }
 
-  // DL4 (not per-port debug) as this is not common
-  RDEBUG(DL_LACPDU, "%s: lport 0x%llx\n", __FUNCTION__, lport_handle);
+    /***************************************************************************
+     * Zero out the memory.
+     ***************************************************************************/
+    memset(marker_response_payload, 0, sizeof(marker_pdu_payload_t));
 
-  /***************************************************************************
-   * Allocate memory for the lacpdu
-   ***************************************************************************/
-  marker_response_payload = (marker_pdu_payload_t *)
-	                        malloc(sizeof(marker_pdu_payload_t));
-  if (marker_response_payload == NULL) {
-    /* Report error */
-    // ERR_errlog(ERR_FORCEFATAL, lacp_efacid, LACP_E_NOMEMMARKERRESPONSE, 0);
-    RDEBUG(DL_ERROR, "%s : LACP_E_NOMEMMARKERRESPONSE\n", __FUNCTION__);
-    goto exit;
-  }
+    /***************************************************************************
+     * Fill in the general parameters in the marker_response_payload.
+     ***************************************************************************/
+    marker_response_payload->subtype = MARKER_SUBTYPE;
+    marker_response_payload->version_number = MARKER_VERSION;
 
-  /***************************************************************************
-   * zero out the memory.
-   ***************************************************************************/
-  memset(marker_response_payload, 0, sizeof(marker_pdu_payload_t));
-
-  /***************************************************************************
-   * Fill in the general parameters in the marker_response_payload.
-   ***************************************************************************/
-  marker_response_payload->subtype = MARKER_SUBTYPE;
-  marker_response_payload->version_number = MARKER_VERSION;
-
-  /***************************************************************************
-   * Fill in the other parameters in the marker_response_payload.
-   * XXX No ntoh changes here, as we're using the incoming data itself to
-   * form this PDU and turn it around XXX
-   ***************************************************************************/
-  marker_response_payload->tlv_type_marker = MARKER_TLV_TYPE;
-  marker_response_payload->marker_info_length = MARKER_TLV_INFO_LENGTH;
-  marker_response_payload->requester_port = marker_pdu->requester_port;
-  memcpy((char *)marker_response_payload->requester_system, 
-	 (char *)marker_pdu->requester_system, MAC_ADDR_LENGTH);
-  marker_response_payload->requester_transaction_id = 
-    marker_pdu->requester_transaction_id;
-  marker_response_payload->tlv_type_terminator = TERMINATOR_TLV_TYPE;
-  marker_response_payload->terminator_length =   TERMINATOR_LENGTH;
+    /***************************************************************************
+     * Fill in the other parameters in the marker_response_payload.
+     * XXX No ntoh changes here, as we're using the incoming data itself to
+     * form this PDU and turn it around XXX
+     ***************************************************************************/
+    marker_response_payload->tlv_type_marker = MARKER_TLV_TYPE;
+    marker_response_payload->marker_info_length = MARKER_TLV_INFO_LENGTH;
+    marker_response_payload->requester_port = marker_pdu->requester_port;
+    memcpy((char *)marker_response_payload->requester_system,
+           (char *)marker_pdu->requester_system, MAC_ADDR_LENGTH);
+    marker_response_payload->requester_transaction_id =
+                                    marker_pdu->requester_transaction_id;
+    marker_response_payload->tlv_type_terminator = TERMINATOR_TLV_TYPE;
+    marker_response_payload->terminator_length =   TERMINATOR_LENGTH;
 
 exit:
+    REXIT();
 
-  REXIT();
-		    
-  return (marker_response_payload);
+    return (marker_response_payload);
 
-}
-
-
+} /* LACP_build_marker_response_payload */
 
 /*----------------------------------------------------------------------
  * Function: LACP_transmit_marker_response(int pnum, void *data)
  * Synopsis: Function to transmit a  marker pdu
- * Input  :  
+ * Input  :
  *           port_number = port number on which to act upon.
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
 LACP_transmit_marker_response(port_handle_t lport_handle, void *data)
 {
-
     unsigned int ii;
 
     RENTRY();
 
-    // DL4 (not per-port debug) as this is not common
+    // DL4 (not per-port debug) as this is not common.
     RDEBUG(DL_LACPDU, "%s: lport 0x%llx\n", __FUNCTION__, lport_handle);
 
     //********************************************************************
@@ -669,68 +595,67 @@ LACP_transmit_marker_response(port_handle_t lport_handle, void *data)
     // itself XXX
     //********************************************************************/
     if (slog_level & (DL_LACPDU)) {
-	    for (ii = 0; ii < sizeof(marker_pdu_payload_t); ii++) {
-		    RDBG("%2x ", ((unsigned char *) data)[ii]);
-		    if ( ((ii + 1) % 16) == 0) RDBG("\n");
-	    }
-	    RDBG("\n");
+        for (ii = 0; ii < sizeof(marker_pdu_payload_t); ii++) {
+            RDBG("%2x ", ((unsigned char *) data)[ii]);
+            if ( ((ii + 1) % 16) == 0) RDBG("\n");
+        }
+        RDBG("\n");
     }
-    
+
     // Halon
     mlacp_send((unsigned char *)data,
                sizeof(marker_pdu_payload_t),
                lport_handle);
-}
+
+} /* LACP_transmit_marker_response */
 
 /*----------------------------------------------------------------------
  * Function: is_same_system(int port_number, lacpdu_payload_t *recvd_lacpdu)
- *           
+ *
  * Synopsis: Checks if the recvd pkt was sent from the same system(loop back)
- * Input  :  
+ * Input  :
  *           port_number - port number
  *           recvd_lacpdu - recieved pdu
  *
  * Returns:  TRUE - if a loop back is detected
- *           FALSE - if  there is no loop back detected.x
+ *           FALSE - if there is no loop back detected.
  *----------------------------------------------------------------------*/
 static int
-is_pkt_from_same_system(lacp_per_port_variables_t *plpinfo, 
+is_pkt_from_same_system(lacp_per_port_variables_t *plpinfo,
                         lacpdu_payload_t *recvd_lacpdu)
 {
-  
-  int status = FALSE;
+    int status = FALSE;
 
-  /***************************************************************************
-   * If the local system identifier is the same as the remote system identifier
-   * then we have a loop back link. If loop back, store the remote port number
-   * in the cgPort_t structure.
-   ***************************************************************************/
-  if (!memcmp(plpinfo->actor_oper_system_variables.system_mac_addr,
-              recvd_lacpdu->actor_system,
-              MAC_ADDR_LENGTH)) {
-    
-    /* Signal detected loop back */
-    status = TRUE;
+    /***************************************************************************
+     * If the local system identifier is the same as the remote system identifier
+     * then we have a loop back link. If loop back, store the remote port number
+     * in the cgPort_t structure.
+     ***************************************************************************/
+    if (!memcmp(plpinfo->actor_oper_system_variables.system_mac_addr,
+                recvd_lacpdu->actor_system,
+                MAC_ADDR_LENGTH)) {
+        /* Signal detected loop back */
+        status = TRUE;
 
-    if (plpinfo->debug_level & DBG_RX_FSM) {
-       RDBG("%s : is_pkt_from_same_system TRUE (lport 0x%llx)\n", 
-          __FUNCTION__, plpinfo->lport_handle);
+        if (plpinfo->debug_level & DBG_RX_FSM) {
+            RDBG("%s : is_pkt_from_same_system TRUE (lport 0x%llx)\n",
+                 __FUNCTION__, plpinfo->lport_handle);
+        }
     }
-  }
-  return status;
-}
+    return status;
 
-int 
+} /* is_pkt_from_same_system */
+
+int
 lacp_lag_port_match(void *v1, void *v2)
 {
- 
-  lacp_lag_ppstruct_t *ppstruct = v1;
-  port_handle_t lport_handle = *(port_handle_t *) v2;
+    lacp_lag_ppstruct_t *ppstruct = v1;
+    port_handle_t lport_handle = *(port_handle_t *)v2;
 
-  //RDEBUG(DL_LACP_TASK, "structure has 0x%llx, lport_handle 0x%llx",
-  //     ppstruct->lport_handle, lport_handle);
+    if (ppstruct->lport_handle == lport_handle) {
+        return 1;
+    } else {
+        return 0;
+    }
 
-    if (ppstruct->lport_handle == lport_handle) return(1);
-    else return(0);
-}
-
+} /* lacp_lag_port_match */

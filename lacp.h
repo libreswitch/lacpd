@@ -23,7 +23,7 @@
  *  SUB-SYSTEM:
  *
  *  ABSTRACT
- *     The file contains the basic data stuctures for the LACP.
+ *     The file contains basic data stuctures for the LACPD.
  *
  *  AUTHOR:
  *
@@ -45,22 +45,15 @@
 #include <sys/types.h>
 #include <nemo/avl.h>
 #include <nemo/nemo_types.h>
-#include <slog.h>	// Halon system log support
-#include "lacp_stubs.h" // XXX remove from here ??
+#include <slog.h>   // Halon system log support
 
-
-// #include "includes.h"
-//#include "pgrp_api.h"
-
-
-//Halon: Define h/w here for now.  This should be moved out
-//         to a common file for all imported Cyclone code.
+// HALON_TODO: Define h/w here for now.  This should be moved
+// out to a common file for all imported Cyclone code.
 #define __HARDWARE__
 
 //*******************************************************************
 // XXX Nemo Changes End
 //*******************************************************************
-
 
 /*****************************************************************************
  *                   MISC. MACROS
@@ -84,7 +77,6 @@
 #define LACP_TLV_TERMINATOR_INFO_LENGTH 0x0
 #define LACP_ETYPE 0x8809
 
-
 /*****************************************************************************
  *                   MACROS REQD FOR MARKER PROTOCOL
  *****************************************************************************/
@@ -95,93 +87,84 @@
 #define MARKER_TLV_TYPE 0x02
 #define MARKER_TLV_INFO_LENGTH 0x10
 
-
-#ifdef MLS_MIPS_BUILD
-typedef unsigned int boolean_t;
-#endif
-
 /*****************************************************************************
- * LAG Id structure
+ * LAG Id structure.
  *****************************************************************************/
 typedef struct LAG_Id {
 
-  int local_system_priority;
-  macaddr_3_t local_system_mac_addr;
-  int local_port_key;
-  int local_port_priority;
-  int local_port_number;
+    int local_system_priority;
+    macaddr_3_t local_system_mac_addr;
+    int local_port_key;
+    int local_port_priority;
+    int local_port_number;
 
-  int remote_system_priority;
-  macaddr_3_t remote_system_mac_addr;
-  int remote_port_key;
-  int remote_port_priority;
-  int remote_port_number;
+    int remote_system_priority;
+    macaddr_3_t remote_system_mac_addr;
+    int remote_port_key;
+    int remote_port_priority;
+    int remote_port_number;
 
 } LAG_Id_t;
 
-
 /*****************************************************************************
- * port list in the lag structure : each nlist element in the lag structure
- * is of this type
+ * port list in the LAG structure : each nlist element in the LAG structure
+ * is of this type.
  *****************************************************************************/
 typedef struct lacp_lag_ppstruct {
 
-  port_handle_t lport_handle;
+    port_handle_t lport_handle;
 
 } lacp_lag_ppstruct_t;
 
 /*****************************************************************************
- *  Link Aggregation Group(LAG) structure
+ *  Link Aggregation Group (LAG) structure.
  *****************************************************************************/
 typedef struct LAG {
-  enum PM_lport_type port_type;
-  LAG_Id_t *LAG_Id;
-  int ready;
-  int loop_back;
-  // XXX Removed pmask variable XXX
-  void   *pplist; // XXX nlist of ports, of type lacp_lag_ppstruct
-  //struct linkGroup *lnk;
 
-  // Halon: save the sport handle.
-  unsigned long long sp_handle;
+    enum PM_lport_type port_type;
+    LAG_Id_t *LAG_Id;
+    int ready;
+    int loop_back;
+    void *pplist; // nlist of ports, of type lacp_lag_ppstruct
+
+    // Halon: save the sport handle.
+    unsigned long long sp_handle;
+
 } LAG_t;
-
 
 /********************************************************************
  * Data structure containing the state paramter bit fields.
  ********************************************************************/
 typedef struct state_parameters {
 #ifndef __HARDWARE__
-     u_char lacp_activity:1,
-            lacp_timeout:1,
-            aggregation:1,
-            synchronization:1,
-            collecting:1,
-            distributing:1,
-            defaulted:1,
-            expired:1;
+    u_char lacp_activity:1,
+           lacp_timeout:1,
+           aggregation:1,
+           synchronization:1,
+           collecting:1,
+           distributing:1,
+           defaulted:1,
+           expired:1;
 #else
-     // Halon: We're using this structure.
-     u_char expired:1,
-            defaulted:1,
-            distributing:1,
-            collecting:1,
-            synchronization:1,
-            aggregation:1,
-            lacp_timeout:1,
-            lacp_activity:1;
+    // Halon: We're using this structure.
+    u_char expired:1,
+           defaulted:1,
+           distributing:1,
+           collecting:1,
+           synchronization:1,
+           aggregation:1,
+           lacp_timeout:1,
+           lacp_activity:1;
 #endif
-
 } state_parameters_t;
 
-
 /********************************************************************
- * Data structure containing the system variables
+ * Data structure containing the system variables.
  ********************************************************************/
 typedef struct system_variables {
 
-  macaddr_3_t system_mac_addr;
-  u_int system_priority;
+    macaddr_3_t system_mac_addr;
+    u_int system_priority;
 
 } system_variables_t;
 
@@ -189,46 +172,44 @@ typedef struct system_variables {
 #pragma pack(push,1)
 
 /********************************************************************
- * Data structure for the LACPdu payload, We use packed structures
+ * Data structure for the LACPDU payload, We use packed structures
  * to make sure no extra padding is added by the compiler.
  ********************************************************************/
 typedef struct lacpdu_payload {
 
-  u_char headroom[LACP_HEADROOM_SIZE];
-  u_char subtype;
-  u_char version_number;
-  u_char tlv_type_actor;
-  u_char actor_info_length;
-  u_short actor_system_priority;
-  macaddr_3_t actor_system;
-  u_short actor_key;
-  u_short actor_port_priority;
-  u_short actor_port;
-  state_parameters_t actor_state;
-  u_char reserved1[3];
-  u_char tlv_type_partner;
-  u_char partner_info_length;
-  u_short partner_system_priority;
-  macaddr_3_t partner_system;
-  u_short partner_key;
-  u_short partner_port_priority;
-  u_short partner_port;
-  state_parameters_t partner_state;
-  u_char reserved2[3];
-  u_char tlv_type_collector;
-  u_char collector_info_length;
-  u_short collector_max_delay;
-  u_char reserved3[12];
-  u_char tlv_type_terminator;
-  u_char terminator_length;
-  u_char reserved4[50];
+    u_char headroom[LACP_HEADROOM_SIZE];
+    u_char subtype;
+    u_char version_number;
+    u_char tlv_type_actor;
+    u_char actor_info_length;
+    u_short actor_system_priority;
+    macaddr_3_t actor_system;
+    u_short actor_key;
+    u_short actor_port_priority;
+    u_short actor_port;
+    state_parameters_t actor_state;
+    u_char reserved1[3];
+    u_char tlv_type_partner;
+    u_char partner_info_length;
+    u_short partner_system_priority;
+    macaddr_3_t partner_system;
+    u_short partner_key;
+    u_short partner_port_priority;
+    u_short partner_port;
+    state_parameters_t partner_state;
+    u_char reserved2[3];
+    u_char tlv_type_collector;
+    u_char collector_info_length;
+    u_short collector_max_delay;
+    u_char reserved3[12];
+    u_char tlv_type_terminator;
+    u_char terminator_length;
+    u_char reserved4[50];
 
 } lacpdu_payload_t;
 
-
-
 /********************************************************************
- * Data structure for the Marker Pdu payload. We make all the fields
+ * Data structure for the Marker PDU payload. We make all the fields
  * packed to make sure the compiler doesn't add any extra padding for
  * alignment.
  ********************************************************************/
@@ -252,139 +233,120 @@ typedef struct marker_pdu_payload {
 #pragma pack(pop)
 
 
-
 /********************************************************************
- * Data structure for the state machine control variables
+ * Data structure for the state machine control variables.
  ********************************************************************/
 typedef struct lacp_control_variables {
 
-  int begin;
-  int actor_churn;
-  int partner_churn;
-  int ready_n;
-#if 0  /* 802.3ad/3.1 doesn't have it */
-  int matched;
-#endif
-  int selected;
-  int port_moved;
-  int ntt;
-  int port_enabled;
+    int begin;
+    int actor_churn;
+    int partner_churn;
+    int ready_n;
+    int selected;
+    int port_moved;
+    int ntt;
+    int port_enabled;
 
 } lacp_control_variables_t;
 
-
-
 /********************************************************************
- * Data structure containing the per port variables
+ * Data structure containing the per port variables.
  ********************************************************************/
 typedef struct lacp_per_port_variables {
 
+    /********************************************************************
+     *              Actor variables
+     ********************************************************************/
+    u_short actor_admin_port_number;
+    u_short actor_oper_port_number;
+    u_short actor_admin_port_priority;
+    u_short actor_oper_port_priority;
+    u_short actor_admin_port_key;
+    u_short actor_oper_port_key;
+    state_parameters_t actor_admin_port_state;
+    state_parameters_t actor_oper_port_state;
+    system_variables_t actor_admin_system_variables;
+    system_variables_t actor_oper_system_variables;
 
- /********************************************************************
-  *              Actor variables   // XXX u_int --> u_short
-  ********************************************************************/
-  u_short actor_admin_port_number;
-  u_short actor_oper_port_number;
-  u_short actor_admin_port_priority;
-  u_short actor_oper_port_priority;
-  u_short actor_admin_port_key;
-  u_short actor_oper_port_key;
-  state_parameters_t actor_admin_port_state;
-  state_parameters_t actor_oper_port_state;
-  system_variables_t actor_admin_system_variables;
-  system_variables_t actor_oper_system_variables;
+    /********************************************************************
+     *  Partner's variables
+     ********************************************************************/
+    u_short partner_admin_port_number;
+    u_short partner_oper_port_number;
+    u_short partner_admin_port_priority;
+    u_short partner_oper_port_priority;
+    u_short partner_admin_key;
+    u_short partner_oper_key;
+    state_parameters_t partner_admin_port_state;
+    state_parameters_t partner_oper_port_state;
+    system_variables_t partner_admin_system_variables;
+    system_variables_t partner_oper_system_variables;
 
+    /********************************************************************
+     *  LACP fsm control variables
+     ********************************************************************/
+    lacp_control_variables_t lacp_control;
 
- /********************************************************************
-  *  Partner's variables
-  ********************************************************************/
-  u_short partner_admin_port_number;
-  u_short partner_oper_port_number;
-  u_short partner_admin_port_priority;
-  u_short partner_oper_port_priority;
-  u_short partner_admin_key;
-  u_short partner_oper_key;
-  state_parameters_t partner_admin_port_state;
-  state_parameters_t partner_oper_port_state;
-  system_variables_t partner_admin_system_variables;
-  system_variables_t partner_oper_system_variables;
+    /********************************************************************
+     *  LACP fsm state variables
+     ********************************************************************/
+    u_int recv_fsm_state;
+    u_int mux_fsm_state;
+    u_int periodic_tx_fsm_state;
 
+    // Added to avoid sending lport_attach on the way back from
+    // Collecting_Distributing (YAGqa36972)
+    u_int prev_mux_fsm_state;
 
- /********************************************************************
-  *  LACP fsm control variables
-  ********************************************************************/
-  lacp_control_variables_t lacp_control;
+    // Halon - Indicates if the port is part of the LAG bitmap in DB.
+    // LACPD set this flag to true after attaching the port to LAG.
+    int hw_attached_to_mux;
 
+    // HALON_TODO: update comment on how hw_collecting indicator works.
+    int hw_collecting;
 
- /********************************************************************
-  *  LACP fsm state variables
-  ********************************************************************/
-  u_int recv_fsm_state;
-  u_int mux_fsm_state;
-  u_int periodic_tx_fsm_state;
+    /********************************************************************
+     *  Timer counters
+     ********************************************************************/
+    int periodic_tx_timer_expiry_counter;
+    int current_while_timer_expiry_counter;
+    int wait_while_timer_expiry_counter;
+    int async_tx_count;
 
-  // added to avoid sending lport_attach on the way back from
-  // Collecting_Distributing (YAGqa36972)
-  u_int prev_mux_fsm_state;
+    /********************************************************************
+     *  LACP statistics
+     ********************************************************************/
+    u_int lacp_pdus_sent;
+    u_int marker_response_pdus_sent;
+    u_int lacp_pdus_received;
+    u_int marker_pdus_received;
 
-  // Halon - Indicates if the port is part of the LAG bitmap in MED.
-  //   LACPd set this flag to true, after updating the /lag/lagN/port_bitmap.
-  int hw_attached_to_mux;
+    /********************************************************************
+     *  Debug variables
+     ********************************************************************/
+    int rx_machine_debug;
+    int periodic_tx_machine_debug;
+    int mux_machine_debug;
+    int tx_lacpdu_display;
+    int rx_lacpdu_display;
 
-  // Halon - Indicates if STPd has attached the port to trunk in H/W.
-  //    This flag is a mechanism to synchronize events between LACPd & STPd.
-  //    LACPd always starts with hw_collecting=false. Once LACPd decides
-  //    to add this port to a trunk, it updates the /lag/lagN/port_bitmap,
-  //    and stays in COLLECTING state.
-  //    After receiving the LAG bitmap change notice, STPd attaches
-  //    the port in H/W it sets /port/portN/lacp/collecting_ready=true.
-  //    That will cause LACPd to move to COLLECTING_DISTRIBUTING state.
-  int hw_collecting;
+    /********************************************************************
+     *  Misc. variables
+     ********************************************************************/
+    u_short collector_max_delay;
+    u_int aggregation_state;
+    int selecting_lag;  /* LAG_selection() in progress */
+    int lacp_up;
 
- /********************************************************************
-  *  Timer counters
-  ********************************************************************/
-  int periodic_tx_timer_expiry_counter;
-  int current_while_timer_expiry_counter;
-  int wait_while_timer_expiry_counter;
-  int async_tx_count;
-
-
- /********************************************************************
-  *  LACP statistics
-  ********************************************************************/
-  u_int lacp_pdus_sent;
-  u_int marker_response_pdus_sent;
-  u_int lacp_pdus_received;
-  u_int marker_pdus_received;
-
- /********************************************************************
-  *  Debug variables
-  ********************************************************************/
-  int rx_machine_debug;
-  int periodic_tx_machine_debug;
-  int mux_machine_debug;
-  int tx_lacpdu_display;
-  int rx_lacpdu_display;
-
-
- /********************************************************************
-  *  Misc. variables
-  ********************************************************************/
-  u_short collector_max_delay; // XXX u_int --> u_short
-  u_int aggregation_state;
-  int selecting_lag;	/* LAG_selection() in progress */
-  int lacp_up;
-
- /********************************************************************
-  *  avl tree related variables
-  ********************************************************************/
-  enum PM_lport_type port_type;
-  port_handle_t     lport_handle;
-  nemo_avl_node_t        avlnode;
-  LAG_t             *lag;
-  port_handle_t     sport_handle; /* The aggregator handle */
-  int               debug_level;
+    /********************************************************************
+     *  AVL tree related variables
+     ********************************************************************/
+    enum PM_lport_type port_type;
+    port_handle_t lport_handle;
+    nemo_avl_node_t avlnode;
+    LAG_t *lag;
+    port_handle_t sport_handle; /* The aggregator handle */
+    int debug_level;
 
 } lacp_per_port_variables_t;
 

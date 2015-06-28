@@ -15,8 +15,8 @@
  *   under the License.
  */
 
-#ifndef _h_NEMO_PROTOCOL_INCLUDE_LACP_H
-#define _h_NEMO_PROTOCOL_INCLUDE_LACP_H 1
+#ifndef __h_NEMO_PROTOCOL_INCLUDE_LACP_H__
+#define __h_NEMO_PROTOCOL_INCLUDE_LACP_H__
 
 struct MLt_include_lacp__debug {
     unsigned long long lport_handle;
@@ -24,25 +24,27 @@ struct MLt_include_lacp__debug {
 };
 
 struct MLt_include_lacp__lag_tuple {
-  unsigned long long sport_handle; 
-  int local_system_priority;
-  char local_system_mac_addr[6];
-  int local_port_key;
-  int local_port_priority;
-  int local_port_number;
- 
-  int remote_system_priority;
-  char remote_system_mac_addr[6];
-  int remote_port_key;
-  int remote_port_priority; 
-  int remote_port_number;
+    unsigned long long sport_handle;
+    int local_system_priority;
+    char local_system_mac_addr[6];
+    int local_port_key;
+    int local_port_priority;
+    int local_port_number;
 
-  int numPorts; unsigned long long *lport_handles;
+    int remote_system_priority;
+    char remote_system_mac_addr[6];
+    int remote_port_key;
+    int remote_port_priority;
+    int remote_port_number;
+
+    int numPorts;
+    unsigned long long *lport_handles;
 };
 
 struct MLt_include_lacp__key_group {
-  int key_val;
-  int numPorts; unsigned long long *lport_handles;
+    int key_val;
+    int numPorts;
+    unsigned long long *lport_handles;
 };
 
-#endif  // _h_NEMO_PROTOCOL_INCLUDE_LACP_H
+#endif  // __h_NEMO_PROTOCOL_INCLUDE_LACP_H__

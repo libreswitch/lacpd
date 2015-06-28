@@ -47,97 +47,91 @@
 /******************************************************************************************/
 
 // Msg Sender ID (instead of Cyclone msgLib infrastructure)
-#define ml_timer_index  0x11
-#define ml_vlan_index   0x22
-#define ml_bolton_index 0x33
-#define ml_cfgMgr_index 0x44
+#define ml_timer_index   0x11
+#define ml_vlan_index    0x22
+#define ml_bolton_index  0x33
+#define ml_cfgMgr_index  0x44
 #define ml_showMgr_index 0x55
 
 #define MSGLIB_INVALID_INDEX (-1)
-
 
 /******************************************************************************************/
 /**                             ML_event & related                                       **/
 /******************************************************************************************/
 #define ML_MAX_MSG_SIZE  4096
 
-        // Forward declaration
-        struct ML_event;
+// Forward declaration
+struct ML_event;
 
-	typedef void (*ML_peer_callback_func_t)(struct ML_event *event, void *data);
+typedef void (*ML_peer_callback_func_t)(struct ML_event *event, void *data);
 
-        struct ML_version {
-	    short major;
-	    short minor;
-	};
+struct ML_version {
+    short major;
+    short minor;
+};
 
-	struct ML_protocol_version {
-	    struct ML_version version;
-	    struct ML_protocol *p;
-	    int num_elements; struct ML_element *elements;
-	    int num_types; struct ML_type *types;
-	    int num_messages; struct ML_message *messages;
-	    int num_enum_types; struct ML_enum_type *enum_types;
-	};
-	
-	struct ML_protocol {
-	    char *name; char *md5;
-	    int num_versions; struct ML_version *versions;	// pointer to version table
-	    struct ML_protocol_version *protocol_versions;  // versions supported for this protocol.
-	};
+struct ML_protocol_version {
+    struct ML_version version;
+    struct ML_protocol *p;
+    int num_elements; struct ML_element *elements;
+    int num_types; struct ML_type *types;
+    int num_messages; struct ML_message *messages;
+    int num_enum_types; struct ML_enum_type *enum_types;
+};
 
-	struct ML_event_info
-	{
-	    int dummy;                          // zero-length structs make me nervous
-	    //int index;
-	};
-	
-	/* for msglib internals only. Pay no attention to the code inside that
-	   curtain. */
-	struct ML_event_internal {
-	    int do_free; // should ml_event_free() really free the ML_event ?
-	    struct ML_protocol *protocol;
-	    struct ML_protocol_version *protocol_version;
-	    struct ML_peer *peer;
-	    ML_peer_callback_func_t callback; // per-message callback, not per-peer
-	    void *callback_data;
-	};
-	
-	struct ML_peer_instance
-	{
-	// Keep Order same as that of struct MLt_include_msglib_common__peer_instance
-	    int            peer; // 0 for special: protocol is "msglib"
-	    int            instance;
-	    int            lifetime;
-	    struct 	   ML_version version; // Version of message by the sender
-	};
-	
-	enum {
-	    ML_event_flags_donot_free = (1 << 0),
-	};
-	
-	/* The event structure handed to the application in ml_get_next_event */ 
-	typedef struct ML_event
-	{
-	    int    flags;
-	    struct ML_event_info  info;
-	    struct ML_event_internal internal;
-	    struct ML_peer_instance sender;  
-	    int            serial;
-	    int            replyto;
-	    int            msgnum; // enum MLm_$protocol
-	    void          *msg; // struct MLt_$protocol__$type
-          //char           msgBody[4096]; // Halon: *msg will point to here...
-	} ML_event;
+struct ML_protocol {
+    char *name; char *md5;
+    int num_versions; struct ML_version *versions;  // pointer to version table
+    struct ML_protocol_version *protocol_versions;  // versions supported for this protocol.
+};
+
+struct ML_event_info {
+    int dummy;                          // zero-length structs make me nervous
+};
+
+// For msglib internals only. Pay no attention to the code inside that
+// curtain.
+struct ML_event_internal {
+    int do_free; // should ml_event_free() really free the ML_event ?
+    struct ML_protocol *protocol;
+    struct ML_protocol_version *protocol_version;
+    struct ML_peer *peer;
+    ML_peer_callback_func_t callback; // per-message callback, not per-peer
+    void *callback_data;
+};
+
+struct ML_peer_instance {
+    // Keep Order same as that of struct MLt_include_msglib_common__peer_instance
+    int peer; // 0 for special: protocol is "msglib"
+    int instance;
+    int lifetime;
+    struct ML_version version; // Version of message by the sender
+};
+
+enum {
+    ML_event_flags_donot_free = (1 << 0),
+};
+
+// The event structure handed to the application in ml_get_next_event.
+typedef struct ML_event {
+    int flags;
+    struct ML_event_info info;
+    struct ML_event_internal internal;
+    struct ML_peer_instance sender;
+    int serial;
+    int replyto;
+    int msgnum; // enum MLm_$protocol
+    void *msg; // struct MLt_$protocol__$type
+    //char msgBody[4096]; // Halon: *msg will point to here...
+} ML_event;
 
 
 /******************************************************************************************/
 /**                             Timer stuff...                                           **/
 /******************************************************************************************/
-
 struct MLt_msglib__timer {
-	int timer_index;
-	int data;
+    int timer_index;
+    int data;
 };
 
 /******************************************************************************************/

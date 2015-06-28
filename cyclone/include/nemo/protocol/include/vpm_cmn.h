@@ -15,12 +15,12 @@
  *   under the License.
  */
 
-#ifndef _h_NEMO_PROTOCOL_INCLUDE_VPM_CMN_H
-#define _h_NEMO_PROTOCOL_INCLUDE_VPM_CMN_H 1
+#ifndef __h_NEMO_PROTOCOL_INCLUDE_VPM_CMN_H__
+#define __h_NEMO_PROTOCOL_INCLUDE_VPM_CMN_H__
 
 struct MLt_include_vpm_cmn__vlan_id {
-    short vid; // vlan 1Q id 
-    short cid; // customer id of this vlan belongs to 
+    short vid; // vlan 1Q id
+    short cid; // customer id of this vlan belongs to
                // 0 means traditional vlans with no specific customer
 };
 
@@ -39,7 +39,7 @@ enum MLet_include_vpm_cmn__mvst_operation {
 // MLed_include_vpm_cmn__mvst_vlan_deleted
 //    mvst_instance, valid
 //    sport_handles, affected sports
-//    mvst_stp_states, corresponding mvst stp states (should be ignored for 
+//    mvst_stp_states, corresponding mvst stp states (should be ignored for
 //    delete
 //    vlan_handles, 1 handle that is getting added or deleted
 // MLed_include_vpm_cmn__mvst_mvst_enabled
@@ -58,23 +58,27 @@ enum MLet_include_vpm_cmn__mvst_operation {
 //    mvst_stp_states, 1 state and refers to stp state for the instance
 struct MLt_include_vpm_cmn__mvst_operation {
     int  mvst_instance;
-    enum MLet_include_vpm_cmn__mvst_operation   operation;
-    int  sport_cnt; unsigned long long *sport_handles;
-    int  vlan_cnt;  unsigned long *vlan_handles;
-    int  state_cnt; unsigned int *mvst_stp_states;
+    enum MLet_include_vpm_cmn__mvst_operation operation;
+    int  sport_cnt;
+    unsigned long long *sport_handles;
+    int  vlan_cnt;
+    unsigned long *vlan_handles;
+    int  state_cnt;
+    unsigned int *mvst_stp_states;
 };
 
 struct MLt_include_vpm_cmn__vlan_age {
-   struct MLt_include_vpm_cmn__vlan_id          vlanid;
-   unsigned int     agetimer;
-   unsigned int     flags;
-   int              error;
+   struct MLt_include_vpm_cmn__vlan_id vlanid;
+   unsigned int agetimer;
+   unsigned int flags;
+   int error;
 };
 
 struct MLt_include_vpm_cmn__vlan_state_info {
    struct MLt_include_vpm_cmn__vlan_id vlan_id;
-   int          error;
+   int error;
    unsigned int link_state;
    unsigned int admin_state;
 };
-#endif  // _h_NEMO_PROTOCOL_INCLUDE_VPM_CMN_H
+
+#endif  // __h_NEMO_PROTOCOL_INCLUDE_VPM_CMN_H__
