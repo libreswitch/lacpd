@@ -31,13 +31,7 @@
 extern void mlacpBoltonRxPdu(struct ML_event *);
 extern void register_mcast_addr(port_handle_t lport_handle);
 extern void deregister_mcast_addr(port_handle_t lport_handle);
-
-//***************************************************************
-// Functions in mlacp.c
-//***************************************************************
 extern int  mlacp_init(u_long);
-extern void mlacp_process_timer(struct MLt_msglib__timer *tevent);
-extern void timerHandler(void);
 
 //***************************************************************
 // Functions in mlacp_send.c
@@ -71,6 +65,7 @@ extern void mlacp_process_vlan_msg(struct ML_event *);
 extern void mlacp_process_api_msg(struct ML_event *);
 extern void mlacp_process_showmgr_msg(struct ML_event *);
 extern void mlacp_process_diagmgr_msg(struct ML_event *);
+extern void mlacp_process_timer(struct MLt_msglib__timer *tevent);
 extern void mlacpVapiLportEvent(struct ML_event *pevent);
 
 //***************************************************************

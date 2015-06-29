@@ -43,6 +43,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <signal.h>
+#include <pthread.h>
+#include <sys/time.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 #include <config.h>
 #include <command-line.h>
@@ -62,12 +67,25 @@
 #include <hash.h>
 #include <shash.h>
 
+#include <nemo/mqueue.h>
+#include <nemo/protocol/drivers/mlacp.h>
+#include <nemo/pm/pm_cmn.h>
+#include <nemo/lacp/lacp_cmn.h>
+#include <nemo/lacp/mlacp_debug.h>
+#include "lacp.h"
+#include "lacp_support.h"
+
+#include "mlacp_fproto.h"
 #include "lacp_halon_if.h"
 
 VLOG_DEFINE_THIS_MODULE(lacpd);
 
 static unixctl_cb_func lacpd_unixctl_dump;
 static unixctl_cb_func halon_lacpd_exit;
+static bool exiting = false;
+
+/* Forward declaration */
+static void lacpd_exit(void);
 
 /**
  * ovs-appctl interface callback function to dump internal debug information.
@@ -93,21 +111,109 @@ lacpd_unixctl_dump(struct unixctl_conn *conn, int argc,
 } /* lacpd_unixctl_dump */
 
 /**
- * lacpd daemons main initialization function.
+ * lacpd daemon's timer handler function.
+ */
+static void
+timerHandler(void)
+{
+    ML_event *timerEvent;
+
+    timerEvent = (ML_event *)malloc(sizeof(ML_event));
+    if (NULL == timerEvent) {
+        RDEBUG(DL_ERROR, "Out of memory for LACP timer message.\n");
+        return;
+    }
+    memset(timerEvent, 0, sizeof(ML_event));
+    timerEvent->sender.peer = ml_timer_index;
+
+    ml_send_event(timerEvent);
+} /* timerHandler */
+
+/**
+ * lacpd daemon's main OVS interface function.
+ *
+ * @param arg pointer to ovs-appctl server struct.
+ */
+void *
+lacpd_ovs_main_thread(void *arg)
+{
+    struct unixctl_server *appctl;
+
+    appctl = (struct unixctl_server *)arg;
+
+    exiting = false;
+    while (!exiting) {
+        lacpd_run();
+        unixctl_server_run(appctl);
+
+        lacpd_wait();
+        unixctl_server_wait(appctl);
+        if (exiting) {
+            poll_immediate_wake();
+        } else {
+            poll_block();
+        }
+    }
+
+    lacpd_exit();
+    unixctl_server_destroy(appctl);
+
+    /* HALON_TODO -- need to tell main loop to exit... */
+
+} /* lacpd_ovs_main_thread */
+
+/**
+ * lacpd daemon's main initialization function.
  *
  * @param db_path pathname for OVSDB connection.
  */
 static void
-lacpd_init(const char *db_path)
+lacpd_init(const char *db_path, struct unixctl_server *appctl)
 {
-    /* HALON_TODO: Initialize LACP protocol */
-    /* halon_lacp_proto_init(); */
+    int rc;
+    sigset_t sigset;
+    pthread_t ovs_if_thread;
+    pthread_t lacpd_thread;
+
+    /* Initialize LACP main task event receiver sockets. */
+    hc_enet_init_event_rcvr();
+
+    /**************** Thread Related ***************/
+
+    /* Block all signals so the spawned threads don't receive any. */
+    sigemptyset(&sigset);
+    sigfillset(&sigset);
+    pthread_sigmask(SIG_BLOCK, &sigset, NULL);
+
+#if 0
+    /* ...HALON_TODO... */
+    /* Spawn off the main Cyclone LACP protocol thread. */
+    rc = pthread_create(&lacpd_thread,
+                        (pthread_attr_t *)NULL,
+                        lacpd_protocol_thread,
+                        NULL);
+    if (rc) {
+        VLOG_ERR("pthread_create for LACPD protocol thread failed! rc=%d", rc);
+        exit(-rc);
+    }
+#endif
 
     /* Initialize IDL through a new connection to the dB. */
     lacpd_ovsdb_if_init(db_path);
 
     /* Register ovs-appctl commands for this daemon. */
     unixctl_command_register("lacpd/dump", "", 0, 2, lacpd_unixctl_dump, NULL);
+
+    /* Spawn off the OVSDB interface thread. */
+    rc = pthread_create(&ovs_if_thread,
+                        (pthread_attr_t *)NULL,
+                        lacpd_ovs_main_thread,
+                        (void *)appctl);
+    if (rc) {
+        VLOG_ERR("pthread_create for OVSDB i/f thread failed! rc=%d", rc);
+        exit(-rc);
+    }
+
 } /* lacpd_init */
 
 /**
@@ -118,6 +224,7 @@ static void
 lacpd_exit(void)
 {
     lacpd_ovsdb_if_exit();
+    VLOG_INFO("lacpd OVSDB thread exiting...");
 } /* lacpd_exit */
 
 /**
@@ -229,11 +336,14 @@ halon_lacpd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
 int
 main(int argc, char *argv[])
 {
+    int mlacp_tindex;
+    struct itimerval timerVal;
     char *appctl_path = NULL;
     struct unixctl_server *appctl;
     char *ovsdb_sock;
-    bool exiting;
     int retval;
+    sigset_t sigset;
+    int signum;
 
     set_program_name(argv[0]);
     proctitle_init(argc, argv);
@@ -258,8 +368,12 @@ main(int argc, char *argv[])
     /* Register the ovs-appctl "exit" command for this daemon. */
     unixctl_command_register("exit", "", 0, 0, halon_lacpd_exit, &exiting);
 
-    /* Create the IDL cache of the dB at ovsdb_sock. */
-    lacpd_init(ovsdb_sock);
+    /* Initialize Cyclone LACP data structures. */
+    (void)mlacp_init(TRUE);
+
+    /* Initialize various protocol and event sockets, and create
+       the IDL cache of the dB at ovsdb_sock. */
+    lacpd_init(ovsdb_sock, appctl);
     free(ovsdb_sock);
 
     /* Notify parent of startup completion. */
@@ -270,22 +384,41 @@ main(int argc, char *argv[])
 
     VLOG_INFO_ONCE("%s (Halon Link Aggregation Daemon) started", program_name);
 
-    exiting = false;
-    while (!exiting) {
-        lacpd_run();
-        unixctl_server_run(appctl);
+    /* Set up timer to fire off every second. */
+    timerVal.it_interval.tv_sec  = 1;
+    timerVal.it_interval.tv_usec = 0;
+    timerVal.it_value.tv_sec  = 1;
+    timerVal.it_value.tv_usec = 0;
 
-        lacpd_wait();
-        unixctl_server_wait(appctl);
-        if (exiting) {
-            poll_immediate_wake();
-        } else {
-            poll_block();
+    if ((mlacp_tindex = setitimer(ITIMER_REAL, &timerVal, NULL)) != 0) {
+        VLOG_ERR("lacpd main: Timer start failed!\n");
+    }
+
+    /* Wait for all signals in an infinite loop. */
+    sigfillset(&sigset);
+    while (!lacpd_shutdown) {
+
+        sigwait(&sigset, &signum);
+        switch (signum) {
+
+        case SIGALRM:
+            timerHandler();
+            break;
+
+        case SIGTERM:
+        case SIGINT:
+            VLOG_WARN("%s, sig %d caught", __FUNCTION__, signum);
+            lacpd_shutdown = 1;
+            break;
+
+        default:
+            VLOG_INFO("Ignoring signal %d.\n", signum);
+            break;
         }
     }
 
-    lacpd_exit();
-    unixctl_server_destroy(appctl);
+    /* HALON_TODO - clean up various threads. */
+    /* lacp_halon_cleanup(); */
 
     return 0;
 } /* main */

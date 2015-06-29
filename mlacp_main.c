@@ -140,25 +140,6 @@ ml_event_free(ML_event* event)
     }
 } // ml_event_free
 
-//***********************************************************************
-// Function : timerHandler
-//***********************************************************************
-void
-timerHandler(void)
-{
-    ML_event *timerEvent;
-
-    timerEvent = (ML_event *)malloc(sizeof(ML_event));
-    if (NULL == timerEvent) {
-        RDEBUG(DL_ERROR, "Out of memory for LACP timer message.\n");
-        return;
-    }
-    memset(timerEvent, 0, sizeof(ML_event));
-    timerEvent->sender.peer = ml_timer_index;
-
-    ml_send_event(timerEvent);
-} // timerHandler
-
 #if 0 // HALON_TODO
 //***********************************************************************
 //  LACPDU Send and Receive Functions

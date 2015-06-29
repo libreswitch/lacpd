@@ -99,7 +99,8 @@ struct iface_data {
     char                *name;              /*!< Name of the interface */
     struct port_data    *port_datap;        /*!< Pointer to associated port's port_data */
     unsigned int        link_speed;         /*!< Operarational link speed of the interface */
-    bool                lag_eligible;       /*!< indicates whether this interface is eligible to become member of configured LAG */
+    bool                lag_eligible;       /*!< indicates whether this interface is eligible
+                                              to become member of configured LAG */
     enum ovsrec_interface_link_state_e link_state; /*!< operational link state */
     enum ovsrec_interface_duplex_e duplex;  /*!< operational link duplex */
 
@@ -108,8 +109,8 @@ struct iface_data {
 };
 
 static int update_interface_lag_eligibility(struct iface_data *idp);
-static int update_interface_hw_bond_config_map_entry(
-    struct iface_data *idp, const char *key, const char *value);
+static int update_interface_hw_bond_config_map_entry(struct iface_data *idp,
+                                                     const char *key, const char *value);
 
 /**
  * @details
@@ -142,6 +143,7 @@ lacpd_ovsdb_if_init(const char *db_path)
     /* Cache Inteface table and columns. */
     ovsdb_idl_add_table(idl, &ovsrec_table_interface);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_name);
+    ovsdb_idl_add_column(idl, &ovsrec_interface_col_duplex);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_link_state);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_link_speed);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_hw_bond_config);
@@ -199,8 +201,19 @@ add_new_interface(const struct ovsrec_interface *ifrow)
             }
         }
 
-        idp->duplex = INTERFACE_DUPLEX_FULL; /* HALON_TODO */
-        idp->link_speed = 1000; /* HALON_TODO */
+        idp->duplex = INTERFACE_DUPLEX_HALF;
+        if (ifrow->duplex) {
+            if (!strcmp(ifrow->duplex, OVSREC_INTERFACE_DUPLEX_FULL)) {
+                idp->duplex = INTERFACE_DUPLEX_FULL;
+            }
+        }
+
+        idp->link_speed = 0;
+        if (ifrow->n_link_speed > 0) {
+            /* There should only be one speed. */
+            idp->link_speed = ifrow->link_speed[0];
+        }
+
         idp->lag_eligible = false;
         idp->cfg = ifrow;
 
@@ -268,21 +281,52 @@ update_interface_cache(void)
         struct iface_data *idp = sh_node->data;
         const struct ovsrec_interface *ifrow =
             shash_find_data(&sh_idl_interfaces, sh_node->name);
-        enum ovsrec_interface_link_state_e new_link_state;
 
         /* Check for changes to row. */
         if (OVSREC_IDL_IS_ROW_INSERTED(ifrow, idl_seqno) ||
             OVSREC_IDL_IS_ROW_MODIFIED(ifrow, idl_seqno)) {
+            bool changed = false;
+            unsigned int new_speed;
+            enum ovsrec_interface_duplex_e new_duplex;
+            enum ovsrec_interface_link_state_e new_link_state;
+
             new_link_state = INTERFACE_LINK_STATE_DOWN;
             if (ifrow->link_state) {
                 if (!strcmp(ifrow->link_state, OVSREC_INTERFACE_LINK_STATE_UP)) {
                     new_link_state = INTERFACE_LINK_STATE_UP;
                 }
             }
-            if (new_link_state != idp->link_state) {
-                VLOG_DBG("Interface %s link_state changed in DB: %s",
-                         ifrow->name, ifrow->link_state);
+
+            /* Although speed & duplex should only change if link state
+               has changed, the IDL change notices may not all come at
+               the same time! */
+            new_speed = 0;
+            if (ifrow->n_link_speed > 0) {
+                /* There should only be one speed. */
+                new_speed = ifrow->link_speed[0];
+            }
+
+            new_duplex = INTERFACE_DUPLEX_HALF;
+            if (ifrow->duplex) {
+                if (!strcmp(ifrow->duplex, OVSREC_INTERFACE_DUPLEX_FULL)) {
+                    new_duplex = INTERFACE_DUPLEX_FULL;
+                }
+            }
+
+            if ((new_link_state != idp->link_state) ||
+                (new_speed != idp->link_speed) ||
+                (new_duplex != idp->duplex)) {
+
                 idp->link_state = new_link_state;
+                idp->link_speed = new_speed;
+                idp->duplex = new_duplex;
+
+                VLOG_DBG("Interface %s link state changed in DB: "
+                         "new_speed=%d, new_link=%s, new_duplex=%s, ",
+                         ifrow->name, idp->link_speed,
+                         (idp->link_state == INTERFACE_LINK_STATE_UP ? "up" : "down"),
+                         (idp->duplex == INTERFACE_DUPLEX_FULL ? "full" : "half"));
+
                 if (update_interface_lag_eligibility(idp)) {
                     rc++;
                 }
@@ -654,7 +698,6 @@ update_port_cache(void)
     SHASH_FOR_EACH(sh_node, &all_ports) {
         const struct ovsrec_port *row = shash_find_data(&sh_idl_ports,
                                                         sh_node->name);
-
         /* Check for changes to row. */
         if (OVSREC_IDL_IS_ROW_INSERTED(row, idl_seqno) ||
             OVSREC_IDL_IS_ROW_MODIFIED(row, idl_seqno)) {
@@ -712,7 +755,7 @@ lacpd_chk_for_system_configured(void)
 
     ovs_vsw = ovsrec_open_vswitch_first(idl);
 
-    if (ovs_vsw && ovs_vsw->cur_cfg > (int64_t) 0) {
+    if (ovs_vsw && ovs_vsw->cur_cfg > (int64_t)0) {
         system_configured = true;
         VLOG_INFO("System is now configured (cur_cfg=%d).",
                   (int)ovs_vsw->cur_cfg);
@@ -739,7 +782,6 @@ lacpd_run(void)
 
         VLOG_ERR_RL(&rl, "Another lacpd process is running, "
                     "disabling this process until it goes away");
-
         return;
     } else if (!ovsdb_idl_has_lock(idl)) {
         return;
@@ -821,6 +863,8 @@ db_update_lag_partner_info(uint16_t lag_id,
 /**********************************************************************/
 /*                               DEBUG                                */
 /**********************************************************************/
+#define MEGA_BITS_PER_SEC  1000000
+
 static void
 lacpd_interface_dump(struct ds *ds, struct iface_data *idp)
 {
@@ -829,8 +873,9 @@ lacpd_interface_dump(struct ds *ds, struct iface_data *idp)
                   idp->link_state == INTERFACE_LINK_STATE_UP
                   ? OVSREC_INTERFACE_LINK_STATE_UP :
                   OVSREC_INTERFACE_LINK_STATE_DOWN);
-    ds_put_format(ds, "    link_speed           : %d\n",
-                  idp->link_speed);
+    /* Convert OVS's bps to Mbps to make it easier to read. */
+    ds_put_format(ds, "    link_speed           : %d Mbps\n",
+                  (idp->link_speed/MEGA_BITS_PER_SEC));
     ds_put_format(ds, "    duplex               : %s\n",
                   idp->duplex == INTERFACE_DUPLEX_FULL
                   ? OVSREC_INTERFACE_DUPLEX_FULL :
@@ -935,7 +980,6 @@ lacpd_debug_dump(struct ds *ds, int argc, const char *argv[])
 
     if (argc > 1) {
         table_name = argv[1];
-
         if (!strcmp(table_name, "interface")) {
             lacpd_interfaces_dump(ds, argc, argv);
         } else if (!strcmp(table_name, "port")) {
