@@ -60,6 +60,8 @@
 // Halon
 #include "lacp_halon.h"
 
+VLOG_DEFINE_THIS_MODULE(selection);
+
 //*************************************************************
 // List of LAGs for ease & debug.
 //*************************************************************

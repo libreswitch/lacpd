@@ -55,7 +55,7 @@
 #include <hash.h>
 #include <shash.h>
 
-VLOG_DEFINE_THIS_MODULE(ovsdb_if);
+VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
 
 /**********************************//**
  * @ingroup lacpd_ovsdb_if

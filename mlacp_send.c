@@ -42,6 +42,7 @@
 // Halon: in lieu of sending events to VPM
 #include "vpm/mvlan_lacp.h"
 
+VLOG_DEFINE_THIS_MODULE(mlacp_send);
 
 //***********************************************************************
 // Global & extern Variables

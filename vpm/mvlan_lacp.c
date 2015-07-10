@@ -35,6 +35,8 @@
 #include "mvlan_sport.h"
 #include "mvlan_lacp.h"
 
+VLOG_DEFINE_THIS_MODULE(mvlan_lacp);
+
 typedef enum match_type {
     EXACT_MATCH,
     PARTIAL_MATCH

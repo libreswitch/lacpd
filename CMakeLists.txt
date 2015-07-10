@@ -23,22 +23,15 @@ set (LIB_CYCLONE_DIR ${LIB_CYCLONE})
 set (LIB_VPM vpm)
 set (LIB_VPM_DIR ${LIB_VPM})
 
-include_directories (${LIB_CYCLONE_DIR}/include)
-include_directories (${LIB_VPM_DIR})
-include_directories (include)
-
 # Rules to locate needed libraries
 include(FindPkgConfig)
-pkg_check_modules(SYSTEMD libsystemd)
-pkg_check_modules(CONFIG_YAML config-yaml)
-pkg_check_modules(HALONUTILS halonutils)
 pkg_check_modules(OVSCOMMON libovscommon)
 pkg_check_modules(OVSDB libovsdb)
 
-include_directories (${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}
+include_directories (include ${LIB_VPM_DIR} ${LIB_CYCLONE_DIR}/include
+                     ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}
                      ${OVSCOMMON_INCLUDE_DIRS}
 )
-
 
 # Source files to build lacpd
 set (SOURCES lacpd.c mlacp_main.c mlacp_recv.c mlacp_send.c lacp_task.c
@@ -50,8 +43,7 @@ add_executable (${LACPD} ${SOURCES})
 add_subdirectory (${LIB_CYCLONE_DIR})
 add_subdirectory (${LIB_VPM_DIR})
 
-target_link_libraries (${LACPD} ${HALONUTILS_LIBRARIES} ${CONFIG_YAML_LIBRARIES} ${OVSCOMMON_LIBRARIES}
-                       ${OVSDB_LIBRARIES} ${OPENSSL_LIBRARIES} ${SYSTEMD_LIBRARIES} 
+target_link_libraries (${LACPD} ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
                        ${LIB_CYCLONE} ${LIB_VPM} -lpthread -lrt)
 
 # Add dependencies otherwise parallell building breaks
@@ -59,4 +51,4 @@ add_dependencies(${LACPD} ${LIB_CYCLONE} ${LIB_VPM})
 
 # Rules to install lacpd binary in rootfs
 install(TARGETS ${LACPD}
-	RUNTIME DESTINATION bin)
+        RUNTIME DESTINATION bin)

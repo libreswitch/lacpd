@@ -36,10 +36,11 @@
 #include "mlacp_fproto.h"
 #include "lacp_support.h"
 
-#include <slog.h>
 #include <hc-utils.h>
 
 #include "lacp_halon_if.h"
+
+VLOG_DEFINE_THIS_MODULE(mlacp_main);
 
 //***********************************************************************
 // Global & extern Variables
@@ -442,13 +443,13 @@ hc_enet_init_lacp(void)
                         lacpd_protocol_thread,
                         NULL);
     if (rc) {
-        SLOG_EXIT(2, "pthread_create for LACPD main protocol thread failed!\n");
+        VLOG_FATAL("pthread_create for LACPD main protocol thread failed!");
     }
 
     // Initialize HALON interface.
     rc = lacp_halon_init();
     if (rc) {
-        SLOG(SLOG_ERR, "LACP Halon init failed, rc=%d", rc);
+        VLOG_ERR("LACP Halon init failed, rc=%d", rc);
     }
 
     return rc;
@@ -461,8 +462,6 @@ usage(int argc __attribute__ ((unused)), char *argv[])
     //printf("USAGE : %s [-l <log_level>]\n", argv[0]);
     printf("USAGE : %s [-d] [-l]\n", argv[0]);
     printf("  -d : Debug.  Does not daemonize LACP process.\n");
-    printf("  -l : Logging. Provides a system logging enable mask.\n");
-    printf(SLOG_USAGE);
 } // usage
 
 int
@@ -475,9 +474,6 @@ main(int argc, char *argv[])
     struct itimerval timerVal;
 
     RENTRY();
-    // slog_level = (DBG_FATAL|DBG_ERROR|DBG_WARNING);
-
-    SLOG_INIT(LACPD_ID);
 
     //Halon: Removed all Cyclone specific initialization code,
     //         e.g. msgLib, logging facilities, heartbeat, etc.
@@ -486,12 +482,6 @@ main(int argc, char *argv[])
         switch (option) {
         case 'd':
             debug = 1;
-            break;
-        case 'l':
-            slog_level=strtol(optarg, NULL, 0);
-            SLOG(SLOG_NOTICE,
-                 "slog_level changed from 0x%x, now 0x%x",
-                 DBG_BASIC, slog_level);
             break;
         default:
             usage(argc, argv);

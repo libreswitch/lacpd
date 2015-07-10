@@ -46,6 +46,8 @@
 #include "lacp_halon_if.h"
 #include "vpm/mvlan_sport.h"
 
+VLOG_DEFINE_THIS_MODULE(mlacp_recv);
+
 //***********************************************************************
 // Global & extern Variables
 //***********************************************************************

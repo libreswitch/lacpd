@@ -28,8 +28,9 @@
 #include <nemo/avl.h>
 #include <nemo/lacp/mlacp_debug.h>
 #include <nemo/nemo_types.h>
-#include <slog.h>
 #include "mvlan_sport.h"
+
+VLOG_DEFINE_THIS_MODULE(mvlan_sport);
 
 /*****************************************************************************
  * Static  varibles for this file
@@ -160,7 +161,7 @@ mvlan_sport_create(struct MLt_vpm_api__create_sport  *psport_create,
     int              lag_id;
 
     if (!psport_create) {
-        SLOG(SLOG_ERR, "LACP - psport create without information!\n");
+        VLOG_ERR("LACP - psport create without information!");
         goto end;
     }
 

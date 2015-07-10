@@ -62,6 +62,8 @@
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
 
+VLOG_DEFINE_THIS_MODULE(lacpd_support);
+
 /*****************************************************************************
  *                    Global Variables Definition
  ****************************************************************************/
@@ -192,7 +194,8 @@ LACP_initialize_port(port_handle_t lport_handle,
     }
 
     /* Halon -- start lacpd with "-l" option to set this dynamically */
-    plpinfo->debug_level = slog_level;
+    /* HALON_TODO: convert to use VLOG. */
+    plpinfo->debug_level = 0;
     /* plpinfo->debug_level = (DBG_FATAL | DBG_WARNING | DBG_ERROR); */
 
     /********************************************************************

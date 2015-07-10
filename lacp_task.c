@@ -60,6 +60,8 @@
 #include "lacp.h"
 #include "lacp_support.h"
 
+VLOG_DEFINE_THIS_MODULE(lacp_task);
+
 /****************************************************************************
  *                    Global Variables Definition
  ****************************************************************************/
@@ -594,7 +596,7 @@ LACP_transmit_marker_response(port_handle_t lport_handle, void *data)
     // XXX No ntoh conversions here, as we turn around the incoming packet
     // itself XXX
     //********************************************************************/
-    if (slog_level & (DL_LACPDU)) {
+    if (VLOG_IS_DBG_ENABLED()) {
         for (ii = 0; ii < sizeof(marker_pdu_payload_t); ii++) {
             RDBG("%2x ", ((unsigned char *) data)[ii]);
             if ( ((ii + 1) % 16) == 0) RDBG("\n");

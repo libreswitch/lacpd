@@ -23,6 +23,8 @@
 #ifndef __MLACP_DEBUG_H__
 #define __MLACP_DEBUG_H__
 
+#include <openvswitch/vlog.h>
+
 //----------------------slog daemon/library identification strings------
 #define LACPD_ID        "lacpd"
 
@@ -37,24 +39,26 @@
 //      will translate to...
 //          syslog(LOG_DEBUG, "task info=%d", x);
 
+// HALON_TODO: temporary.  Convert to VLOG.
+#define  SLOG_MAKE_SERVICEPRI(x)  ((0x00000001) << (x))
+
 // Port-based debug level
-#define  DBG_FATAL        (SLOG_EMERG)
-#define  DBG_ERROR        (SLOG_ERR)
-#define  DBG_WARNING      (SLOG_WARNING)
-#define  DBG_INFO         (SLOG_INFO)
-#define  DBG_LACPDU       (SLOG_MAKE_SERVICEPRI(0))  // 0x100
-#define  DBG_LACP_TASK    (SLOG_MAKE_SERVICEPRI(1))  // 0x200
-#define  DBG_LACP_SEND    (SLOG_MAKE_SERVICEPRI(2))  // 0x400
-#define  DBG_LACP_RCV     (SLOG_MAKE_SERVICEPRI(3))  // 0x800
-#define  DBG_RX_FSM       (SLOG_MAKE_SERVICEPRI(4))  // 0x1000
-#define  DBG_TX_FSM       (SLOG_MAKE_SERVICEPRI(5))  // 0x2000
-#define  DBG_MUX_FSM      (SLOG_MAKE_SERVICEPRI(6))  // 0x4000
-#define  DBG_SELECT       (SLOG_MAKE_SERVICEPRI(7))  // 0x8000
-#define  DBG_TIMERS       (SLOG_MAKE_SERVICEPRI(8))  // 0x10000
-#define  DBG_VPM          (SLOG_MAKE_SERVICEPRI(9))  // 0x20000
-#define  DBG_HW           (SLOG_MAKE_SERVICEPRI(10)) // 0x40000
-#define  DBG_DAL          (SLOG_MAKE_SERVICEPRI(11)) // 0x80000
-#define  DBG_F_ENTRY      (SLOG_MAKE_SERVICEPRI(12)) // 0x100000
+#define  DBG_FATAL        (SLOG_MAKE_SERVICEPRI(0))  // 0x1
+#define  DBG_ERROR        (SLOG_MAKE_SERVICEPRI(1))  // 0x2
+#define  DBG_WARNING      (SLOG_MAKE_SERVICEPRI(2))  // 0x4
+#define  DBG_INFO         (SLOG_MAKE_SERVICEPRI(3))  // 0x8
+#define  DBG_LACPDU       (SLOG_MAKE_SERVICEPRI(4))  // 0x10
+#define  DBG_LACP_TASK    (SLOG_MAKE_SERVICEPRI(5))  // 0x20
+#define  DBG_LACP_SEND    (SLOG_MAKE_SERVICEPRI(6))  // 0x40
+#define  DBG_LACP_RCV     (SLOG_MAKE_SERVICEPRI(7))  // 0x80
+#define  DBG_RX_FSM       (SLOG_MAKE_SERVICEPRI(8))  // 0x100
+#define  DBG_TX_FSM       (SLOG_MAKE_SERVICEPRI(9))  // 0x200
+#define  DBG_MUX_FSM      (SLOG_MAKE_SERVICEPRI(10)) // 0x400
+#define  DBG_SELECT       (SLOG_MAKE_SERVICEPRI(11)) // 0x800
+#define  DBG_TIMERS       (SLOG_MAKE_SERVICEPRI(12)) // 0x1000
+#define  DBG_VPM          (SLOG_MAKE_SERVICEPRI(13)) // 0x2000
+#define  DBG_HW           (SLOG_MAKE_SERVICEPRI(14)) // 0x4000
+#define  DBG_F_ENTRY      (SLOG_MAKE_SERVICEPRI(15)) // 0x8000
 
 // Some helper defines
 #define  DBG_ALL          (0xFFFF)
@@ -79,8 +83,14 @@
 #define  DL_HW            (DBG_HW)
 #define  DL_DAL           (DBG_DAL)
 
+// HALON_TODO: remove these defines & use VLOG directly in code.
+#if 0
 #define RDEBUG(category, m...)  SLOG(category, m)
 #define RDBG(m...)  SLOG(SLOG_NOTICE, m)
+#else
+#define RDEBUG(category, m...)  VLOG_DBG(m)
+#define RDBG(m...)  VLOG_DBG(m)
+#endif
 
 #if 0
 #define RENTRY()     RDEBUG(DBG_F_ENTRY, "Entry: %s", __FUNCTION__);

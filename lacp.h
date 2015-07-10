@@ -45,7 +45,6 @@
 #include <sys/types.h>
 #include <nemo/avl.h>
 #include <nemo/nemo_types.h>
-#include <slog.h>   // Halon system log support
 
 // HALON_TODO: Define h/w here for now.  This should be moved
 // out to a common file for all imported Cyclone code.
