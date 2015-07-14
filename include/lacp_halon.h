@@ -208,6 +208,6 @@ extern ML_event* ml_wait_for_next_event(void);
 extern void ml_event_free(ML_event* event);
 
 // LACPDU send function
-extern int mlacp_send(unsigned char* data, int length, int portHandle);
+extern int mlacp_send(unsigned char* data, int length, port_handle_t portHandle);
 
 #endif /*__LACP_HALON_H__*/

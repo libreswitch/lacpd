@@ -26,12 +26,18 @@
 #include "lacp_halon.h"
 
 //***************************************************************
+// Variables in lacpd.c
+//***************************************************************
+extern bool exiting;
+
+//***************************************************************
 // Functions in mlacp_main.c
 //***************************************************************
 extern void mlacpBoltonRxPdu(struct ML_event *);
 extern void register_mcast_addr(port_handle_t lport_handle);
 extern void deregister_mcast_addr(port_handle_t lport_handle);
-extern int  mlacp_init(u_long);
+extern void *lacpd_protocol_thread(void *arg);
+extern int mlacp_init(u_long);
 
 //***************************************************************
 // Functions in mlacp_send.c

@@ -162,7 +162,7 @@ nemo_avl_insert_or_find(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
     nemo_avl_balance_tree(tree, parent_node);
 
     /**************************************************************************/
-    /* Update the number of nodes in the tree                                  /
+    /* Update the number of nodes in the tree                                 */
     /**************************************************************************/
     tree->num_nodes++;
 

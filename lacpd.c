@@ -36,56 +36,34 @@
  *       5. Dynamically configure hardware based on
  *          operational state changes as needed.
  ***************************************************************************/
-#include <errno.h>
 #include <getopt.h>
-#include <limits.h>
-#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <signal.h>
 #include <pthread.h>
 #include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
 
-#include <config.h>
-#include <command-line.h>
-#include <compiler.h>
+#include <util.h>
 #include <daemon.h>
 #include <dirs.h>
-#include <dynamic-string.h>
-#include <fatal-signal.h>
-#include <ovsdb-idl.h>
-#include <poll-loop.h>
 #include <unixctl.h>
-#include <util.h>
-#include <openvswitch/vconn.h>
-#include <openvswitch/vlog.h>
+#include <fatal-signal.h>
+#include <command-line.h>
 #include <vswitch-idl.h>
-#include <openhalon-idl.h>
-#include <hash.h>
-#include <shash.h>
+#include <openvswitch/vlog.h>
 
-#include <nemo/mqueue.h>
-#include <nemo/protocol/drivers/mlacp.h>
 #include <nemo/pm/pm_cmn.h>
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
-#include "lacp.h"
-#include "lacp_support.h"
 
+#include "lacp.h"
 #include "mlacp_fproto.h"
 #include "lacp_halon_if.h"
 
 VLOG_DEFINE_THIS_MODULE(lacpd);
 
+bool exiting = false;
 static unixctl_cb_func lacpd_unixctl_dump;
 static unixctl_cb_func halon_lacpd_exit;
-static bool exiting = false;
-
-/* Forward declaration */
-static void lacpd_exit(void);
 
 /**
  * ovs-appctl interface callback function to dump internal debug information.
@@ -130,40 +108,8 @@ timerHandler(void)
 } /* timerHandler */
 
 /**
- * lacpd daemon's main OVS interface function.
- *
- * @param arg pointer to ovs-appctl server struct.
- */
-void *
-lacpd_ovs_main_thread(void *arg)
-{
-    struct unixctl_server *appctl;
-
-    appctl = (struct unixctl_server *)arg;
-
-    exiting = false;
-    while (!exiting) {
-        lacpd_run();
-        unixctl_server_run(appctl);
-
-        lacpd_wait();
-        unixctl_server_wait(appctl);
-        if (exiting) {
-            poll_immediate_wake();
-        } else {
-            poll_block();
-        }
-    }
-
-    lacpd_exit();
-    unixctl_server_destroy(appctl);
-
-    /* HALON_TODO -- need to tell main loop to exit... */
-
-} /* lacpd_ovs_main_thread */
-
-/**
- * lacpd daemon's main initialization function.
+ * lacpd daemon's main initialization function.  Responsible for
+ * creating various protocol & OVSDB interface threads.
  *
  * @param db_path pathname for OVSDB connection.
  */
@@ -175,18 +121,11 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
     pthread_t ovs_if_thread;
     pthread_t lacpd_thread;
 
-    /* Initialize LACP main task event receiver sockets. */
-    hc_enet_init_event_rcvr();
-
-    /**************** Thread Related ***************/
-
     /* Block all signals so the spawned threads don't receive any. */
     sigemptyset(&sigset);
     sigfillset(&sigset);
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-#if 0
-    /* ...HALON_TODO... */
     /* Spawn off the main Cyclone LACP protocol thread. */
     rc = pthread_create(&lacpd_thread,
                         (pthread_attr_t *)NULL,
@@ -196,7 +135,6 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
         VLOG_ERR("pthread_create for LACPD protocol thread failed! rc=%d", rc);
         exit(-rc);
     }
-#endif
 
     /* Initialize IDL through a new connection to the dB. */
     lacpd_ovsdb_if_init(db_path);
@@ -215,17 +153,6 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
     }
 
 } /* lacpd_init */
-
-/**
- * Cleanup function at daemon shutdown time.
- *
- */
-static void
-lacpd_exit(void)
-{
-    lacpd_ovsdb_if_exit();
-    VLOG_INFO("lacpd OVSDB thread exiting...");
-} /* lacpd_exit */
 
 /**
  * lacpd usage help function.
@@ -368,11 +295,14 @@ main(int argc, char *argv[])
     /* Register the ovs-appctl "exit" command for this daemon. */
     unixctl_command_register("exit", "", 0, 0, halon_lacpd_exit, &exiting);
 
-    /* Initialize Cyclone LACP data structures. */
-    (void)mlacp_init(TRUE);
+    /* Main LACP protocol state machine related initialization. */
+    retval = mlacp_init(TRUE);
+    if (retval) {
+        exit(EXIT_FAILURE);
+    }
 
     /* Initialize various protocol and event sockets, and create
-       the IDL cache of the dB at ovsdb_sock. */
+     * the IDL cache of the dB at ovsdb_sock. */
     lacpd_init(ovsdb_sock, appctl);
     free(ovsdb_sock);
 

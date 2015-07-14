@@ -96,8 +96,6 @@
 /*****************************************************************************/
 /*                   Prototypes for Global routines                          */
 /*****************************************************************************/
-extern struct lacp_per_port_variables;
-
 extern void LACP_mux_fsm(int, int, lacp_per_port_variables_t *);
 extern void LACP_periodic_tx_fsm(int, int, lacp_per_port_variables_t *);
 extern void LACP_receive_fsm(int, int, lacpdu_payload_t *,
@@ -137,8 +135,8 @@ extern void start_wait_while_timer(lacp_per_port_variables_t *);
 extern void periodic_tx_state_string(int, char *);
 extern void mux_state_string(int, char *);
 extern void rx_state_string(int, char *);
-inline int lacp_lock(void);
-inline void lacp_unlock(int);
+extern int lacp_lock(void);
+extern void lacp_unlock(int);
 extern void LACP_async_transmit_lacpdu(lacp_per_port_variables_t *);
 extern void LACP_sync_transmit_lacpdu(lacp_per_port_variables_t *);
 extern void display_lacpdu(lacpdu_payload_t *,char *, char *, int);

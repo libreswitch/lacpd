@@ -39,19 +39,26 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <netinet/ether.h>
 
 #include <nemo/pm/pm_cmn.h>
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
 #include <nemo/protocol/lacp/api.h>
 
+#include "lacp.h"
+#include "mlacp_fproto.h"
 #include "vpm/mvlan_sport.h"
 #include "vpm/mvlan_lacp.h"
 
+#include <unixctl.h>
 #include <dynamic-string.h>
 #include <vswitch-idl.h>
 #include <openhalon-idl.h>
 #include <openvswitch/vlog.h>
+#include <poll-loop.h>
 #include <hash.h>
 #include <shash.h>
 
@@ -62,10 +69,11 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
  * @{
  **************************************/
 
+#define LACP_ENABLED_ON_PORT(m)    ((m) == PORT_LACP_PASSIVE || \
+                                    (m) == PORT_LACP_ACTIVE)
+
 struct ovsdb_idl *idl;           /*!< Session handle for OVSDB IDL session. */
-
 static unsigned int idl_seqno;
-
 static int system_configured = false;
 
 /**
@@ -85,6 +93,7 @@ static struct shash all_ports = SHASH_INITIALIZER(&all_ports);
  ****************************************************************************/
 struct port_data {
     char                *name;              /*!< Name of the port */
+    uint16_t            lag_id;             /*!< LAG ID of the port */
     struct shash        cfg_member_ifs;     /*!< configured member interfaces */
     struct shash        eligible_member_ifs;/*!< Interfaces eligible to form a LAG */
     enum ovsrec_port_lacp_e lacp_mode;      /*!< port's LACP mode */
@@ -106,11 +115,350 @@ struct iface_data {
 
     /* These members are valid only within lacpd_reconfigure(). */
     const struct ovsrec_interface *cfg;     /*!< pointer to corresponding row in IDL cache */
+
+    int      index;                         /*!< Allocated index for interface */
+    enum PM_lport_type  cycl_port_type;     /*!< Cyclone port type */
+
+    /* Configuration information from LACP element. */
+    uint16_t cfg_lag_id;       /*!< Configured LAG_ID */
+    int      lacp_state;       /*!< 0=disabled, 1=enabled */
+    int      actor_priority;   /*!< Integer */
+    int      actor_key;        /*!< Integer */
+    int      aggregateable;    /*!< 0=no, 1=yes */
+    int      activity_mode;    /*!< 0=passive, 1=active */
+    int      timeout_mode;     /*!< 0=long, 1=short */
+    int      collecting_ready; /*!< hardware is ready to collect */
 };
+
+/* NOTE: These LAG IDs are only used for LACP state machine.
+ *       They are not necessarily the same as h/w LAG ID. */
+#define LAG_ID_IN_USE   1
+#define VALID_LAG_ID(x) ((x)>=min_lag_id && (x)<=max_lag_id)
+
+const uint16_t min_lag_id = 1;
+uint16_t max_lag_id = 0;
+uint16_t *lag_id_pool = NULL;
+
+/* To serialize updates to OVSDB.  Both LACP Cyclone and OVS
+ * interface threads calls to update OVSDB states. */
+pthread_mutex_t ovsdb_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Macros to lock and unlock mutexes in a verbose manner. */
+#define OVSDB_LOCK { \
+                VLOG_DBG("%s(%d): OVSDB_LOCK: taking lock...", __FUNCTION__, __LINE__); \
+                pthread_mutex_lock(&ovsdb_mutex); \
+}
+
+#define OVSDB_UNLOCK { \
+                VLOG_DBG("%s(%d): OVSDB_UNLOCK: releasing lock...", __FUNCTION__, __LINE__); \
+                pthread_mutex_unlock(&ovsdb_mutex); \
+}
+
 
 static int update_interface_lag_eligibility(struct iface_data *idp);
 static int update_interface_hw_bond_config_map_entry(struct iface_data *idp,
                                                      const char *key, const char *value);
+
+/**********************************************************************/
+/*                               UTILS                                */
+/**********************************************************************/
+static void
+init_lag_id_pool(uint16_t count)
+{
+    if (lag_id_pool == NULL) {
+        /* Track how many we're allocating. */
+        max_lag_id = count;
+
+        /* Allocate an extra one to skip LAG ID 0. */
+        lag_id_pool = (uint16_t *)xcalloc(count+1, sizeof(uint16_t));
+        VLOG_DBG("lacpd: allocated %d LAG IDs", count);
+    }
+} /* init_lag_id_pool */
+
+static uint16_t
+alloc_lag_id(void)
+{
+    if (lag_id_pool != NULL) {
+        uint16_t id;
+
+        for (id=min_lag_id; id<=max_lag_id; id++) {
+
+            if (lag_id_pool[id] == LAG_ID_IN_USE) {
+                continue;
+            }
+
+            /* Found an available LAG_ID. */
+            lag_id_pool[id] = LAG_ID_IN_USE;
+            return id;
+        }
+    } else {
+        VLOG_ERR("LAG ID pool not initialized!");
+    }
+
+    /* No free LAG ID available if we get here. */
+    return 0;
+
+} /* alloc_lag_id */
+
+#if 0
+/* HALON_TODO */
+static void
+free_lag_id(uint16_t id)
+{
+    if ((lag_id_pool == NULL) && VALID_LAG_ID(id)) {
+        if (lag_id_pool[id] == LAG_ID_IN_USE) {
+            lag_id_pool[id] = 0;
+        } else {
+            VLOG_ERR("Trying to free an unused LAGID (%d)!", id);
+        }
+    } else {
+        if (lag_id_pool == NULL) {
+            VLOG_ERR("Attempt to free LAG ID when"
+                     "pool is not initialized!");
+        } else {
+            VLOG_ERR("Attempt to free invalid LAG ID %d!", id);
+        }
+    }
+
+} /* free_lag_id */
+#endif
+
+struct iface_data *
+find_iface_data_by_index(int index)
+{
+    struct iface_data *idp;
+    struct shash_node *sh_node;
+
+    SHASH_FOR_EACH(sh_node, &all_interfaces) {
+        idp = sh_node->data;
+        if (idp) {
+            if (idp->index == index) {
+                return idp;
+            }
+        }
+    }
+
+    return NULL;
+} /* find_iface_data_by_index */
+
+const char *
+find_ifname_by_index(int index)
+{
+    struct iface_data *idp;
+
+    idp = find_iface_data_by_index(index);
+    if (idp) {
+        return idp->name;
+    } else {
+        return "";
+    }
+
+} /* find_ifname_by_index */
+
+/**********************************************************************/
+/*              Configuration Message Sending Utilities               */
+/**********************************************************************/
+static void *
+alloc_msg(int size)
+{
+    void *msg;
+
+    msg = xzalloc(size);
+
+    if (msg == NULL) {
+        VLOG_ERR("%s: malloc failed.",__FUNCTION__);
+    }
+
+    return msg;
+} /* alloc_msg */
+
+static void
+send_sys_mac_msg(struct ether_addr *macAddr)
+{
+    ML_event *event;
+    struct MLt_lacp_api__actorSysMac *macMsg;
+    int msgSize;
+
+    VLOG_DBG("%s: entry", __FUNCTION__);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_lacp_api__actorSysMac);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_lacp_api__setActorSysMac;
+
+        macMsg = (struct MLt_lacp_api__actorSysMac *)(event+1);
+
+        /* Copy MAC address. */
+        memcpy(macMsg->actor_sys_mac, macAddr, ETH_ALEN);
+
+        ml_send_event(event);
+    }
+} /* send_sys_mac_msg */
+
+static void
+send_lag_create_msg(int lag_id)
+{
+    ML_event *event;
+    struct MLt_vpm_api__create_sport *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: lag_id=%d", __FUNCTION__, lag_id);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_vpm_api__create_sport);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_vpm_api__create_sport;
+
+        msg = (struct MLt_vpm_api__create_sport *)(event+1);
+        msg->handle = PM_LAG2HANDLE(lag_id);
+        msg->type = STYPE_802_3AD;
+
+        ml_send_event(event);
+    }
+} /* send_lag_create_msg */
+
+#if 0
+/* HALON_TODO */
+static void
+send_lag_delete_msg(int lag_id)
+{
+    ML_event *event;
+    struct MLt_vpm_api__delete_sport *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: lag_id=%d", __FUNCTION__, lag_id);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_vpm_api__delete_sport);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_vpm_api__delete_sport;
+
+        msg = (struct MLt_vpm_api__delete_sport *)(event+1);
+        msg->handle = PM_LAG2HANDLE(lag_id);
+
+        ml_send_event(event);
+    }
+} /* send_lag_delete_msg */
+#endif
+
+static void
+send_config_lag_msg(int lag_id, int actorKey, int cycl_ptype)
+{
+    ML_event *event;
+    struct MLt_vpm_api__lacp_sport_params *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: lag_id=%d, actor_key=%d, cycl_ptype=%d",
+             __FUNCTION__, lag_id, actorKey, cycl_ptype);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_vpm_api__lacp_sport_params);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. (This is for the VPM side) ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_vpm_api__set_lacp_sport_params;
+
+        msg = (struct MLt_vpm_api__lacp_sport_params *)(event+1);
+        msg->sport_handle = PM_LAG2HANDLE(lag_id);
+        msg->flags = (LACP_LAG_PORT_TYPE_FIELD_PRESENT |
+                      LACP_LAG_ACTOR_KEY_FIELD_PRESENT);
+
+        msg->port_type = cycl_ptype;
+        msg->actor_key = actorKey;
+
+        ml_send_event(event);
+    }
+} /* send_config_lag_msg */
+
+static void
+send_config_lport_msg(struct iface_data *info_ptr)
+{
+    ML_event *event;
+    struct MLt_vpm_api__lport_lacp_change *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: port=%s, index=%d", __FUNCTION__,
+             info_ptr->name, info_ptr->index);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_vpm_api__lport_lacp_change);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From VLAN peer. ***/
+        event->sender.peer = ml_vlan_index;
+        event->msgnum = MLm_vpm_api__set_lacp_lport_params_event;
+
+        msg = (struct MLt_vpm_api__lport_lacp_change *)(event+1);
+        msg->lport_handle = PM_SMPT2HANDLE(0,0,info_ptr->index,
+                                           info_ptr->cycl_port_type);
+        msg->link_state = (info_ptr->link_state == INTERFACE_LINK_STATE_UP) ? 1 : 0;
+        msg->link_speed = (info_ptr->link_speed/1000000);
+
+        /* NOTE: 802.3ad requires port number to be non-zero.  So we'll
+         *       just use 1-based port number, instead of 0-based.
+         * (ANVL LACP Conformance Test numbers 4.11)
+         */
+        msg->port_id          = (info_ptr->index+1);
+        msg->port_key         = info_ptr->actor_key;
+        msg->port_priority    = info_ptr->actor_priority;
+        msg->lacp_state       = info_ptr->lacp_state;
+        msg->lacp_aggregation = info_ptr->aggregateable;
+        msg->lacp_activity    = info_ptr->activity_mode;
+        msg->lacp_timeout     = info_ptr->timeout_mode;
+        msg->collecting_ready = info_ptr->collecting_ready;
+
+        msg->flags = (LACP_LPORT_PORT_KEY_PRESENT |
+                      LACP_LPORT_PORT_PRIORITY_PRESENT |
+                      LACP_LPORT_ACTIVITY_FIELD_PRESENT |
+                      LACP_LPORT_TIMEOUT_FIELD_PRESENT |
+                      LACP_LPORT_AGGREGATION_FIELD_PRESENT |
+                      LACP_LPORT_HW_COLL_STATUS_PRESENT);
+
+        ml_send_event(event);
+    }
+} /* send_config_lport_msg */
+
+static void
+configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
+{
+    VLOG_DBG("%s: lag_id=%d, i/f=%s", __FUNCTION__, portp->lag_id, idp->name);
+
+    idp->cfg_lag_id = portp->lag_id;
+    idp->lacp_state = (portp->lacp_mode == PORT_LACP_OFF ?
+                       LACP_STATE_DISABLED : LACP_STATE_ENABLED);
+
+#if 0
+    idp->cycl_port_type = speed_to_lport_type(portp->port_max_speed);
+    idp->actor_priority = portp->actor_priority;
+    idp->actor_key = portp->actor_key;
+    idp->activity_mode = lag_entry->activity_mode;
+    idp->timeout_mode = lag_entry->timeout_mode;
+#else
+    /* HALON_TODO: temporary hard-code. */
+    idp->cycl_port_type = PM_LPORT_10GIGE;
+    idp->actor_priority = 1;
+    idp->actor_key = portp->lag_id;
+    idp->aggregateable = AGGREGATABLE;
+    idp->activity_mode = LACP_PASSIVE_MODE;
+    idp->timeout_mode = LONG_TIMEOUT;
+    idp->collecting_ready = 1;
+#endif
+} /* configure_lacp_on_interface */
 
 /**
  * @details
@@ -134,6 +482,10 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_table(idl, &ovsrec_table_open_vswitch);
     ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_cur_cfg);
 
+    /* Cache Subsystem table. */
+    ovsdb_idl_add_table(idl, &ovsrec_table_subsystem);
+    ovsdb_idl_add_column(idl, &ovsrec_subsystem_col_other_info);
+
     /* Cache Port table and columns. */
     ovsdb_idl_add_table(idl, &ovsrec_table_port);
     ovsdb_idl_add_column(idl, &ovsrec_port_col_name);
@@ -148,6 +500,11 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_link_speed);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_hw_bond_config);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_hw_bond_config);
+    ovsdb_idl_add_column(idl, &ovsrec_interface_col_hw_intf_info);
+
+    /* Initialize LAG ID pool. */
+    /* HALON_TODO: read # of LAGs from somewhere? */
+    init_lag_id_pool(128);
 
 } /* lacpd_ovsdb_if_init */
 
@@ -192,7 +549,18 @@ add_new_interface(const struct ovsrec_interface *ifrow)
         VLOG_WARN("Interface %s specified twice", ifrow->name);
         free(idp);
     } else {
+        const char *hw_id = smap_get(&(ifrow->hw_intf_info),
+                                     INTERFACE_HW_INTF_INFO_MAP_SWITCH_INTF_ID);
+
         idp->name = xstrdup(ifrow->name);
+
+        /* Allocate interface index. */
+        /* -- use hw_intf_info:switch_intf_id for now.
+         * -- may be overridden with OVS's other_config:lacp-port-id. */
+        idp->index = hw_id ? atoi(hw_id) : -1;
+        if (idp->index <= 0) {
+            VLOG_ERR("Invalid interface index, hw_id=%p, id=%d", hw_id, idp->index);
+        }
 
         idp->link_state = INTERFACE_LINK_STATE_DOWN;
         if (ifrow->link_state) {
@@ -285,7 +653,6 @@ update_interface_cache(void)
         /* Check for changes to row. */
         if (OVSREC_IDL_IS_ROW_INSERTED(ifrow, idl_seqno) ||
             OVSREC_IDL_IS_ROW_MODIFIED(ifrow, idl_seqno)) {
-            bool changed = false;
             unsigned int new_speed;
             enum ovsrec_interface_duplex_e new_duplex;
             enum ovsrec_interface_link_state_e new_link_state;
@@ -344,6 +711,8 @@ update_interface_cache(void)
  * Update hw_bond_config map column of interface row with entry_key and
  * entry_value pair.
  *
+ * NOTE: ovsdb_mutex must be taken prior to calling this function.
+ *
  * @param idp  iface_data pointer to the interface entry.
  * @param entry_key name of the key.
  * @param entry_value value for the key.
@@ -351,10 +720,9 @@ update_interface_cache(void)
  * @return 1 to indicate database transaction needs to be committed.
  */
 static int
-update_interface_hw_bond_config_map_entry(
-    struct iface_data *idp,
-    const char *entry_key,
-    const char *entry_value)
+update_interface_hw_bond_config_map_entry(struct iface_data *idp,
+                                          const char *entry_key,
+                                          const char *entry_value)
 {
     const struct ovsrec_interface *ifrow;
     struct smap smap;
@@ -379,17 +747,15 @@ update_interface_hw_bond_config_map_entry(
  * @param eligible indicates whether the interface is eligible to be a LAG member.
  */
 static void
-set_interface_lag_eligibility(
-    struct port_data *portp,
-    struct iface_data *idp,
-    bool eligible)
+set_interface_lag_eligibility(struct port_data *portp, struct iface_data *idp,
+                              bool eligible)
 {
     if (eligible == idp->lag_eligible) {
         return;
     }
 
     if (portp->lacp_mode == PORT_LACP_OFF) {
-        /* static LAG configuration in hardware. */
+        /* Static LAG configuration in hardware. */
         update_interface_hw_bond_config_map_entry(
             idp,
             INTERFACE_HW_BOND_CONFIG_MAP_RX_ENABLED,
@@ -404,14 +770,23 @@ set_interface_lag_eligibility(
             ? INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE
             : INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE);
     } else {
-        /* HALON_TODO: LACP LAG support. */
+        /* NOTE: For Ports in dynamic LACP mode, eligible interfaces
+         * mean the LACP is run on the interfaces.  LACP state machine
+         * will then decide if the interfaces' RX/TX should be enabled.
+         */
+        configure_lacp_on_interface(portp, idp);
+
+        /* Override lacp_state based on eligibility. */
+        idp->lacp_state = (eligible? LACP_STATE_ENABLED :
+                                     LACP_STATE_DISABLED);
+        send_config_lport_msg(idp);
     }
 
     /* update eligible LAG member list. */
     if (eligible) {
-            shash_add(&portp->eligible_member_ifs, idp->name, (void *)idp);
+        shash_add(&portp->eligible_member_ifs, idp->name, (void *)idp);
     } else {
-            shash_find_and_delete(&portp->eligible_member_ifs, idp->name);
+        shash_find_and_delete(&portp->eligible_member_ifs, idp->name);
     }
     idp->lag_eligible = eligible;
 } /* set_interface_lag_eligibility */
@@ -516,8 +891,44 @@ handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
     if (portp->lacp_mode != lacp_mode) {
         VLOG_DBG("port %s:lacp_mode changed  %d -> %d",
                  row->name, portp->lacp_mode, lacp_mode);
+
+        /* LACP mode changed.  In either case, mark all existing interfaces
+         * as ineligible to detach them first.  Then the interfaces will be
+         * reconfigured based on the new LACP mode. */
+        SHASH_FOR_EACH_SAFE(node, next, &portp->eligible_member_ifs) {
+            struct iface_data *idp =
+                shash_find_data(&all_interfaces, node->name);
+            set_interface_lag_eligibility(portp, idp, false);
+        }
+
+        if (!LACP_ENABLED_ON_PORT(portp->lacp_mode)) {
+            /* LACP was not on (static LAG).  Need to turn on LACP. */
+
+            /* Create super port in LACP state machine. */
+            if (!portp->lag_id) {
+                portp->lag_id = alloc_lag_id();
+            }
+
+            if (portp->lag_id) {
+                /* Send LAG creation information. */
+                send_lag_create_msg(portp->lag_id);
+
+                /* Send LAG configuration information
+                 * NOTE: Halon now controls actor_key and port type
+                 *       parameters, so we'll simply initialize them
+                 *       with default values.
+                 * HALON_TODO: Allow the user to configure actor_key.
+                 */
+                send_config_lag_msg(portp->lag_id,
+                                    portp->lag_id, /* Just use LAGID as actor key...*/
+                                    PM_LPORT_INVALID);
+            } else {
+                VLOG_ERR("Failed to allocate LAGID for port %s!", portp->name);
+            }
+        }
+
+        /* Save new LACP mode. */
         portp->lacp_mode = lacp_mode;
-        /* HALON_TODO: Handle lacp_mode changes. */
     }
 
     VLOG_DBG("%s: port %s n_interfaces=%d",
@@ -548,6 +959,7 @@ handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
             }
         }
     }
+
     /* Look for newly added interfaces. */
     SHASH_FOR_EACH(node, &sh_idl_port_intfs) {
         struct ovsrec_interface *ifrow =
@@ -619,7 +1031,7 @@ add_new_port(const struct ovsrec_port *port_row)
     VLOG_DBG("Port %s being added!", port_row->name);
 
     /* Allocate structure to save state information for this interface. */
-    portp = xcalloc(1, sizeof *portp);
+    portp = xzalloc(sizeof *portp);
 
     if (!shash_add_once(&all_ports, port_row->name, portp)) {
         VLOG_WARN("Port %s specified twice", port_row->name);
@@ -627,7 +1039,10 @@ add_new_port(const struct ovsrec_port *port_row)
     } else {
         size_t i;
 
+        portp->lag_id = 0;
         portp->name = xstrdup(port_row->name);
+        portp->lacp_mode = PORT_LACP_OFF;
+        portp->lag_member_speed = 0;
         shash_init(&portp->cfg_member_ifs);
         shash_init(&portp->eligible_member_ifs);
 
@@ -754,11 +1169,28 @@ lacpd_chk_for_system_configured(void)
     }
 
     ovs_vsw = ovsrec_open_vswitch_first(idl);
-
     if (ovs_vsw && ovs_vsw->cur_cfg > (int64_t)0) {
-        system_configured = true;
-        VLOG_INFO("System is now configured (cur_cfg=%d).",
-                  (int)ovs_vsw->cur_cfg);
+        const char *sys_mac;
+        const struct ovsrec_subsystem *ovs_subsys = NULL;
+
+        /* HALON_TODO: temprarily using base_mac_address, which is
+         * used for interface MACs.  We really need to reserve one
+         * dedicated to the entire switching system. */
+        /* HALON_TODO: handle multiple subsystems. */
+        ovs_subsys = ovsrec_subsystem_first(idl);
+
+        if (ovs_subsys) {
+            sys_mac = smap_get(&ovs_subsys->other_info, "base_mac_address");
+            if (sys_mac) {
+                struct ether_addr *eth_addr;
+                eth_addr = ether_aton(sys_mac);
+                send_sys_mac_msg(eth_addr);
+
+                system_configured = true;
+                VLOG_INFO("System is now configured (cur_cfg=%d, sys_mac=%s).",
+                          (int)ovs_vsw->cur_cfg, sys_mac);
+            }
+        }
     }
 
 } /* lacpd_chk_for_system_configured */
@@ -774,16 +1206,19 @@ lacpd_run(void)
 {
     struct ovsdb_idl_txn *txn;
 
+    OVSDB_LOCK;
+
     /* Process a batch of messages from OVSDB. */
     ovsdb_idl_run(idl);
 
     if (ovsdb_idl_is_lock_contended(idl)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-
         VLOG_ERR_RL(&rl, "Another lacpd process is running, "
                     "disabling this process until it goes away");
+        OVSDB_UNLOCK;
         return;
     } else if (!ovsdb_idl_has_lock(idl)) {
+        OVSDB_UNLOCK;
         return;
     }
 
@@ -799,6 +1234,8 @@ lacpd_run(void)
         ovsdb_idl_txn_destroy(txn);
     }
 
+    OVSDB_UNLOCK;
+
     return;
 } /* lacpd_run */
 
@@ -808,57 +1245,133 @@ lacpd_wait(void)
     ovsdb_idl_wait(idl);
 } /* lacpd_wait */
 
-void
-halon_create_lag_in_hw(uint16_t lag_id __attribute__((unused)))
+static void
+lacpd_thread_intf_update_hw_bond_config(struct iface_data *idp,
+                                        bool update_rx, bool rx_enabled,
+                                        bool update_tx, bool tx_enabled)
 {
-}
+    struct ovsdb_idl_txn *txn;
+
+    OVSDB_LOCK;
+    txn = ovsdb_idl_txn_create(idl);
+    if (update_rx) {
+        update_interface_hw_bond_config_map_entry(
+            idp,
+            INTERFACE_HW_BOND_CONFIG_MAP_RX_ENABLED,
+            (rx_enabled ?
+             INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE :
+             INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE));
+    }
+    if (update_tx) {
+        update_interface_hw_bond_config_map_entry(
+            idp,
+            INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED,
+            (tx_enabled ?
+             INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE :
+             INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE));
+    }
+    ovsdb_idl_txn_commit_block(txn);
+    ovsdb_idl_txn_destroy(txn);
+    OVSDB_UNLOCK;
+
+} /* halon_intf_update_hw_bond_config */
 
 void
-halon_destroy_lag_in_hw(uint16_t lag_id __attribute__((unused)))
+halon_create_lag_in_hw(uint16_t lag_id)
 {
-}
+    /* HALON_TODO: this is probably no longer necessary. */
+    VLOG_DBG("%s: HALON_TODO lag_id=%d", __FUNCTION__, lag_id);
+} /* halon_create_lag_in_hw */
 
 void
-halon_attach_port_in_hw(uint16_t lag_id __attribute__((unused)),
-                        int port __attribute__((unused)))
+halon_destroy_lag_in_hw(uint16_t lag_id)
 {
-}
-void
-halon_detach_port_in_hw(uint16_t lag_id __attribute__((unused)),
- int port_index __attribute__((unused)))
-{
-}
+    /* HALON_TODO: this is probably no longer necessary. */
+    VLOG_DBG("%s: HALON_TODO lag_id=%d", __FUNCTION__, lag_id);
+} /* halon_destroy_lag_in_hw */
 
 void
-db_delete_lag_port(uint16_t lag_id __attribute__((unused)),
- int port __attribute__((unused)))
+halon_attach_port_in_hw(uint16_t lag_id, int port)
 {
-}
+    struct iface_data *idp = NULL;
+
+    idp = find_iface_data_by_index(port);
+    if (idp) {
+        /* Attaching port means just RX. */
+        lacpd_thread_intf_update_hw_bond_config(idp,
+                                                true,   /* update_rx */
+                                                true,   /* rx_enabled */
+                                                false,  /* update_tx */
+                                                false); /* tx_enabled */
+    } else {
+        VLOG_ERR("Failed to find interface data for attaching port in hw. "
+                 "port index=%d", port);
+    }
+} /* halon_attach_port_in_hw */
 
 void
-halon_trunk_port_egr_enable(uint16_t lag_id __attribute__((unused)),
- int port __attribute__((unused)))
+halon_detach_port_in_hw(uint16_t lag_id, int port)
 {
-}
+    struct iface_data *idp = NULL;
+
+    idp = find_iface_data_by_index(port);
+    if (idp) {
+        /* Detaching port means both RX/TX are disabled. */
+        lacpd_thread_intf_update_hw_bond_config(idp,
+                                                true,   /* update_rx */
+                                                false,  /* rx_enabled */
+                                                true,   /* update_tx */
+                                                false); /* tx_enabled */
+    } else {
+        VLOG_ERR("Failed to find interface data for attaching port in hw. "
+                 "port index=%d", port);
+    }
+
+} /* halon_detach_port_in_hw */
 
 void
-db_add_lag_port(uint16_t lag_id __attribute__((unused)),
- int port __attribute__((unused)))
+db_delete_lag_port(uint16_t lag_id, int port)
 {
-}
+    VLOG_DBG("%s: HALON_TODO lag_id=%d, port=%d", __FUNCTION__, lag_id, port);
+} /* db_delete_lag_port */
+
+void
+halon_trunk_port_egr_enable(uint16_t lag_id, int port)
+{
+    struct iface_data *idp = NULL;
+
+    idp = find_iface_data_by_index(port);
+    if (idp) {
+        /* Egress enable means TX. */
+        lacpd_thread_intf_update_hw_bond_config(idp,
+                                                false, /* update_rx */
+                                                false, /* rx_enabled */
+                                                true,  /* update_tx */
+                                                true); /* tx_enabled */
+    } else {
+        VLOG_ERR("Failed to find interface data for egress enable. "
+                 "port index=%d", port);
+    }
+} /* halon_trunk_port_egr_enable */
+
+void
+db_add_lag_port(uint16_t lag_id, int port)
+{
+    VLOG_DBG("%s: HALON_TODO lag_id=%d, port=%d", __FUNCTION__, lag_id, port);
+} /* db_add_lag_port */
 
 void
 db_clear_lag_partner_info(uint16_t lag_id)
 {
-    VLOG_DBG("*** %s TODO lag_id %d***", __FUNCTION__, lag_id);
-}
+    VLOG_DBG("%s: HALON_TODO lag_id %d", __FUNCTION__, lag_id);
+} /* db_clear_lag_partner_info */
 
 void
 db_update_lag_partner_info(uint16_t lag_id,
-   lacp_sport_params_t *param __attribute__((unused)))
+                           lacp_sport_params_t *param __attribute__((unused)))
 {
-    VLOG_DBG("*** %s TODO lag_id %d***", __FUNCTION__, lag_id);
-}
+    VLOG_DBG("%s: HALON_TODO lag_id %d", __FUNCTION__, lag_id);
+} /* db_update_lag_partner_info */
 
 /**********************************************************************/
 /*                               DEBUG                                */
@@ -990,5 +1503,59 @@ lacpd_debug_dump(struct ds *ds, int argc, const char *argv[])
         lacpd_ports_dump(ds, 0, NULL);
     }
 } /* lacpd_debug_dump */
+
+/**********************************************************************/
+/*                        OVS Main Thread                             */
+/**********************************************************************/
+
+/**
+ * Cleanup function at daemon shutdown time.
+ */
+static void
+lacpd_exit(void)
+{
+    lacpd_ovsdb_if_exit();
+    VLOG_INFO("lacpd OVSDB thread exiting...");
+} /* lacpd_exit */
+
+/**
+ * @details
+ * lacpd daemon's main OVS interface function.  Repeat loop that
+ * calls run, wait, poll_block, etc. functions for lacpd.
+ *
+ * @param arg pointer to ovs-appctl server struct.
+ */
+void *
+lacpd_ovs_main_thread(void *arg)
+{
+    struct unixctl_server *appctl;
+
+    /* Detach thread to avoid memory leak upon exit. */
+    pthread_detach(pthread_self());
+
+    appctl = (struct unixctl_server *)arg;
+
+    exiting = false;
+    while (!exiting) {
+        lacpd_run();
+        unixctl_server_run(appctl);
+
+        lacpd_wait();
+        unixctl_server_wait(appctl);
+        if (exiting) {
+            poll_immediate_wake();
+        } else {
+            poll_block();
+        }
+    }
+
+    lacpd_exit();
+    unixctl_server_destroy(appctl);
+
+    /* HALON_TODO -- need to tell main loop to exit... */
+
+    return NULL;
+
+} /* lacpd_ovs_main_thread */
 
 /**@} end of lacpd group */

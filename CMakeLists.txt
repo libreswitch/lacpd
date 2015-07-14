@@ -33,6 +33,9 @@ include_directories (include ${LIB_VPM_DIR} ${LIB_CYCLONE_DIR}/include
                      ${OVSCOMMON_INCLUDE_DIRS}
 )
 
+# Define compile flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Werror")
+
 # Source files to build lacpd
 set (SOURCES lacpd.c mlacp_main.c mlacp_recv.c mlacp_send.c lacp_task.c
      lacp_support.c periodic_tx_fsm.c receive_fsm.c mux_fsm.c

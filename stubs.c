@@ -20,6 +20,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/types.h>
+#include <openvswitch/vlog.h>
 #include <nemo/nemo_types.h>
 #include <nemo/avl.h>
 

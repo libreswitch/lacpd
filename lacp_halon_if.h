@@ -134,6 +134,9 @@ extern void db_clear_lag_partner_info(int lag_id);
 extern void db_add_lag_port(int lag_id, int port);
 extern void db_delete_lag_port(int lag_id, int port);
 
+// Utility functions
+const char *find_ifname_by_index(int index);
+
 /**************************************************************************//**
  * Initializes OVSDB interface.
  * Called by lacpd's initialization code to create a connection to OVSDB
@@ -177,6 +180,14 @@ extern void lacpd_run(void);
  *
  *****************************************************************************/
 extern void lacpd_debug_dump(struct ds *ds, int argc, const char *argv[]);
+
+/**************************************************************************//**
+ * lacpd daemon's main OVS interface function.
+ *
+ * @param arg pointer to ovs-appctl server struct.
+ *
+ *****************************************************************************/
+extern void *lacpd_ovs_main_thread(void *arg);
 
 /** @} end of group lacpd_ovsdb_if */
 

@@ -24,6 +24,7 @@
 *****************************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <nemo/avl.h>
 #include <nemo/lacp/mlacp_debug.h>

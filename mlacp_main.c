@@ -20,24 +20,30 @@
 //    Description        : Master (mcpu) LACP Manager's main entry point
 //**************************************************************************
 
-#include <stdio.h>
-#include <signal.h>
-#include <limits.h>
-#include <sys/time.h>
-#include <sys/un.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <net/if.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
+#include <linux/filter.h>
+
+#include <util.h>
+#include <openvswitch/vlog.h>
 
 #include <nemo/mqueue.h>
 #include <nemo/protocol/drivers/mlacp.h>
 #include <nemo/pm/pm_cmn.h>
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
+#include <vpm/mvlan_sport.h>
 #include "lacp.h"
 #include "mlacp_fproto.h"
 #include "lacp_support.h"
-
-#include <hc-utils.h>
-
 #include "lacp_halon_if.h"
 
 VLOG_DEFINE_THIS_MODULE(mlacp_main);
@@ -69,46 +75,66 @@ enum PM_lport_type cycl_port_type[CHAR_BIT * sizeof(PBM_t)];
 // Message Queue for LACPD main protocol thread
 mqueue_t lacpd_main_rcvq;
 
-// Forward declarations
-extern int mvlan_sport_init(u_long  first_time);
-
 //////////////////// Internal global defines ////////////////////
 
-#define LACPD_ID             "lacpd"
-#define LACPD_PID_FILE       "/var/run/lacpd.pid"
-#define LACPD_DBG_FILE       "lacpd_dbg.log"
+/* LACP filter
+ *
+ * BPF filter to receive LACPDU from interfaces.
+ *
+ * LACP: "ether proto 0x8809 and ether dst 01:80:c2:00:00:02"
+ *       "ether subtype = 0x1" - LACP
+ *       "ether subtype = 0x2" - Marker protocol
+ *
+ * Since LACP protocol 0x8809 is already specified in the socket bind,
+ * we just need to filter on the destination MAC address.  For now
+ * we're not filtering on the subtype.  Capture all slow-protocol frames.
+ *
+ *    tcpdump -dd "(ether dst 01:80:c2:00:00:02)"
+ */
+#define LACPD_FILTER_F \
+    { 0x20, 0, 0, 0x00000002 }, \
+    { 0x15, 0, 3, 0xc2000002 }, \
+    { 0x28, 0, 0, 0x00000000 }, \
+    { 0x15, 0, 1, 0x00000180 }, \
+    { 0x6, 0, 0, 0x0000ffff }, \
+    { 0x6, 0, 0, 0x00000000 }
+
+static struct sock_filter lacpd_filter_f[] = { LACPD_FILTER_F };
+static struct sock_fprog lacpd_fprog = {
+    .filter = lacpd_filter_f,
+    .len = sizeof(lacpd_filter_f) / sizeof(struct sock_filter)
+};
 
 //***********************************************************************
 // Event Receiver Functions
 //***********************************************************************
 int
-hc_enet_init_event_rcvr(void)
+ml_init_event_rcvr(void)
 {
     int rc;
 
     rc = mqueue_init(&lacpd_main_rcvq);
     if (rc) {
-        RDEBUG(DL_ERROR, "Failed lacp main receive queue init: %s\n",
-               strerror(rc));
+        VLOG_ERR("Failed LACP main receive queue init: %s",
+                 strerror(rc));
     }
 
     return rc;
-} // hc_enet_init_event_rcvr
+} /* ml_init_event_rcvr */
 
 int
-ml_send_event(ML_event* event)
+ml_send_event(ML_event *event)
 {
     int rc;
 
     rc = mqueue_send(&lacpd_main_rcvq, event);
     if (rc) {
-        RDEBUG(DL_ERROR,
-               "Failed to send to lacp main receive queue: %s\n",
-               strerror(rc));
+        VLOG_ERR("Failed to send to LACP main receive queue: %s",
+                 strerror(rc));
     }
 
     return rc;
-} // ml_send_event
+} /* ml_send_event */
 
 ML_event *
 ml_wait_for_next_event(void)
@@ -116,7 +142,7 @@ ml_wait_for_next_event(void)
     int rc;
     ML_event *event = NULL;
 
-    rc = mqueue_wait(&lacpd_main_rcvq, (void**)(void *)&event);
+    rc = mqueue_wait(&lacpd_main_rcvq, (void **)(void *)&event);
     if (!rc) {
         /* Set up event->msg pointer to just after the event
          * structure itself. This must be done here since the
@@ -124,188 +150,181 @@ ml_wait_for_next_event(void)
          * space, and will result in fatal errors if we try to
          * access it in LACP process space.
          */
-        event->msg = (void*)(event+1);
+        event->msg = (void *)(event+1);
     } else {
-        RDEBUG(DL_ERROR, "LACP main receive queue wait error, rc=%d\n",
-               rc);
+        VLOG_ERR("LACP main receive queue wait error, rc=%s",
+                 strerror(rc));
     }
 
     return event;
-} // ml_wait_for_next_event
+} /* ml_wait_for_next_event */
 
 void
-ml_event_free(ML_event* event)
+ml_event_free(ML_event *event)
 {
     if (event != NULL) {
         free(event);
     }
-} // ml_event_free
+} /* ml_event_free */
 
-#if 0 // HALON_TODO
 //***********************************************************************
-//  LACPDU Send and Receive Functions
+// LACPDU Send and Receive Functions
 //***********************************************************************
+
+void *
+mlacp_rx_pdu_thread(void *data)
+{
+    int rc;
+    int port;
+    int sockfd;
+    int if_idx = 0;
+    port_handle_t lport_handle = (port_handle_t)data;
+    const char *if_name;
+    struct ifreq ifr = { .ifr_name = {} };
+    struct sockaddr_ll addr;
+
+    /* Detach thread to avoid memory leak upon exit. */
+    pthread_detach(pthread_self());
+
+    /* Find the interface data first. */
+    port = PM_HANDLE2PORT(lport_handle);
+    if_name = find_ifname_by_index(port);
+
+    if_idx = if_nametoindex(if_name);
+    if (0 == if_idx) {
+        VLOG_ERR("Error getting ifindex for port %d (if_name=%s)!",
+                 port, if_name);
+        return NULL;
+    }
+
+    VLOG_DBG("Eth %s, ifindex=%d\n", if_name, if_idx);
+
+    snprintf(ifr.ifr_name, IFNAMSIZ, if_name);
+    if ((sockfd = socket(PF_PACKET, SOCK_RAW, 0)) < 0) {
+        rc = errno;
+        VLOG_ERR("Failed to open datagram socket for %s, rc=%s",
+                 if_name, strerror(rc));
+        return NULL;
+    }
+
+    rc = setsockopt(sockfd, SOL_SOCKET, SO_ATTACH_FILTER,
+                    &lacpd_fprog, sizeof(lacpd_fprog));
+    if (rc < 0) {
+        VLOG_ERR("Failed to attach socket filter for %s, rc=%s",
+                 if_name, strerror(rc));
+        close(sockfd);
+        return NULL;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sll_family = AF_PACKET;
+    addr.sll_ifindex = if_idx;
+    addr.sll_protocol = htons(ETH_P_SLOW); /* IEEE802.3 slow protocol (LACP) */
+
+    rc = bind(sockfd, (struct sockaddr *)&addr, sizeof(addr));
+    if (rc < 0) {
+        VLOG_ERR("Failed to bind socket to addr for %s, rc=%s",
+                 if_name, strerror(rc));
+        close(sockfd);
+        return NULL;
+    }
+
+    while (1) {
+        int count;
+        int clientlen;
+        struct sockaddr_ll clientaddr;
+        ML_event *event;
+        int total_msg_size;
+        struct MLt_drivers_mlacp__rxPdu *pkt_event;
+
+        // Cyclone LACPDU size hard-coded to 124 max.
+        // See MLt_drivers_mlacp__rxPdu in include/nemo/protocol/drivers/mlacp.h
+        total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
+
+        event = xzalloc(total_msg_size);
+        event->sender.peer = ml_bolton_index;
+        pkt_event = (struct MLt_drivers_mlacp__rxPdu *)(event+1);
+
+        clientlen = sizeof(clientaddr);
+        count = recvfrom(sockfd, (void *)pkt_event->data,
+                         MAX_LACPDU_PKT_SIZE, 0,
+                         (struct sockaddr *)&clientaddr,
+                         (unsigned int *)&clientlen);
+        if (count < 0) {
+            /* General socket error... */
+            VLOG_ERR("Read failed for %s, fd=%d: errno=%d",
+                     if_name, sockfd, errno);
+            free(event);
+            continue;
+
+        } else if (!count) {
+            /* Socket is closed.  Get out. */
+            VLOG_ERR("%s, socket=%d closed", if_name, sockfd);
+            free(event);
+            break;
+
+        } else if (count <= MAX_LACPDU_PKT_SIZE) {
+            pkt_event->lport_handle = lport_handle;
+            pkt_event->pktLen = count;
+
+            ml_send_event(event);
+        }
+    } /* while (1) */
+
+    return NULL;
+
+} /* mlacp_rx_pdu_thread */
+
 void
 register_mcast_addr(port_handle_t lport_handle)
 {
-    int port = PM_HANDLE2PORT(lport_handle);
-    cycl_port_type[port] = PM_HANDLE2LTYPE(lport_handle);
-    mcast_registered_pbm |= PORTNUM_TO_PBM(port);
-} // register_mcast_addr
+    int rc;
+    pthread_t rx_thread;
+
+    VLOG_DBG("%s: lport 0x%llx, port=%d",
+             __FUNCTION__, lport_handle, PM_HANDLE2PORT(lport_handle));
+
+    /* Spawn off thread to listen for LACPDU on the interface. */
+    rc = pthread_create(&rx_thread,
+                        (pthread_attr_t *)NULL,
+                        mlacp_rx_pdu_thread,
+                        (void *)lport_handle);
+    if (rc) {
+        VLOG_ERR("pthread_create for LACPDU Rx thread failed!");
+    }
+
+    /* HALON_TODO: save thread info to kill it when not needed. */
+
+} /* register_mcast_addr */
 
 void
 deregister_mcast_addr(port_handle_t lport_handle)
 {
-    int port = PM_HANDLE2PORT(lport_handle);
-    mcast_registered_pbm &= ~PORTNUM_TO_PBM(port);
-    cycl_port_type[port] = PM_LPORT_INVALID;
-} // deregister_mcast_addr
+    VLOG_DBG("%s: HALON_TODO: lport 0x%llx, port=%d",
+             __FUNCTION__, lport_handle, PM_HANDLE2PORT(lport_handle));
+} /* deregister_mcast_addr */
 
 int
-mlacp_send(unsigned char* data, int length, port_handle_t portHandle)
+mlacp_send(unsigned char* data, int length, port_handle_t lport_handle)
 {
-    proto_packet_t pkt;
-    int totalLength;
-
-    // Set up PDU header.  This is from mlacp_send() in mlacp_klib.c.
-    data[0] = 0x01;
-    data[1] = 0x80;
-    data[2] = 0xC2;
-    data[3] = 0x00;
-    data[4] = 0x00;
-    data[5] = 0x02;
-
-    data[6] = my_mac_addr[0];
-    data[7] = my_mac_addr[1];
-    data[8] = my_mac_addr[2];
-    data[9] = my_mac_addr[3];
-    data[10] = my_mac_addr[4];
-    data[11] = my_mac_addr[5];
-
-    data[12] = 0x88;
-    data[13] = 0x09;
-
-    pkt.header.port = PM_HANDLE2PORT(portHandle);
-
-    memcpy(pkt.data, data, length);
-
-    totalLength = length+sizeof(proto_pkt_header_t);
-
-    // --- HALON - send via DAL interface ---
-    halon_send_lacpdu((unsigned char *)&pkt, totalLength, pkt.header.port);
-
-    return 0;
-} // mlacp_send
-
-void
-halon_lacpdu_rx(proto_packet_t *shalPkt, int count)
-{
-    if (count < 0) {
-        RDEBUG(DL_ERROR, "Invalid LACPDU length len=%d", count);
-        return;
-    }
-
-    if (!shal_port_is_valid(shalPkt->header.port)) {
-        // Bad port number.  Ignore this packet.
-        RDEBUG(DL_ERROR,
-               "LACP rx processing, Invalid port number=%d",
-               shalPkt->header.port);
-        return;
-    }
-
-    RDEBUG(DL_LACPDU,
-           " --- LACP Proto Rx Thread: rx pkt from port=%d  length=%d\n",
-           shalPkt->header.port, count);
-
-    // Ignore any LACPDU from ports that aren't ready to handle LACPDUs.
-    if (!(mcast_registered_pbm & PORTNUM_TO_PBM(shalPkt->header.port))) {
-        return;
-    }
-
-    //*********************************************
-    //*           LACPDU Packet                   *
-    //*********************************************
-    if (shalPkt->header.msgType == PROTO_DATA_PKT) {
-        count -= sizeof(proto_pkt_header_t);
-
-        RDEBUG(DL_LACPDU, " --- LACPDU Received, PDU length=%d\n", count);
-
-        // Allocate a new PDU event message and send it to LACP main.
-        struct MLt_drivers_mlacp__rxPdu *pkt_event;
-        ML_event *event;
-        int total_msg_size;
-
-        if (count <= MAX_LACPDU_PKT_SIZE) {
-            // Cyclone LACPDU size hard-coded to 124 max.
-            // See MLt_drivers_mlacp__rxPdu in include/nemo/protocol/drivers/mlacp.h
-
-            total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
-            event = (ML_event*)malloc(total_msg_size);
-
-            if (event != NULL) {
-                event->sender.peer = ml_bolton_index;
-                // pkt_event = (struct MLt_drivers_mlacp__rxPdu *) &(event->msgBody[0]);
-                pkt_event = (struct MLt_drivers_mlacp__rxPdu *) (event+1);
-
-                // NOT NEEDED.
-                //event->msg = pkt_event;
-
-                pkt_event->lport_handle = PM_SMPT2HANDLE(0, 0, shalPkt->header.port,
-                                     cycl_port_type[shalPkt->header.port]);
-                pkt_event->pktLen = count;
-                memcpy(pkt_event->data, shalPkt->data, count);
-
-                ml_send_event(event);
-            } else {
-                RDEBUG(DL_ERROR, "No memory to send PDU!|n");
-            }
-        } else {
-            RDEBUG(DL_ERROR, "LACPDU packet size greater than %d!\n",
-                   MAX_LACPDU_PKT_SIZE);
-        }
-    } else {
-        RDEBUG(DL_ERROR, "Unknown protocol msgType=%d\n", shalPkt->header.msgType);
-    }
-
-    return;
-} // halon_lacpdu_rx
-#else
-void
-register_mcast_addr(port_handle_t lport_handle __attribute__ ((unused)))
-{
-} // register_mcast_addr
-
-void
-deregister_mcast_addr(port_handle_t lport_handle __attribute__ ((unused)))
-{
-} // deregister_mcast_addr
-
-int
-mlacp_send(unsigned char* data __attribute__ ((unused)),
-       int length __attribute__ ((unused)),
-       int portHandle __attribute__ ((unused)) )
-{
+    VLOG_DBG("%s: HALON_TODO: lport 0x%llx, port=%d, data=%p, len=%d",
+             __FUNCTION__, lport_handle, PM_HANDLE2PORT(lport_handle),
+             data, length);
     return 0;
 }
-void
-halon_lacpdu_rx(void *shalPkt __attribute__((unused)),
-        int count __attribute__((unused)))
-{
-}
-#endif // 0 HALON_TODO
 
 //***********************************************************************
 // LACP Protocol Thread
 //***********************************************************************
 void *
-lacpd_protocol_thread(void *arg __attribute__ ((unused)))
+lacpd_protocol_thread(void *arg)
 {
     ML_event *pevent;
 
     // Detach thread to avoid memory leak upon exit.
     pthread_detach(pthread_self());
 
-    RDEBUG(DL_INFO, "%s : waiting for events in the main loop\n", __FUNCTION__);
+    VLOG_DBG("%s : waiting for events in the main loop", __FUNCTION__);
 
     //*******************************************************************
     // The main receive loop starts
@@ -319,7 +338,7 @@ lacpd_protocol_thread(void *arg __attribute__ ((unused)))
         }
 
         if (!pevent) {
-            RDEBUG(DL_ERROR, "Received NULL event!\n");
+            VLOG_ERR("LACPD protocol: Received NULL event!");
             continue;
         }
 
@@ -351,28 +370,29 @@ lacpd_protocol_thread(void *arg __attribute__ ((unused)))
         } else if (pevent->sender.peer == ml_timer_index) {
             struct MLt_msglib__timer *tevent = pevent->msg;
             //***********************************************************
-            // XXX Use this later for various LACP timers
+            // msg from LACP timers
             //***********************************************************
-            RDEBUG(DL_TIMERS, "%s : got timer event\n", __FUNCTION__);
+            VLOG_DBG("%s : got timer event", __FUNCTION__);
 
             mlacp_process_timer(tevent);
 
         } else if (pevent->sender.peer == ml_bolton_index) {
             //***********************************************************
-            // Packet has arrived thru socket
+            // Packet has arrived thru socket.
             //***********************************************************
-            RDEBUG(DL_LACPDU, "%s : Packet (%d) arrived from bolton\n",
+            VLOG_DBG("%s : Packet (%d) arrived from bolton",
                    __FUNCTION__, pevent->msgnum);
 
-            // Halon: this is really coming from DAL interface.
+            // HALON_TODO: rename function.  This is really coming
+            // from Eth interface.
             mlacpBoltonRxPdu(pevent);
 
         } else {
             //***********************************************
             // unknown/unregistered sender
             //***********************************************
-            RDEBUG(DL_ERROR, "%s : message %d from unknown sender %d\n",
-                   __FUNCTION__, pevent->msgnum, pevent->sender.peer);
+            VLOG_ERR("%s : message %d from unknown sender %d",
+                     __FUNCTION__, pevent->msgnum, pevent->sender.peer);
         }
 
         ml_event_free(pevent);
@@ -390,166 +410,33 @@ mlacp_init(u_long  first_time)
 {
     int status = 0;
 
-    RENTRY();
-
     if (first_time != TRUE) {
-        RDEBUG(DL_FATAL, "Cannot handle revival from dead");
+        VLOG_ERR("Cannot handle revival from dead");
         status = -1;
         goto end;
     }
 
     if (lacp_init_done == TRUE) {
-        RDEBUG(DL_WARNING, "Already initialized");
+        VLOG_WARN("Already initialized");
         status = -1;
         goto end;
     }
 
-    // Halon: Initialize super ports
+    // Initialize super ports.
     mvlan_sport_init(first_time);
 
-    // Initialize LACP data structures
+    // Initialize LACP data structures.
     NEMO_AVL_INIT_TREE(lacp_per_port_vars_tree, nemo_compare_port_handle);
+
+    // Initialize LACP main task event receiver queue.
+    if (ml_init_event_rcvr()) {
+        VLOG_ERR("Failed to initialize event receiver.");
+        status = -1;
+        goto end;
+    }
 
     lacp_init_done  = TRUE;
 
 end:
-    REXIT();
-
-    return(status);
+    return status;
 } // mlacp_init
-
-// HALON_TODO Cleanup the unused code.
-#ifndef HALON
-static int
-hc_enet_init_lacp(void)
-{
-    int rc;
-    pthread_t lacpd_thread;
-    sigset_t sigset;
-
-    // Initialize LACP main task event receiver sockets.
-    hc_enet_init_event_rcvr();
-
-    /**************** Thread Related ***************/
-
-    // Block all signals so the spawned threads don't receive any.
-    sigemptyset(&sigset);
-    sigfillset(&sigset);
-    pthread_sigmask(SIG_BLOCK, &sigset, NULL);
-
-    // Spawn off the main Cyclone LACP protocol thread.
-    rc = pthread_create(&lacpd_thread,
-                        (pthread_attr_t *)NULL,
-                        lacpd_protocol_thread,
-                        NULL);
-    if (rc) {
-        VLOG_FATAL("pthread_create for LACPD main protocol thread failed!");
-    }
-
-    // Initialize HALON interface.
-    rc = lacp_halon_init();
-    if (rc) {
-        VLOG_ERR("LACP Halon init failed, rc=%d", rc);
-    }
-
-    return rc;
-} // hc_enet_init_lacp
-
-static void
-usage(int argc __attribute__ ((unused)), char *argv[])
-{
-    //Original Cyclone option
-    //printf("USAGE : %s [-l <log_level>]\n", argv[0]);
-    printf("USAGE : %s [-d] [-l]\n", argv[0]);
-    printf("  -d : Debug.  Does not daemonize LACP process.\n");
-} // usage
-
-int
-main(int argc, char *argv[])
-{
-    int debug  = 0;
-    int option;
-    sigset_t sigset;
-    int signum;
-    struct itimerval timerVal;
-
-    RENTRY();
-
-    //Halon: Removed all Cyclone specific initialization code,
-    //         e.g. msgLib, logging facilities, heartbeat, etc.
-
-    while ((option = getopt(argc, argv, "dl:")) != EOF) {
-        switch (option) {
-        case 'd':
-            debug = 1;
-            break;
-        default:
-            usage(argc, argv);
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    // If there's any extra arguments, fail it.
-    if (optind < argc) {
-        usage(argc, argv);
-        exit(EXIT_FAILURE);
-    }
-
-    // Daemonize process.
-    if (!debug) {
-        hc_daemonize(HC_DAEMON_LACPD);
-    }
-
-    // Record our PID so we can signal the daemon.
-    hc_record_pid(LACPD_PID_FILE);
-
-    // Initialize Cyclone LACP data structures.
-    (void)mlacp_init(TRUE);
-
-    // Initialize various protocol and event sockets.
-    hc_enet_init_lacp();
-
-    // Set up timer to fire off every second.
-    timerVal.it_interval.tv_sec  = 1;
-    timerVal.it_interval.tv_usec = 0;
-    timerVal.it_value.tv_sec  = 1;
-    timerVal.it_value.tv_usec = 0;
-
-    if ((mlacp_tindex = setitimer(ITIMER_REAL, &timerVal, NULL)) != 0) {
-        RDEBUG(DL_ERROR, "mlacp_init: Timer start failed!\n");
-    }
-
-    // Wait for all signals in an infinite loop.
-    sigfillset(&sigset);
-    while (!lacpd_shutdown) {
-
-        sigwait(&sigset, &signum);
-        switch (signum) {
-
-        case SIGALRM:
-            timerHandler();
-            break;
-
-        case SIGTERM:
-        case SIGINT:
-            RDEBUG(DL_WARNING, "%s, sig %d caught", __FUNCTION__, signum);
-            lacpd_shutdown = 1;
-            break;
-
-        case SIGUSR1:
-            dump_lacp_halon_info();
-            break;
-
-        default:
-            RDEBUG(DL_INFO, "Ignoring signal %d.\n", signum);
-            break;
-        }
-    }
-
-    // ---HALON---
-    lacp_halon_cleanup();
-
-    exit(EXIT_SUCCESS);
-
-} // main
-#endif /* HALON */
