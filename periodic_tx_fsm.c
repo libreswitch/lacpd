@@ -55,6 +55,7 @@
 #include "lacp.h"
 #include "lacp_stubs.h"
 #include "lacp_support.h"
+#include "mlacp_fproto.h"
 #include "lacp_halon.h"
 
 VLOG_DEFINE_THIS_MODULE(periodic_tx_fsm);
@@ -423,9 +424,8 @@ LACP_transmit_lacpdu(lacp_per_port_variables_t *plpinfo)
     }
 
     // Halon
-    mlacp_send((unsigned char *)lacpdu_payload,
-               datasize,
-               plpinfo->lport_handle);
+    mlacp_tx_pdu((unsigned char *)lacpdu_payload,
+                 datasize, plpinfo->lport_handle);
 
     plpinfo->lacp_pdus_sent++;
 

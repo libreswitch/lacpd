@@ -77,7 +77,6 @@ mlacpBoltonRxPdu(struct ML_event *pevent)
 {
     struct MLt_drivers_mlacp__rxPdu *pRxPduMsg = pevent->msg;
     unsigned char *data = (unsigned char *)pRxPduMsg->data;
-    void LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *, int len);
 
     LACP_process_input_pkt(pRxPduMsg->lport_handle, data, pRxPduMsg->pktLen);
 
@@ -207,6 +206,8 @@ mlacp_process_api_msg(ML_event *pevent)
                    my_mac_addr[3], my_mac_addr[4], my_mac_addr[5]);
         }
         break;
+
+        // HALON_TODO: remove static LAG related stuff here...
 
         // Halon: static LAG support.
         case MLm_vpm_api__static_lag_create:

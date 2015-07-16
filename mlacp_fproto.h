@@ -36,6 +36,7 @@ extern bool exiting;
 extern void mlacpBoltonRxPdu(struct ML_event *);
 extern void register_mcast_addr(port_handle_t lport_handle);
 extern void deregister_mcast_addr(port_handle_t lport_handle);
+extern int mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle);
 extern void *lacpd_protocol_thread(void *arg);
 extern int mlacp_init(u_long);
 
@@ -60,9 +61,10 @@ extern void mlacp_task_init(void);
 extern void mlacp_process_rxPdu(port_handle_t sport_handle, unsigned char *data);
 
 //***************************************************************
-// Functions in mlacp_task.c
+// Functions in lacp_task.c
 //***************************************************************
 extern int lacp_lag_port_match(void *v1, void *v2);
+extern void LACP_process_input_pkt(port_handle_t lport_handle, unsigned char * data, int len);
 
 //***************************************************************
 // Functions in mlacp_recv.c

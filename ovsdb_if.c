@@ -454,7 +454,7 @@ configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
     idp->actor_priority = 1;
     idp->actor_key = portp->lag_id;
     idp->aggregateable = AGGREGATABLE;
-    idp->activity_mode = LACP_PASSIVE_MODE;
+    idp->activity_mode = LACP_ACTIVE_MODE;
     idp->timeout_mode = LONG_TIMEOUT;
     idp->collecting_ready = 1;
 #endif

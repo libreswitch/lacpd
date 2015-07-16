@@ -305,13 +305,70 @@ deregister_mcast_addr(port_handle_t lport_handle)
 } /* deregister_mcast_addr */
 
 int
-mlacp_send(unsigned char* data, int length, port_handle_t lport_handle)
+mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle)
 {
-    VLOG_DBG("%s: HALON_TODO: lport 0x%llx, port=%d, data=%p, len=%d",
+    VLOG_DBG("%s: lport 0x%llx, port=%d, data=%p, len=%d",
              __FUNCTION__, lport_handle, PM_HANDLE2PORT(lport_handle),
              data, length);
+
+    /* Set up LACPDU header dest/src MAC addresses. */
+    memcpy(data, lacp_mcast_addr, MAC_ADDR_LENGTH);
+    memcpy(&data[6], my_mac_addr, MAC_ADDR_LENGTH);
+
+    /* IEEE802.3 slow protocol (LACP) */
+    data[12] = 0x88;
+    data[13] = 0x09;
+
+    /* HALON_TODO: temporary, just create & close socket for each transmit. */
+    {
+        int rc;
+        int port;
+        const char *if_name;
+        int send_sockfd;
+        int send_ifidx = 0;
+        struct ifreq send_ifr = { .ifr_name = {} };
+        struct sockaddr_ll send_addr;
+
+        port = PM_HANDLE2PORT(lport_handle);
+        if_name = find_ifname_by_index(port);
+        send_ifidx = if_nametoindex(if_name);
+        if (0 == send_ifidx) {
+            VLOG_ERR("Error getting ifindex for port %d (if_name=%s)!",
+                     port, if_name);
+            return 1;
+        }
+
+        VLOG_DBG("%s: Eth %s, ifindex=%d\n", __FUNCTION__, if_name, send_ifidx);
+
+        snprintf(send_ifr.ifr_name, IFNAMSIZ, if_name);
+        if ((send_sockfd = socket(PF_PACKET, SOCK_RAW, 0)) < 0) {
+            rc = errno;
+            VLOG_ERR("Failed to open datagram socket for send, %s", strerror(rc));
+            return 1;
+        }
+
+        memset(&send_addr, 0, sizeof(send_addr));
+        send_addr.sll_family = AF_PACKET;
+        send_addr.sll_ifindex = send_ifidx;
+
+        rc = bind(send_sockfd, (struct sockaddr *)&send_addr, sizeof(send_addr));
+        if (rc < 0) {
+            VLOG_ERR("Failed to bind socket to send_addr, %s", strerror(rc));
+            close(send_sockfd);
+            return 1;
+        }
+
+        rc = sendto(send_sockfd, data, length, 0, NULL, 0);
+        if (rc == -1) {
+            VLOG_ERR("Failed to send LACPDU, rc=%d", errno);
+            return 1;
+        }
+
+        close(send_sockfd);
+    }
+
     return 0;
-}
+} /* mlacp_tx_pdu */
 
 //***********************************************************************
 // LACP Protocol Thread
@@ -372,8 +429,6 @@ lacpd_protocol_thread(void *arg)
             //***********************************************************
             // msg from LACP timers
             //***********************************************************
-            VLOG_DBG("%s : got timer event", __FUNCTION__);
-
             mlacp_process_timer(tevent);
 
         } else if (pevent->sender.peer == ml_bolton_index) {

@@ -56,19 +56,21 @@
 #include <nemo/lacp/mlacp_debug.h>
 #include <nemo/lacp/lacp_fsm.h>
 
-#include "lacp_halon.h"
 #include "lacp.h"
+#include "lacp_halon.h"
 #include "lacp_support.h"
+#include "mlacp_fproto.h"
 
 VLOG_DEFINE_THIS_MODULE(lacp_task);
 
 /****************************************************************************
  *                    Global Variables Definition
  ****************************************************************************/
-const char lacp_mcast_addr[MAC_ADDR_LENGTH] =
+const unsigned char lacp_mcast_addr[MAC_ADDR_LENGTH] =
 {0x01, 0x80, 0xc2, 0x00, 0x00, 0x02};
 
-const char default_partner_system_mac[6] = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+const unsigned char default_partner_system_mac[MAC_ADDR_LENGTH] =
+{0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
 
 extern unsigned char my_mac_addr[];
 
@@ -77,7 +79,6 @@ extern unsigned char my_mac_addr[];
  ****************************************************************************/
 void LACP_periodic_tx(void);
 static void periodic_tx_timer_expiry(lacp_per_port_variables_t *);
-void LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *, int len);
 void LACP_current_while_expiry(void);
 static void current_while_timer_expiry(lacp_per_port_variables_t *);
 static void mux_wait_while_timer_expiry(lacp_per_port_variables_t *);
@@ -368,8 +369,8 @@ LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *data, int len)
 
     plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL || plpinfo->lacp_up == FALSE) {
-        RDEBUG(DL_WARNING, "Got LACPDU, but LACP not enabled (port 0x%llx)\n",
-               lport_handle);
+        VLOG_WARN("Got LACPDU, but LACP not enabled (port 0x%llx)",
+                  lport_handle);
         return;
     }
 
@@ -605,9 +606,9 @@ LACP_transmit_marker_response(port_handle_t lport_handle, void *data)
     }
 
     // Halon
-    mlacp_send((unsigned char *)data,
-               sizeof(marker_pdu_payload_t),
-               lport_handle);
+    mlacp_tx_pdu((unsigned char *)data,
+                 sizeof(marker_pdu_payload_t),
+                 lport_handle);
 
 } /* LACP_transmit_marker_response */
 

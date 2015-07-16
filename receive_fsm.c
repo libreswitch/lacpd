@@ -173,18 +173,17 @@ static void generate_mux_event_from_recordPdu(lacp_per_port_variables_t *);
 
 
 /*----------------------------------------------------------------------
- * Function: LACP_receive_fsm(event, current_state, recvd_lacpdu, port_number)
- * Synopsis: Entry routine for lacp Receive state machine.
+ * Function: LACP_receive_fsm(event, current_state, recvd_lacpdu, plpinfo)
+ * Synopsis: Entry routine for LACP Receive state machine.
  * Input  :
  *           event = the event that occured
  *           current_state = the current state of the fsm
- *           recvd_lacpdu = received LACPDU.
- *           port_number = port number on which to act upon.
+ *           recvd_lacpdu = received LACPDU
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 void
-LACP_receive_fsm(int event,
-                 int current_state,
+LACP_receive_fsm(int event, int current_state,
                  lacpdu_payload_t *recvd_lacpdu,
                  lacp_per_port_variables_t *plpinfo)
 {
@@ -232,44 +231,32 @@ LACP_receive_fsm(int event,
     // Call the appropriate action routine.
     switch (action) {
 
-        case ACTION_CURRENT:
-        {
-            current_state_action(plpinfo, recvd_lacpdu);
-        }
+    case ACTION_CURRENT:
+        current_state_action(plpinfo, recvd_lacpdu);
         break;
 
-        case ACTION_EXPIRED:
-        {
-            expired_state_action(plpinfo);
-        }
+    case ACTION_EXPIRED:
+        expired_state_action(plpinfo);
         break;
 
-        case ACTION_DEFAULTED:
-        {
-            defaulted_state_action(plpinfo);
-        }
+    case ACTION_DEFAULTED:
+        defaulted_state_action(plpinfo);
         break;
 
-        case ACTION_LACP_DISABLED:
-        {
-            lacp_disabled_state_action(plpinfo);
-        }
+    case ACTION_LACP_DISABLED:
+        lacp_disabled_state_action(plpinfo);
         break;
 
-        case ACTION_PORT_DISABLED:
-        {
-            port_disabled_state_action(plpinfo);
-        }
+    case ACTION_PORT_DISABLED:
+        port_disabled_state_action(plpinfo);
         break;
 
-        case ACTION_INITIALIZE:
-        {
-            initialize_state_action(plpinfo);
-        }
+    case ACTION_INITIALIZE:
+        initialize_state_action(plpinfo);
         break;
 
-        case NO_ACTION:
-        default:
+    case NO_ACTION:
+    default:
         break;
     }
 
@@ -278,11 +265,10 @@ LACP_receive_fsm(int event,
 } // LACP_receive_fsm
 
 /*----------------------------------------------------------------------
- * Function: current_state_action(int port_number,
- *                                lacpdu_payload_t *recvd_lacpdu)
+ * Function: current_state_action(plpinfo, recvd_lacpdu)
  * Synopsis: Function implementing current state action
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  *           recvd_lacpdu = received LACPDU payload.
  * Returns:  void
  *----------------------------------------------------------------------*/
@@ -319,10 +305,10 @@ current_state_action(lacp_per_port_variables_t *plpinfo,
 } // current_state_action
 
 /*----------------------------------------------------------------------
- * Function: expired_state_action(int port_number)
+ * Function: expired_state_action(plpinfo)
  * Synopsis: Function implementing expired state action
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -353,10 +339,10 @@ expired_state_action(lacp_per_port_variables_t *plpinfo)
 } // expired_state_action
 
 /*----------------------------------------------------------------------
- * Function: defaulted_state_action(int port_number)
+ * Function: defaulted_state_action(plpinfo)
  * Synopsis: Function implementing defaulted state action
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -404,10 +390,10 @@ defaulted_state_action(lacp_per_port_variables_t *plpinfo)
 } // defaulted_state_action
 
 /*----------------------------------------------------------------------
- * Function: lacp_disabled_state_action(int port_number)
+ * Function: lacp_disabled_state_action(plpinfo)
  * Synopsis: Function implementing lacp disabled state action
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -434,10 +420,10 @@ lacp_disabled_state_action(lacp_per_port_variables_t *plpinfo)
 } // lacp_disabled_state_action
 
 /*----------------------------------------------------------------------
- * Function: port_disabled_state_action(int port_number)
+ * Function: port_disabled_state_action(plpinfo)
  * Synopsis: Function implementing port disabled state action
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -477,10 +463,10 @@ port_disabled_state_action(lacp_per_port_variables_t *plpinfo)
 } // port_disabled_state_action
 
 /*----------------------------------------------------------------------
- * Function: initialize_state_action(int port_number)
+ * Function: initialize_state_action(plpinfo)
  * Synopsis: Function implementing initialize state action
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -512,11 +498,11 @@ initialize_state_action(lacp_per_port_variables_t *plpinfo)
 } // initialize_state_action
 
 /*----------------------------------------------------------------------
- * Function: update_Selected (lacpdu_payload_t *recvd_lacpdu, int port_number)
+ * Function: update_Selected (recvd_lacpdu, plpinfo)
  * Synopsis: Function implementing update selected state action
  * Input  :
  *           recvd_lacpdu = received LACPDU
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -668,11 +654,11 @@ update_Selected(lacpdu_payload_t *recvd_lacpdu,
 } // update_Selected
 
 /*----------------------------------------------------------------------
- * Function: update_NTT(lacpdu_payload_t *recvd_lacpdu, int port_number)
+ * Function: update_NTT(recvd_lacpdu, plpinfo)
  * Synopsis: Function implementing update NTT
  * Input  :
  *           recvd_lacpdu = received LACPDU
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -883,11 +869,11 @@ exit:
 } // update_NTT
 
 /*----------------------------------------------------------------------
- * Function: recordPDU (lacpdu_payload_t *recvd_lacpdu, int port_number)
+ * Function: recordPDU (recvd_lacpdu, plpinfo)
  * Synopsis:
  * Input  :
  *           recvd_lacpdu = received LACPDU
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -1039,7 +1025,7 @@ generate_mux_event_from_recordPdu(lacp_per_port_variables_t *plpinfo)
 } // generate_mux_event_from_recordPdu
 
 /*----------------------------------------------------------------------
- * Function: choose_Matched(lacpdu_payload_t *recvd_lacpdu, int port_number)
+ * Function: choose_Matched(recvd_lacpdu, plpinfo)
  * Synopsis: If the same unique LAG is correctly identified by the info in
  *           recvd LACPDU, the Matched variable for the port is set to TRUE,
  *           FALSE otherwise.
@@ -1047,7 +1033,7 @@ generate_mux_event_from_recordPdu(lacp_per_port_variables_t *plpinfo)
  * Change : As per 802.3ad/3.1, there is no matched variable at all...
  * Input  :
  *           recvd_lacpdu = received LACPDU
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -1125,10 +1111,10 @@ exit:
 } // choose_Matched
 
 /*----------------------------------------------------------------------
- * Function: recordDefault(int port_number)
+ * Function: recordDefault(plpinfo)
  * Synopsis:
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -1192,10 +1178,10 @@ recordDefault(lacp_per_port_variables_t *plpinfo)
 } // recordDefault
 
 /*----------------------------------------------------------------------
- * Function: update_Default_Selected(int port_number)
+ * Function: update_Default_Selected(plpinfo)
  * Synopsis:
  * Input  :
- *           port_number = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  * Returns:  void
  *----------------------------------------------------------------------*/
 static void
@@ -1288,17 +1274,14 @@ exit:
 } // update_Default_Selected
 
 /*----------------------------------------------------------------------
- * Function: LACP_process_lacpdu(linkGroup_t *lnkgrp, int inport, void *data)
+ * Function: LACP_process_lacpdu(plpinfo, data)
  * Synopsis:
- * Input  :
- *           lnkgrp = pointer to link group,
- *           inport = port number on which to act upon,
- *           data = received LACPDU data.
+ * Input  :  plpinfo = pointer to lport data
+ *           data = received LACPDU data
  * Returns:  void
  *----------------------------------------------------------------------*/
 void
-LACP_process_lacpdu(lacp_per_port_variables_t *plpinfo,
-                    void *data)
+LACP_process_lacpdu(lacp_per_port_variables_t *plpinfo, void *data)
 {
     RENTRY();
 
@@ -1326,10 +1309,10 @@ LACP_process_lacpdu(lacp_per_port_variables_t *plpinfo,
 } // LACP_process_lacpdu
 
 /*----------------------------------------------------------------------
- * Function: start_current_while_timer(int port_number, int lacp_timeout)
+ * Function: start_current_while_timer(plpinfo, lacp_timeout)
  * Synopsis:
  * Input  :
- *           inport = port number on which to act upon,
+ *           plpinfo = pointer to lport data
  *           lacp_timeout = lacp timeout value.
  * Returns:  void
  *----------------------------------------------------------------------*/

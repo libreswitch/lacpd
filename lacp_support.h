@@ -153,8 +153,8 @@ extern void lacp_support_diag_dump(int port);
  *       Extern declarations for global variables
  *****************************************************************************/
 extern nemo_avl_tree_t lacp_per_port_vars_tree;
-extern const char lacp_mcast_addr[];
-extern const char default_partner_system_mac[];
+extern const unsigned char lacp_mcast_addr[];
+extern const unsigned char default_partner_system_mac[];
 extern int lacp_tables_last_changed_time;
 extern LAG_t *lacp_lags[];
 extern unsigned int lacp_cli_opt_mask[];

@@ -67,11 +67,11 @@ VLOG_DEFINE_THIS_MODULE(lacpd_support);
 /*****************************************************************************
  *                    Global Variables Definition
  ****************************************************************************/
-unsigned char my_mac_addr[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+unsigned char my_mac_addr[MAC_ADDR_LENGTH] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 uint actor_system_priority = DEFAULT_SYSTEM_PRIORITY;
 
 /* Global per port variables table */
-nemo_avl_tree_t lacp_per_port_vars_tree; // XXX
+nemo_avl_tree_t lacp_per_port_vars_tree;
 
 extern struct NList *mlacp_lag_tuple_list;
 
@@ -195,7 +195,7 @@ LACP_initialize_port(port_handle_t lport_handle,
 
     /* Halon -- start lacpd with "-l" option to set this dynamically */
     /* HALON_TODO: convert to use VLOG. */
-    plpinfo->debug_level = 0;
+    plpinfo->debug_level = 0xFFFFFFFF;
     /* plpinfo->debug_level = (DBG_FATAL | DBG_WARNING | DBG_ERROR); */
 
     /********************************************************************

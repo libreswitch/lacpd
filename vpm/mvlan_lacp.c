@@ -542,8 +542,8 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
             ((placp_match_params->actor_aggr_type == LACP_LAG_AGGRTYPE_INDIVIDUAL)||
              (placp_match_params->partner_aggr_type == LACP_LAG_AGGRTYPE_INDIVIDUAL))) {
             // failed
-            RDEBUG(DL_VPM, ">>>actor or partner aggr_type is individual."
-                   "Failed\n, actor=%d paterner=%d",
+            RDEBUG(DL_VPM, ">>>actor or partner aggr_type is individual. "
+                   "Failed, actor=%d partner=%d",
                    placp_match_params->actor_aggr_type,
                    placp_match_params->partner_aggr_type);
             goto nextone;

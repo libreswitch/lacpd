@@ -39,24 +39,19 @@
 #ifndef _LACP_H_
 #define _LACP_H_
 
-//*******************************************************************
-// XXX Nemo Changes Start
-//*******************************************************************
 #include <sys/types.h>
 #include <nemo/avl.h>
 #include <nemo/nemo_types.h>
 
-// HALON_TODO: Define h/w here for now.  This should be moved
-// out to a common file for all imported Cyclone code.
-#define __HARDWARE__
-
-//*******************************************************************
-// XXX Nemo Changes End
-//*******************************************************************
+/* HALON_TODO: Define h/w here for now.  This needs to be passed in
+ * as build or environment variable based on CPU h/w architecture
+ * (Big- vs. Little-Endian).
+ */
+#define __X86_HARDWARE__
 
 /*****************************************************************************
  *                   MISC. MACROS
-*****************************************************************************/
+ *****************************************************************************/
 #define MAC_ADDR_LENGTH 6
 #define UNSELECTED 0
 #define SELECTED 1
@@ -124,9 +119,9 @@ typedef struct LAG {
     LAG_Id_t *LAG_Id;
     int ready;
     int loop_back;
-    void *pplist; // nlist of ports, of type lacp_lag_ppstruct
+    void *pplist; /* nlist of ports, of type lacp_lag_ppstruct */
 
-    // Halon: save the sport handle.
+    /* Halon: save the sport handle. */
     unsigned long long sp_handle;
 
 } LAG_t;
@@ -135,7 +130,8 @@ typedef struct LAG {
  * Data structure containing the state paramter bit fields.
  ********************************************************************/
 typedef struct state_parameters {
-#ifndef __HARDWARE__
+#ifdef __X86_HARDWARE__
+    /* Halon: OCP h/w is Little-Endian. */
     u_char lacp_activity:1,
            lacp_timeout:1,
            aggregation:1,
@@ -145,7 +141,7 @@ typedef struct state_parameters {
            defaulted:1,
            expired:1;
 #else
-    // Halon: We're using this structure.
+    /* This structure is for Big-Endian. */
     u_char expired:1,
            defaulted:1,
            distributing:1,
@@ -293,15 +289,17 @@ typedef struct lacp_per_port_variables {
     u_int mux_fsm_state;
     u_int periodic_tx_fsm_state;
 
-    // Added to avoid sending lport_attach on the way back from
-    // Collecting_Distributing (YAGqa36972)
+    /* Added to avoid sending lport_attach on the way back from
+     * Collecting_Distributing.
+     */
     u_int prev_mux_fsm_state;
 
-    // Halon - Indicates if the port is part of the LAG bitmap in DB.
-    // LACPD set this flag to true after attaching the port to LAG.
+    /* Halon - Indicates if the port is part of the LAG bitmap in DB.
+     * LACPD set this flag to true after attaching the port to LAG.
+     */
     int hw_attached_to_mux;
 
-    // HALON_TODO: update comment on how hw_collecting indicator works.
+    /* HALON_TODO: update comment on how hw_collecting indicator works. */
     int hw_collecting;
 
     /********************************************************************
