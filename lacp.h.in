@@ -43,11 +43,7 @@
 #include <nemo/avl.h>
 #include <nemo/nemo_types.h>
 
-/* HALON_TODO: Define h/w here for now.  This needs to be passed in
- * as build or environment variable based on CPU h/w architecture
- * (Big- vs. Little-Endian).
- */
-#define __X86_HARDWARE__
+#cmakedefine CPU_LITTLE_ENDIAN
 
 /*****************************************************************************
  *                   MISC. MACROS
@@ -130,7 +126,7 @@ typedef struct LAG {
  * Data structure containing the state paramter bit fields.
  ********************************************************************/
 typedef struct state_parameters {
-#ifdef __X86_HARDWARE__
+#ifdef CPU_LITTLE_ENDIAN
     /* Halon: OCP h/w is Little-Endian. */
     u_char lacp_activity:1,
            lacp_timeout:1,

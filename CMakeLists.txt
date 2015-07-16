@@ -23,6 +23,11 @@ set (LIB_CYCLONE_DIR ${LIB_CYCLONE})
 set (LIB_VPM vpm)
 set (LIB_VPM_DIR ${LIB_VPM})
 
+# This option is specified in Yocto -- halon.bbclass.
+OPTION( CPU_LITTLE_ENDIAN "Specifies CPU architecture is Little-Endian" OFF )
+configure_file ("${PROJECT_SOURCE_DIR}/lacp.h.in"
+                "${PROJECT_BINARY_DIR}/lacp.h")
+
 # Rules to locate needed libraries
 include(FindPkgConfig)
 pkg_check_modules(OVSCOMMON libovscommon)
