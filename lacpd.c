@@ -120,6 +120,7 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
     sigset_t sigset;
     pthread_t ovs_if_thread;
     pthread_t lacpd_thread;
+    pthread_t lacpdu_rx_thread;
 
     /* Block all signals so the spawned threads don't receive any. */
     sigemptyset(&sigset);
@@ -149,6 +150,16 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
                         (void *)appctl);
     if (rc) {
         VLOG_ERR("pthread_create for OVSDB i/f thread failed! rc=%d", rc);
+        exit(-rc);
+    }
+
+    /* Spawn off LACPDU RX thread. */
+    rc = pthread_create(&lacpdu_rx_thread,
+                        (pthread_attr_t *)NULL,
+                        mlacp_rx_pdu_thread,
+                        NULL);
+    if (rc) {
+        VLOG_ERR("pthread_create for LACDU RX thread failed! rc=%d", rc);
         exit(-rc);
     }
 

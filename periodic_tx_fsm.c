@@ -60,9 +60,6 @@
 
 VLOG_DEFINE_THIS_MODULE(periodic_tx_fsm);
 
-extern unsigned char my_mac_addr[];
-void dump_lacpdu_payload(lacpdu_payload_t *);
-
 /****************************************************************************
  *   Static Variables
  ****************************************************************************/

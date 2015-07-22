@@ -112,8 +112,44 @@
 #ifndef __LACP_HALON_IF__H__
 #define __LACP_HALON_IF__H__
 
-#include "vpm/mvlan_lacp.h"
+#include <nemo/pm/pm_cmn.h>
 #include <dynamic-string.h>
+#include <vswitch-idl.h>
+#include "vpm/mvlan_lacp.h"
+
+/*************************************************************************//**
+ * @ingroup lacpd_ovsdb_if
+ * @brief lacpd's internal data strucuture to store per interface data.
+ ****************************************************************************/
+struct iface_data {
+    char                *name;              /*!< Name of the interface */
+    struct port_data    *port_datap;        /*!< Pointer to associated port's port_data */
+    unsigned int        link_speed;         /*!< Operarational link speed of the interface */
+    bool                lag_eligible;       /*!< indicates whether this interface is eligible
+                                              to become member of configured LAG */
+    enum ovsrec_interface_link_state_e link_state; /*!< operational link state */
+    enum ovsrec_interface_duplex_e duplex;  /*!< operational link duplex */
+
+    /* These members are valid only within lacpd_reconfigure(). */
+    const struct ovsrec_interface *cfg;     /*!< pointer to corresponding row in IDL cache */
+
+    int      index;                         /*!< Allocated index for interface */
+    enum PM_lport_type  cycl_port_type;     /*!< Cyclone port type */
+
+    /* Configuration information from LACP element. */
+    uint16_t cfg_lag_id;       /*!< Configured LAG_ID */
+    int      lacp_state;       /*!< 0=disabled, 1=enabled */
+    int      actor_priority;   /*!< Integer */
+    int      actor_key;        /*!< Integer */
+    int      aggregateable;    /*!< 0=no, 1=yes */
+    int      activity_mode;    /*!< 0=passive, 1=active */
+    int      timeout_mode;     /*!< 0=long, 1=short */
+    int      collecting_ready; /*!< hardware is ready to collect */
+
+    /* LACPDU send/receive related. */
+    int      pdu_sockfd;       /*!< Socket FD for LACPDU rx/tx */
+    bool     pdu_registered;   /*!< Indicates if port is registered to receive LACPDU */
+};
 
 /**
  * @defgroup lacpd_ovsdb_if OVSDB Interface
@@ -121,21 +157,22 @@
  * @{
  */
 // H/W Configuration function
-extern void halon_create_lag_in_hw(int lag_id);
-extern void halon_destroy_lag_in_hw(int lag_id);
-extern void halon_trunk_port_egr_enable(int lag_id, int port);
-extern void halon_attach_port_in_hw(int lag_id, int port);
-extern void halon_detach_port_in_hw(int lag_id, int port);
+extern void halon_create_lag_in_hw(uint16_t lag_id);
+extern void halon_destroy_lag_in_hw(uint16_t lag_id);
+extern void halon_trunk_port_egr_enable(uint16_t lag_id, int port);
+extern void halon_attach_port_in_hw(uint16_t lag_id, int port);
+extern void halon_detach_port_in_hw(uint16_t lag_id, int port);
 extern void halon_send_lacpdu(unsigned char* data, int len, int port);
 
 // LAG status update functions
-extern void db_update_lag_partner_info(int lag_id, lacp_sport_params_t *param);
-extern void db_clear_lag_partner_info(int lag_id);
-extern void db_add_lag_port(int lag_id, int port);
-extern void db_delete_lag_port(int lag_id, int port);
+extern void db_update_lag_partner_info(uint16_t lag_id, lacp_sport_params_t *param);
+extern void db_clear_lag_partner_info(uint16_t lag_id);
+extern void db_add_lag_port(uint16_t lag_id, int port);
+extern void db_delete_lag_port(uint16_t lag_id, int port);
 
 // Utility functions
-const char *find_ifname_by_index(int index);
+extern const char *find_ifname_by_index(int index);
+extern struct iface_data *find_iface_data_by_index(int index);
 
 /**************************************************************************//**
  * Initializes OVSDB interface.

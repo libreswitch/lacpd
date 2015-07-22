@@ -33,7 +33,7 @@ extern bool exiting;
 //***************************************************************
 // Functions in mlacp_main.c
 //***************************************************************
-extern void mlacpBoltonRxPdu(struct ML_event *);
+extern void *mlacp_rx_pdu_thread(void *data);
 extern void register_mcast_addr(port_handle_t lport_handle);
 extern void deregister_mcast_addr(port_handle_t lport_handle);
 extern int mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle);
@@ -63,17 +63,20 @@ extern void mlacp_process_rxPdu(port_handle_t sport_handle, unsigned char *data)
 //***************************************************************
 // Functions in lacp_task.c
 //***************************************************************
+extern void LACP_periodic_tx(void);
+extern void LACP_current_while_expiry(void);
 extern int lacp_lag_port_match(void *v1, void *v2);
 extern void LACP_process_input_pkt(port_handle_t lport_handle, unsigned char * data, int len);
 
 //***************************************************************
 // Functions in mlacp_recv.c
 //***************************************************************
+extern void mlacp_process_rx_pdu(struct ML_event *);
 extern void mlacp_process_vlan_msg(struct ML_event *);
 extern void mlacp_process_api_msg(struct ML_event *);
 extern void mlacp_process_showmgr_msg(struct ML_event *);
 extern void mlacp_process_diagmgr_msg(struct ML_event *);
-extern void mlacp_process_timer(struct MLt_msglib__timer *tevent);
+extern void mlacp_process_timer(void);
 extern void mlacpVapiLportEvent(struct ML_event *pevent);
 
 //***************************************************************

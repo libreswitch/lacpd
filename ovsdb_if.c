@@ -43,19 +43,17 @@
 #include <semaphore.h>
 #include <netinet/ether.h>
 
-#include <nemo/pm/pm_cmn.h>
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
 #include <nemo/protocol/lacp/api.h>
 
+#include "lacp_halon_if.h"
 #include "lacp.h"
 #include "mlacp_fproto.h"
 #include "vpm/mvlan_sport.h"
-#include "vpm/mvlan_lacp.h"
 
 #include <unixctl.h>
 #include <dynamic-string.h>
-#include <vswitch-idl.h>
 #include <openhalon-idl.h>
 #include <openvswitch/vlog.h>
 #include <poll-loop.h>
@@ -98,36 +96,6 @@ struct port_data {
     struct shash        eligible_member_ifs;/*!< Interfaces eligible to form a LAG */
     enum ovsrec_port_lacp_e lacp_mode;      /*!< port's LACP mode */
     unsigned int        lag_member_speed;   /*!< link speed of LAG members */
-};
-
-/*************************************************************************//**
- * @ingroup lacpd_ovsdb_if
- * @brief lacpd's internal data strucuture to store per interface data.
- ****************************************************************************/
-struct iface_data {
-    char                *name;              /*!< Name of the interface */
-    struct port_data    *port_datap;        /*!< Pointer to associated port's port_data */
-    unsigned int        link_speed;         /*!< Operarational link speed of the interface */
-    bool                lag_eligible;       /*!< indicates whether this interface is eligible
-                                              to become member of configured LAG */
-    enum ovsrec_interface_link_state_e link_state; /*!< operational link state */
-    enum ovsrec_interface_duplex_e duplex;  /*!< operational link duplex */
-
-    /* These members are valid only within lacpd_reconfigure(). */
-    const struct ovsrec_interface *cfg;     /*!< pointer to corresponding row in IDL cache */
-
-    int      index;                         /*!< Allocated index for interface */
-    enum PM_lport_type  cycl_port_type;     /*!< Cyclone port type */
-
-    /* Configuration information from LACP element. */
-    uint16_t cfg_lag_id;       /*!< Configured LAG_ID */
-    int      lacp_state;       /*!< 0=disabled, 1=enabled */
-    int      actor_priority;   /*!< Integer */
-    int      actor_key;        /*!< Integer */
-    int      aggregateable;    /*!< 0=no, 1=yes */
-    int      activity_mode;    /*!< 0=passive, 1=active */
-    int      timeout_mode;     /*!< 0=long, 1=short */
-    int      collecting_ready; /*!< hardware is ready to collect */
 };
 
 /* NOTE: These LAG IDs are only used for LACP state machine.
@@ -399,8 +367,8 @@ send_config_lport_msg(struct iface_data *info_ptr)
     event = (ML_event *)alloc_msg(msgSize);
 
     if (event != NULL) {
-        /*** From VLAN peer. ***/
-        event->sender.peer = ml_vlan_index;
+        /*** From LPORT peer. ***/
+        event->sender.peer = ml_lport_index;
         event->msgnum = MLm_vpm_api__set_lacp_lport_params_event;
 
         msg = (struct MLt_vpm_api__lport_lacp_change *)(event+1);
@@ -432,6 +400,10 @@ send_config_lport_msg(struct iface_data *info_ptr)
         ml_send_event(event);
     }
 } /* send_config_lport_msg */
+
+
+/* HALON_TODO: add link state change config messages. */
+
 
 static void
 configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)

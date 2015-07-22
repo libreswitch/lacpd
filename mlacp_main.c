@@ -15,10 +15,10 @@
  *   under the License.
  */
 
-//**************************************************************************
-//    File               : mlacp_main.c
-//    Description        : Master (mcpu) LACP Manager's main entry point
-//**************************************************************************
+/***************************************************************************
+ *    File               : mlacp_main.c
+ *    Description        : Master (mcpu) LACP Manager's main entry point
+ ***************************************************************************/
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <linux/if_ether.h>
@@ -48,34 +49,22 @@
 
 VLOG_DEFINE_THIS_MODULE(mlacp_main);
 
-//***********************************************************************
-// Global & extern Variables
-//***********************************************************************
-
-// Halon Change: Each of the indices below that's needed is moved into
-//               include/lacp_halon.h.
-int mlacp_helper_index = MSGLIB_INVALID_INDEX;
-int diagMgr_index = MSGLIB_INVALID_INDEX;
-int l2Mgr_index   = MSGLIB_INVALID_INDEX;
-int mlacp_tindex;
-
+/************************************************************************
+ * Global Variables
+ ************************************************************************/
 static int lacp_init_done = FALSE;
 int lacpd_shutdown = 0;
 
-// System MAC address, lives in lacp_support.c
-extern unsigned char my_mac_addr[];
-extern nemo_avl_tree_t lacp_per_port_vars_tree;
-
-#if 0 // HALON_TODO
-// For LACP mcast address registration.
-PBM_t mcast_registered_pbm = (PBM_t)0;
-enum PM_lport_type cycl_port_type[CHAR_BIT * sizeof(PBM_t)];
-#endif // 0
-
-// Message Queue for LACPD main protocol thread
+/* Message Queue for LACPD main protocol thread */
 mqueue_t lacpd_main_rcvq;
 
-//////////////////// Internal global defines ////////////////////
+/* epoll FD for LACPDU RX. */
+int epfd = -1;
+
+/* Max number of events returned by epoll_wait().
+ * This number is arbitrary.  It's only used for
+ * sizing the epoll events data structure. */
+#define MAX_EVENTS 64
 
 /* LACP filter
  *
@@ -105,9 +94,9 @@ static struct sock_fprog lacpd_fprog = {
     .len = sizeof(lacpd_filter_f) / sizeof(struct sock_filter)
 };
 
-//***********************************************************************
-// Event Receiver Functions
-//***********************************************************************
+/************************************************************************
+ * Event Receiver Functions
+ ************************************************************************/
 int
 ml_init_event_rcvr(void)
 {
@@ -167,53 +156,147 @@ ml_event_free(ML_event *event)
     }
 } /* ml_event_free */
 
-//***********************************************************************
-// LACPDU Send and Receive Functions
-//***********************************************************************
-
+/************************************************************************
+ * LACPDU Send and Receive Functions
+ ************************************************************************/
 void *
 mlacp_rx_pdu_thread(void *data)
+{
+    /* Detach thread to avoid memory leak upon exit. */
+    pthread_detach(pthread_self());
+
+    epfd = epoll_create1(0);
+    if (epfd == -1) {
+        VLOG_ERR("Failed to create epoll object.  rc=%d", errno);
+        return NULL;
+    }
+
+    for (;;) {
+        int n;
+        int nfds;
+        struct epoll_event events[MAX_EVENTS];
+
+        nfds = epoll_wait(epfd, events, MAX_EVENTS, -1);
+
+        if (nfds < 0) {
+            VLOG_ERR("epoll_wait returned error %s", strerror(errno));
+            break;
+        } else {
+            VLOG_DBG("epoll_wait returned, nfds=%d", nfds);
+        }
+
+        for (n = 0; n < nfds; n++) {
+            int count;
+            int clientlen;
+            struct sockaddr_ll clientaddr;
+            ML_event *event;
+            int total_msg_size;
+            struct MLt_drivers_mlacp__rxPdu *pkt_event;
+            struct iface_data *idp = NULL;
+
+            idp = (struct iface_data *)events[n].data.ptr;
+            if (idp == NULL) {
+                VLOG_ERR("Interface data missing for epoll event!");
+                continue;
+            } else {
+                VLOG_DBG("epoll event #%d: events flags=0x%x, port=%d, sock=%d",
+                         n, events[n].events, idp->index, idp->pdu_sockfd);
+            }
+
+            if (idp->pdu_registered == false) {
+                /* Most likely just a race condition. */
+                continue;
+            }
+
+            /* Cyclone LACPDU size hard-coded to 124 max.
+             * See MLt_drivers_mlacp__rxPdu in include/nemo/protocol/drivers/mlacp.h
+             */
+            total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
+
+            event = xzalloc(total_msg_size);
+            event->sender.peer = ml_rx_pdu_index;
+            pkt_event = (struct MLt_drivers_mlacp__rxPdu *)(event+1);
+
+            clientlen = sizeof(clientaddr);
+            count = recvfrom(idp->pdu_sockfd, (void *)pkt_event->data,
+                             MAX_LACPDU_PKT_SIZE, 0,
+                             (struct sockaddr *)&clientaddr,
+                             (unsigned int *)&clientlen);
+            if (count < 0) {
+                /* General socket error. */
+                VLOG_ERR("Read failed, fd=%d: errno=%d",
+                         idp->pdu_sockfd, errno);
+                free(event);
+                continue;
+
+            } else if (!count) {
+                /* Socket is closed.  Get out. */
+                VLOG_ERR("socket=%d closed", idp->pdu_sockfd);
+                free(event);
+                continue;
+
+            } else if (count <= MAX_LACPDU_PKT_SIZE) {
+                pkt_event->lport_handle = PM_SMPT2HANDLE(0, 0, idp->index,
+                                                         idp->cycl_port_type);
+                pkt_event->pktLen = count;
+                ml_send_event(event);
+            }
+        } /* for nfds */
+    } /* for(;;) */
+
+    return NULL;
+} /* mlacp_rx_pdu_thread */
+
+void
+register_mcast_addr(port_handle_t lport_handle)
 {
     int rc;
     int port;
     int sockfd;
     int if_idx = 0;
-    port_handle_t lport_handle = (port_handle_t)data;
-    const char *if_name;
-    struct ifreq ifr = { .ifr_name = {} };
+    struct iface_data *idp = NULL;
     struct sockaddr_ll addr;
-
-    /* Detach thread to avoid memory leak upon exit. */
-    pthread_detach(pthread_self());
+    struct epoll_event event;
 
     /* Find the interface data first. */
     port = PM_HANDLE2PORT(lport_handle);
-    if_name = find_ifname_by_index(port);
+    idp = find_iface_data_by_index(port);
 
-    if_idx = if_nametoindex(if_name);
-    if (0 == if_idx) {
-        VLOG_ERR("Error getting ifindex for port %d (if_name=%s)!",
-                 port, if_name);
-        return NULL;
+    if (idp == NULL) {
+        VLOG_ERR("Failed to find interface data for register mcast addr! "
+                 "lport=0x%llx", lport_handle);
+        return;
     }
 
-    VLOG_DBG("Eth %s, ifindex=%d\n", if_name, if_idx);
+    if (idp->pdu_registered == true) {
+        VLOG_ERR("Duplicated registration for mcast addr? port=%s", idp->name);
+        return;
+    }
 
-    snprintf(ifr.ifr_name, IFNAMSIZ, if_name);
+    /* Create raw socket on interface to receive LACPDUs. */
+    if_idx = if_nametoindex(idp->name);
+    if (if_idx == 0) {
+        VLOG_ERR("Error getting ifindex for port %d (if_name=%s)!",
+                 port, idp->name);
+        return;
+    }
+
+    VLOG_DBG("%s: port %s, ifindex=%d\n", __FUNCTION__, idp->name, if_idx);
+
     if ((sockfd = socket(PF_PACKET, SOCK_RAW, 0)) < 0) {
         rc = errno;
         VLOG_ERR("Failed to open datagram socket for %s, rc=%s",
-                 if_name, strerror(rc));
-        return NULL;
+                 idp->name, strerror(rc));
+        return;
     }
 
     rc = setsockopt(sockfd, SOL_SOCKET, SO_ATTACH_FILTER,
                     &lacpd_fprog, sizeof(lacpd_fprog));
     if (rc < 0) {
         VLOG_ERR("Failed to attach socket filter for %s, rc=%s",
-                 if_name, strerror(rc));
+                 idp->name, strerror(rc));
         close(sockfd);
-        return NULL;
+        return;
     }
 
     memset(&addr, 0, sizeof(addr));
@@ -224,92 +307,93 @@ mlacp_rx_pdu_thread(void *data)
     rc = bind(sockfd, (struct sockaddr *)&addr, sizeof(addr));
     if (rc < 0) {
         VLOG_ERR("Failed to bind socket to addr for %s, rc=%s",
-                 if_name, strerror(rc));
+                 idp->name, strerror(rc));
         close(sockfd);
-        return NULL;
+        return;
     }
 
-    while (1) {
-        int count;
-        int clientlen;
-        struct sockaddr_ll clientaddr;
-        ML_event *event;
-        int total_msg_size;
-        struct MLt_drivers_mlacp__rxPdu *pkt_event;
+    /* Save sockfd information in interface data. */
+    idp->pdu_sockfd = sockfd;
+    idp->pdu_registered = true;
 
-        // Cyclone LACPDU size hard-coded to 124 max.
-        // See MLt_drivers_mlacp__rxPdu in include/nemo/protocol/drivers/mlacp.h
-        total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
+    /* Add new FD to epoll.  Save interface data pointer.
+     * NOTE: assumption is that interfaces are not deleted in h/w switch! */
+    event.events = EPOLLIN;
+    event.data.ptr = (void *)idp;
 
-        event = xzalloc(total_msg_size);
-        event->sender.peer = ml_bolton_index;
-        pkt_event = (struct MLt_drivers_mlacp__rxPdu *)(event+1);
-
-        clientlen = sizeof(clientaddr);
-        count = recvfrom(sockfd, (void *)pkt_event->data,
-                         MAX_LACPDU_PKT_SIZE, 0,
-                         (struct sockaddr *)&clientaddr,
-                         (unsigned int *)&clientlen);
-        if (count < 0) {
-            /* General socket error... */
-            VLOG_ERR("Read failed for %s, fd=%d: errno=%d",
-                     if_name, sockfd, errno);
-            free(event);
-            continue;
-
-        } else if (!count) {
-            /* Socket is closed.  Get out. */
-            VLOG_ERR("%s, socket=%d closed", if_name, sockfd);
-            free(event);
-            break;
-
-        } else if (count <= MAX_LACPDU_PKT_SIZE) {
-            pkt_event->lport_handle = lport_handle;
-            pkt_event->pktLen = count;
-
-            ml_send_event(event);
-        }
-    } /* while (1) */
-
-    return NULL;
-
-} /* mlacp_rx_pdu_thread */
-
-void
-register_mcast_addr(port_handle_t lport_handle)
-{
-    int rc;
-    pthread_t rx_thread;
-
-    VLOG_DBG("%s: lport 0x%llx, port=%d",
-             __FUNCTION__, lport_handle, PM_HANDLE2PORT(lport_handle));
-
-    /* Spawn off thread to listen for LACPDU on the interface. */
-    rc = pthread_create(&rx_thread,
-                        (pthread_attr_t *)NULL,
-                        mlacp_rx_pdu_thread,
-                        (void *)lport_handle);
-    if (rc) {
-        VLOG_ERR("pthread_create for LACPDU Rx thread failed!");
+    rc = epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &event);
+    if (rc == 0) {
+        VLOG_DBG("Registered sockfd %d for interface %s with epoll loop.",
+                 sockfd, idp->name);
+    } else {
+        VLOG_ERR("Failed to register sockfd for interface %s with epoll "
+                 "loop.  err=%s", idp->name, strerror(errno));
     }
-
-    /* HALON_TODO: save thread info to kill it when not needed. */
-
 } /* register_mcast_addr */
 
 void
 deregister_mcast_addr(port_handle_t lport_handle)
 {
-    VLOG_DBG("%s: HALON_TODO: lport 0x%llx, port=%d",
-             __FUNCTION__, lport_handle, PM_HANDLE2PORT(lport_handle));
+    int rc;
+    int port;
+    struct iface_data *idp = NULL;
+
+    /* Find the interface data first. */
+    port = PM_HANDLE2PORT(lport_handle);
+    idp = find_iface_data_by_index(port);
+
+    if (idp == NULL) {
+        VLOG_ERR("Failed to find interface data for deregister mcast addr! "
+                 "lport=0x%llx", lport_handle);
+        return;
+    }
+
+    if (idp->pdu_registered != true) {
+        VLOG_ERR("Deregistering for mcast addr when not registered? "
+                 "port=%s", idp->name);
+        return;
+    }
+
+    rc = epoll_ctl(epfd, EPOLL_CTL_DEL, idp->pdu_sockfd, NULL);
+    if (rc == 0) {
+        VLOG_DBG("Deregistered sockfd %d for interface %s with epoll loop.",
+                 idp->pdu_sockfd, idp->name);
+    } else {
+        VLOG_ERR("Failed to deregister sockfd for interface %s with epoll "
+                 "loop.  err=%s", idp->name, strerror(errno));
+    }
+
+    close(idp->pdu_sockfd);
+    idp->pdu_sockfd = 0;
+    idp->pdu_registered = false;
+
 } /* deregister_mcast_addr */
 
 int
 mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle)
 {
-    VLOG_DBG("%s: lport 0x%llx, port=%d, data=%p, len=%d",
-             __FUNCTION__, lport_handle, PM_HANDLE2PORT(lport_handle),
-             data, length);
+    int rc;
+    int port;
+    struct iface_data *idp = NULL;
+
+    /* Find the interface data first. */
+    port = PM_HANDLE2PORT(lport_handle);
+    idp = find_iface_data_by_index(port);
+
+    if (idp == NULL) {
+        VLOG_ERR("Failed to find interface data for LACPDU TX! "
+                 "lport=0x%llx", lport_handle);
+        return 1;
+    }
+
+    if (idp->pdu_registered != true) {
+        VLOG_ERR("Trying to send LACPDU before registering, "
+                 "port=%s", idp->name);
+        return 1;
+    }
+
+    VLOG_DBG("%s: lport 0x%llx, port=%s, data=%p, len=%d",
+             __FUNCTION__, lport_handle, idp->name, data, length);
 
     /* Set up LACPDU header dest/src MAC addresses. */
     memcpy(data, lacp_mcast_addr, MAC_ADDR_LENGTH);
@@ -319,73 +403,32 @@ mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle)
     data[12] = 0x88;
     data[13] = 0x09;
 
-    /* HALON_TODO: temporary, just create & close socket for each transmit. */
-    {
-        int rc;
-        int port;
-        const char *if_name;
-        int send_sockfd;
-        int send_ifidx = 0;
-        struct ifreq send_ifr = { .ifr_name = {} };
-        struct sockaddr_ll send_addr;
-
-        port = PM_HANDLE2PORT(lport_handle);
-        if_name = find_ifname_by_index(port);
-        send_ifidx = if_nametoindex(if_name);
-        if (0 == send_ifidx) {
-            VLOG_ERR("Error getting ifindex for port %d (if_name=%s)!",
-                     port, if_name);
-            return 1;
-        }
-
-        VLOG_DBG("%s: Eth %s, ifindex=%d\n", __FUNCTION__, if_name, send_ifidx);
-
-        snprintf(send_ifr.ifr_name, IFNAMSIZ, if_name);
-        if ((send_sockfd = socket(PF_PACKET, SOCK_RAW, 0)) < 0) {
-            rc = errno;
-            VLOG_ERR("Failed to open datagram socket for send, %s", strerror(rc));
-            return 1;
-        }
-
-        memset(&send_addr, 0, sizeof(send_addr));
-        send_addr.sll_family = AF_PACKET;
-        send_addr.sll_ifindex = send_ifidx;
-
-        rc = bind(send_sockfd, (struct sockaddr *)&send_addr, sizeof(send_addr));
-        if (rc < 0) {
-            VLOG_ERR("Failed to bind socket to send_addr, %s", strerror(rc));
-            close(send_sockfd);
-            return 1;
-        }
-
-        rc = sendto(send_sockfd, data, length, 0, NULL, 0);
-        if (rc == -1) {
-            VLOG_ERR("Failed to send LACPDU, rc=%d", errno);
-            return 1;
-        }
-
-        close(send_sockfd);
+    rc = sendto(idp->pdu_sockfd, data, length, 0, NULL, 0);
+    if (rc == -1) {
+        VLOG_ERR("Failed to send LACPDU for interface=%s, rc=%d",
+                 idp->name, errno);
+        return 1;
     }
 
     return 0;
 } /* mlacp_tx_pdu */
 
-//***********************************************************************
-// LACP Protocol Thread
-//***********************************************************************
+/************************************************************************
+ * LACP Protocol Thread
+ ************************************************************************/
 void *
 lacpd_protocol_thread(void *arg)
 {
     ML_event *pevent;
 
-    // Detach thread to avoid memory leak upon exit.
+    /* Detach thread to avoid memory leak upon exit. */
     pthread_detach(pthread_self());
 
     VLOG_DBG("%s : waiting for events in the main loop", __FUNCTION__);
 
-    //*******************************************************************
-    // The main receive loop starts
-    //*******************************************************************
+    /*******************************************************************
+     * The main receive loop.
+     *******************************************************************/
     while (1) {
 
         pevent = ml_wait_for_next_event();
@@ -399,67 +442,64 @@ lacpd_protocol_thread(void *arg)
             continue;
         }
 
-        if (pevent->sender.peer == ml_vlan_index) {
-            //***********************************************************
-            // msg from VLAN task on the Management-Module
-            //***********************************************************
+        if (pevent->sender.peer == ml_lport_index) {
+            /***********************************************************
+             * Msg from OVSDB interface for lports.
+             ***********************************************************/
             mlacp_process_vlan_msg(pevent);
 
         } else if (pevent->sender.peer == ml_showMgr_index) {
-            //***********************************************************
-            // msg from Show Manager
-            //***********************************************************
-            //mlacp_process_showmgr_msg(pevent);
+            /***********************************************************
+             * Msg from Show Manager.
+             ***********************************************************/
+            /* mlacp_process_showmgr_msg(pevent); */
             lacp_support_diag_dump(pevent->msgnum);
 
-        } else if (pevent->sender.peer == diagMgr_index) {
-            //***********************************************************
-            // msg from Diag Manager
-            //***********************************************************
+        } else if (pevent->sender.peer == ml_diagMgr_index) {
+            /***********************************************************
+             * Msg from Diag Manager.
+             ***********************************************************/
             mlacp_process_diagmgr_msg(pevent);
 
         } else if (pevent->sender.peer == ml_cfgMgr_index) {
-            //***********************************************************
-            // msg from Cfg Manager
-            //***********************************************************
+            /***********************************************************
+             * Msg from Cfg Manager.
+             ***********************************************************/
             mlacp_process_api_msg(pevent);
 
         } else if (pevent->sender.peer == ml_timer_index) {
-            struct MLt_msglib__timer *tevent = pevent->msg;
-            //***********************************************************
-            // msg from LACP timers
-            //***********************************************************
-            mlacp_process_timer(tevent);
+            /***********************************************************
+             * Msg from LACP timers.
+             ***********************************************************/
+            mlacp_process_timer();
 
-        } else if (pevent->sender.peer == ml_bolton_index) {
-            //***********************************************************
-            // Packet has arrived thru socket.
-            //***********************************************************
-            VLOG_DBG("%s : Packet (%d) arrived from bolton",
+        } else if (pevent->sender.peer == ml_rx_pdu_index) {
+            /***********************************************************
+             * Packet has arrived through interface socket.
+             ************************************************************/
+            VLOG_DBG("%s : LACPDU Packet (%d) arrived from interface socket",
                    __FUNCTION__, pevent->msgnum);
 
-            // HALON_TODO: rename function.  This is really coming
-            // from Eth interface.
-            mlacpBoltonRxPdu(pevent);
+            mlacp_process_rx_pdu(pevent);
 
         } else {
-            //***********************************************
-            // unknown/unregistered sender
-            //***********************************************
+            /***********************************************************
+             * Unknown/unregistered sender.
+             ************************************************************/
             VLOG_ERR("%s : message %d from unknown sender %d",
                      __FUNCTION__, pevent->msgnum, pevent->sender.peer);
         }
 
         ml_event_free(pevent);
 
-    } // while loop
+    } /* while loop */
 
     return NULL;
-} // lacpd_protocol_thread
+} /* lacpd_protocol_thread */
 
-//***********************************************************************
-// Initialization & main functions
-//***********************************************************************
+/************************************************************************
+ * Initialization & main functions
+ ************************************************************************/
 int
 mlacp_init(u_long  first_time)
 {
@@ -477,13 +517,13 @@ mlacp_init(u_long  first_time)
         goto end;
     }
 
-    // Initialize super ports.
+    /* Initialize super ports. */
     mvlan_sport_init(first_time);
 
-    // Initialize LACP data structures.
+    /* Initialize LACP data structures. */
     NEMO_AVL_INIT_TREE(lacp_per_port_vars_tree, nemo_compare_port_handle);
 
-    // Initialize LACP main task event receiver queue.
+    /* Initialize LACP main task event receiver queue. */
     if (ml_init_event_rcvr()) {
         VLOG_ERR("Failed to initialize event receiver.");
         status = -1;
@@ -494,4 +534,4 @@ mlacp_init(u_long  first_time)
 
 end:
     return status;
-} // mlacp_init
+} /* mlacp_init */

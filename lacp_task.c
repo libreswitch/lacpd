@@ -72,14 +72,10 @@ const unsigned char lacp_mcast_addr[MAC_ADDR_LENGTH] =
 const unsigned char default_partner_system_mac[MAC_ADDR_LENGTH] =
 {0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
 
-extern unsigned char my_mac_addr[];
-
 /****************************************************************************
  *   Prototypes for static functions
  ****************************************************************************/
-void LACP_periodic_tx(void);
 static void periodic_tx_timer_expiry(lacp_per_port_variables_t *);
-void LACP_current_while_expiry(void);
 static void current_while_timer_expiry(lacp_per_port_variables_t *);
 static void mux_wait_while_timer_expiry(lacp_per_port_variables_t *);
 static int LACP_marker_responder(lacp_per_port_variables_t *, void *);

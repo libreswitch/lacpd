@@ -49,14 +49,6 @@
 VLOG_DEFINE_THIS_MODULE(mlacp_recv);
 
 //***********************************************************************
-// Global & extern Variables
-//***********************************************************************
-// Halon: The following system related info are in lacp_support.c
-extern unsigned char my_mac_addr[];
-extern uint actor_system_priority;
-extern void set_all_port_system_priority(void);
-
-//***********************************************************************
 // (local) Function prototypes
 //***********************************************************************
 // Halon
@@ -70,27 +62,24 @@ extern void set_all_port_system_priority(void);
 //int  cli_get_actor_system_priority(void);
 
 //*****************************************************************
-// Function : mlacpBoltonRxPdu
+// Function : mlacp_process_rx_pdu
 //*****************************************************************
 void
-mlacpBoltonRxPdu(struct ML_event *pevent)
+mlacp_process_rx_pdu(struct ML_event *pevent)
 {
     struct MLt_drivers_mlacp__rxPdu *pRxPduMsg = pevent->msg;
     unsigned char *data = (unsigned char *)pRxPduMsg->data;
 
     LACP_process_input_pkt(pRxPduMsg->lport_handle, data, pRxPduMsg->pktLen);
 
-} // mlacpBoltonRxPdu
+} // mlacp_process_rx_pdu
 
 //*****************************************************************
 // Function : mlacp_process_timer
 //*****************************************************************
 void
-mlacp_process_timer(struct MLt_msglib__timer *tevent __attribute__ ((unused)))
+mlacp_process_timer(void)
 {
-    void LACP_periodic_tx(void);
-    void LACP_current_while_expiry(void);
-
     RENTRY();
 
     LACP_periodic_tx();
@@ -199,7 +188,7 @@ mlacp_process_api_msg(ML_event *pevent)
             struct MLt_lacp_api__actorSysMac *pMsg = pevent->msg;
             unsigned char *mac_addr = pMsg->actor_sys_mac;
 
-            memcpy(my_mac_addr, mac_addr, 6);
+            memcpy(my_mac_addr, mac_addr, MAC_ADDR_LENGTH);
 
             RDEBUG(DL_LACP_RCV, "Set sys mac addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
                    my_mac_addr[0], my_mac_addr[1], my_mac_addr[2],
