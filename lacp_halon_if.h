@@ -157,8 +157,6 @@ struct iface_data {
  * @{
  */
 // H/W Configuration function
-extern void halon_create_lag_in_hw(uint16_t lag_id);
-extern void halon_destroy_lag_in_hw(uint16_t lag_id);
 extern void halon_trunk_port_egr_enable(uint16_t lag_id, int port);
 extern void halon_attach_port_in_hw(uint16_t lag_id, int port);
 extern void halon_detach_port_in_hw(uint16_t lag_id, int port);

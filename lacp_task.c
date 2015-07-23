@@ -214,7 +214,7 @@ mux_wait_while_timer_expiry(lacp_per_port_variables_t *lacp_port)
     if (n_list_find_data(lag->pplist,
                          &lacp_lag_port_match,
                          &lacp_port->lport_handle) == NULL) {
-        RDEBUG(DL_ERROR, "lport (ox%llx) not set ??\n", lacp_port->lport_handle);
+        VLOG_ERR("lport (ox%llx) not set ??", lacp_port->lport_handle);
         return;
     }
 
@@ -495,7 +495,7 @@ LACP_marker_responder(lacp_per_port_variables_t *plpinfo, void *data)
     if (!(marker_response_payload =
           LACP_build_marker_response_payload(plpinfo->lport_handle, data))) {
         /* Report error and exit with status as TRUE */
-        RDEBUG(DL_ERROR, "CANT TX MARKER RESPONSE\n");
+        VLOG_ERR("CANT TX MARKER RESPONSE");
         goto exit;
     }
 
@@ -535,7 +535,7 @@ LACP_build_marker_response_payload(port_handle_t lport_handle,
     marker_response_payload = (marker_pdu_payload_t *)malloc(sizeof(marker_pdu_payload_t));
     if (marker_response_payload == NULL) {
         /* Report error */
-        RDEBUG(DL_ERROR, "%s : LACP_E_NOMEMMARKERRESPONSE\n", __FUNCTION__);
+        VLOG_ERR("%s : LACP_E_NOMEMMARKERRESPONSE", __FUNCTION__);
         goto exit;
     }
 

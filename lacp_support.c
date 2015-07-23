@@ -169,9 +169,9 @@ LACP_initialize_port(port_handle_t lport_handle,
      * on this port, just kill it and restart with the latest
      * config info. */
     if (plpinfo != NULL) {
-        RDEBUG(DL_ERROR, "Calling LACP_initialize_port when already "
-               "initialized?  port_id=%d  lport=0x%llx",
-               port_id, lport_handle);
+        VLOG_ERR("Calling LACP_initialize_port when already "
+                 "initialized?  port_id=%d  lport=0x%llx",
+                 port_id, lport_handle);
         LACP_disable_lacp(lport_handle);
         plpinfo = NULL;
     }
@@ -181,7 +181,7 @@ LACP_initialize_port(port_handle_t lport_handle,
 
     plpinfo = calloc(1, sizeof(lacp_per_port_variables_t));
     if (plpinfo == NULL) {
-        RDEBUG(DL_FATAL, "out of memory\n");
+        VLOG_FATAL("out of memory");
         exit(-1);
     }
 
@@ -189,7 +189,7 @@ LACP_initialize_port(port_handle_t lport_handle,
     NEMO_AVL_INIT_NODE(plpinfo->avlnode, plpinfo, &(plpinfo->lport_handle));
 
     if (NEMO_AVL_INSERT(lacp_per_port_vars_tree, plpinfo->avlnode) == FALSE) {
-        RDEBUG(DL_FATAL, "avl_insert failed for handle 0x%llx\n", lport_handle);
+        VLOG_FATAL("avl_insert failed for handle 0x%llx", lport_handle);
         exit(-1);
     }
 
@@ -348,8 +348,8 @@ LACP_update_port_params(port_handle_t lport_handle,
         plpinfo->lacp_control.ntt = TRUE;
 
     } else {
-        RDEBUG(DL_ERROR, "Update LACP param: lport_handle 0x%llx not found\n",
-               lport_handle);
+        VLOG_ERR("Update LACP param: lport_handle 0x%llx not found",
+                 lport_handle);
         return;
     }
 
@@ -503,8 +503,8 @@ LACP_disable_lacp(port_handle_t lport_handle)
 
     plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL) {
-        RDEBUG(DL_ERROR, "Disable LACP: lport_handle 0x%llx not found\n",
-               lport_handle);
+        VLOG_ERR("Disable LACP: lport_handle 0x%llx not found",
+                 lport_handle);
         return;
     }
 
@@ -584,7 +584,7 @@ LACP_reset_port(port_handle_t lport_handle)
 
     lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
-        RDEBUG(DL_ERROR, "reset port - can't find lport 0x%llx\n", lport_handle);
+        VLOG_ERR("reset port - can't find lport 0x%llx", lport_handle);
         return;
     }
 
@@ -806,7 +806,7 @@ get_lacp_fsm_state(struct MLt_lacp_api__lport_protocol *pMsg, int getnext)
     if (getnext == 0) {
         lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "fsm get: can't find lport 0x%llx\n", pMsg->lport_handle);
+            VLOG_ERR("fsm get: can't find lport 0x%llx", pMsg->lport_handle);
             pMsg->error = -3;
             return;
         }
@@ -814,7 +814,7 @@ get_lacp_fsm_state(struct MLt_lacp_api__lport_protocol *pMsg, int getnext)
         lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
                                        &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "no more lports\n");
+            VLOG_ERR("no more lports");
             pMsg->error = -2;
             return;
         }
@@ -870,20 +870,12 @@ print_lacp_fsm_state(port_handle_t lport_handle)
 
     lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
-        RDEBUG(DL_ERROR, " fsm print - can't find lport 0x%llx\n", lport_handle);
+        VLOG_ERR(" fsm print - can't find lport 0x%llx", lport_handle);
         return;
     }
-
-#if 0 // XXX won't happen for us
-    if (lacp_port->lacp_control.lacp_enabled == FALSE) {
-        RDEBUG(DL_ERROR, "lacp not enabled on handle 0x%lx\n", lport_handle);
-        return;
-    }
-#endif //0
 
     lock = lacp_lock();
 
-    // XXX printf("%s LACP Protocol State:\n", Ports[port]->Port_Name);
     RDBG("logical port 0x%llx LACP Protocol State:\n", lport_handle);
     RDBG("   LACP State Machines:\n");
 
@@ -1136,7 +1128,7 @@ print_lacp_lags(port_handle_t lport_handle)
 
     plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (!plpinfo) {
-        RDEBUG(DL_ERROR, "lport_handle 0x%llx not found\n", lport_handle);
+        VLOG_ERR("lport_handle 0x%llx not found", lport_handle);
         return;
     }
 
@@ -1203,8 +1195,8 @@ get_lacp_stats(struct MLt_lacp_api__lport_stats *pMsg, int getnext)
     if (getnext == 0) {
         lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "get stat - can't find lport 0x%llx\n",
-                   pMsg->lport_handle);
+            VLOG_ERR("get stat - can't find lport 0x%llx",
+                     pMsg->lport_handle);
             pMsg->error = -3;
             return;
         }
@@ -1212,7 +1204,7 @@ get_lacp_stats(struct MLt_lacp_api__lport_stats *pMsg, int getnext)
         lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
                                        &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "no more lports\n");
+            VLOG_ERR("no more lports");
             pMsg->error = -2;
             return;
         }
@@ -1238,8 +1230,8 @@ clear_lacp_stats(struct MLt_lacp_api__lport_stats *pMsg, int clearnext)
     if (clearnext == 0) {
         lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "clear stats: can't find lport 0x%llx\n",
-                   pMsg->lport_handle);
+            VLOG_ERR("clear stats: can't find lport 0x%llx",
+                     pMsg->lport_handle);
             pMsg->error = -3;
             return;
         }
@@ -1247,7 +1239,7 @@ clear_lacp_stats(struct MLt_lacp_api__lport_stats *pMsg, int clearnext)
         lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
                                        &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "no more lports\n");
+            VLOG_ERR("no more lports");
             pMsg->error = -2;
             return;
         }
@@ -1273,7 +1265,7 @@ print_lacp_stats(port_handle_t lport_handle)
 
     lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
-        RDEBUG(DL_ERROR, "print stats - can't find lport 0x%llx\n", lport_handle);
+        VLOG_ERR("print stats - can't find lport 0x%llx", lport_handle);
         return;
     }
 
@@ -1300,8 +1292,8 @@ get_lacp_params(struct MLt_lacp_api__lport_params *pMsg, int getnext)
     if (getnext == 0) {
         lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "get params - can't find lport 0x%llx\n",
-                   pMsg->lport_handle);
+            VLOG_ERR("get params - can't find lport 0x%llx",
+                     pMsg->lport_handle);
             pMsg->error = -3;
             return;
         }
@@ -1309,7 +1301,7 @@ get_lacp_params(struct MLt_lacp_api__lport_params *pMsg, int getnext)
         lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
                                        &(pMsg->lport_handle));
         if (lacp_port == NULL) {
-            RDEBUG(DL_ERROR, "no more lports\n");
+            VLOG_ERR("no more lports");
             pMsg->error = -2;
             return;
         }
@@ -1383,7 +1375,7 @@ print_lacp_params(port_handle_t lport_handle)
 
     lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
-        RDEBUG(DL_ERROR, "print params - can't find lport 0x%llx\n", lport_handle);
+        VLOG_ERR("print params - can't find lport 0x%llx", lport_handle);
         return;
     }
 
@@ -1598,7 +1590,7 @@ LACP_waiting_link_up(port_handle_t lport_handle)
 
     lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
-        RDEBUG(DL_ERROR, "waiting link up - can't find lport 0x%llx\n", lport_handle);
+        VLOG_ERR("waiting link up - can't find lport 0x%llx", lport_handle);
         return 0;
     }
 
@@ -1629,7 +1621,7 @@ mlacpVapiLinkUp(port_handle_t lport_handle, int speed)
 
     plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL) {
-        RDEBUG(DL_ERROR, "link up but can't find lport 0x%llx\n", lport_handle);
+        VLOG_ERR("link up but can't find lport 0x%llx", lport_handle);
         return;
     }
 
@@ -1695,7 +1687,7 @@ mlacpVapiLinkDown(port_handle_t lport_handle)
 
     plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL) {
-        RDEBUG(DL_ERROR, "link down, but can't find lport 0x%llx\n", lport_handle);
+        VLOG_ERR("link down, but can't find lport 0x%llx", lport_handle);
         return;
     }
 

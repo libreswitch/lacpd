@@ -298,8 +298,8 @@ mlacp_blocking_send_clear_aggregator(unsigned long long sport_handle)
     status = mvlan_api_clear_sport_params(sport_handle);
 
     if (status != R_SUCCESS) {
-        RDEBUG(DL_ERROR, "Failed to clear sport params for 0x%llx",
-               sport_handle);
+        VLOG_ERR("Failed to clear sport params for 0x%llx",
+                 sport_handle);
     }
 
     return status;

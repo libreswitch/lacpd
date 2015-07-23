@@ -249,7 +249,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
             // to form an individual LAG.
             if ((lag = (LAG_t *)malloc(sizeof(LAG_t))) == NULL) {
                 free(lagId);
-                RDEBUG(DL_FATAL, "%s : out of memory\n", __FUNCTION__);
+                VLOG_FATAL("%s : out of memory", __FUNCTION__);
                 exit(-1);
 
                 lacp_port->selecting_lag = FALSE;
@@ -269,7 +269,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
 
             plag_port_struct = calloc(1, sizeof(lacp_lag_ppstruct_t));
             if (plag_port_struct == NULL) {
-                RDEBUG(DL_FATAL, "%s : out of memory\n", __FUNCTION__);
+                VLOG_FATAL("%s : out of memory", __FUNCTION__);
                 exit(-1);
             }
             plag_port_struct->lport_handle = lacp_port->lport_handle;
@@ -322,7 +322,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
 
                 plag_port_struct = calloc(1, sizeof(lacp_lag_ppstruct_t));
                 if (plag_port_struct == NULL) {
-                    RDEBUG(DL_FATAL, "%s : out of memory\n", __FUNCTION__);
+                    VLOG_FATAL("%s : out of memory", __FUNCTION__);
                     exit(-1);
                 }
                 plag_port_struct->lport_handle = lacp_port->lport_handle;
@@ -344,7 +344,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
             return;
         }
 
-        RDEBUG(DL_FATAL, "%s : FATAL : How come it got here ?!\n", __FUNCTION__);
+        VLOG_FATAL("%s : FATAL : How come it got here ?!", __FUNCTION__);
         exit(-1);
 
     } // (1) if (lag == NULL)
@@ -529,8 +529,7 @@ LAG_attached_to_aggregator(port_handle_t lport_handle,int result)
     printf ("==============ATTACHED =========================\n");
     lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
-        RDEBUG(DL_ERROR, "%s : can't find lport 0x%llx\n",
-               __FUNCTION__, lport_handle);
+        VLOG_ERR("%s : can't find lport 0x%llx", __FUNCTION__, lport_handle);
         return;
     }
 
@@ -616,7 +615,7 @@ form_lag_id(lacp_per_port_variables_t *lacp_port)
 
     // Allocate memory for LAG ID.
     if (!(lagId = (LAG_Id_t *)malloc(sizeof(LAG_Id_t)))) {
-        RDEBUG(DL_FATAL, "out of memory");
+        VLOG_FATAL("out of memory");
         return NULL;
     }
 

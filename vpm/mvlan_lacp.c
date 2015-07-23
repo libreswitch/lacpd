@@ -135,8 +135,8 @@ mvlan_api_validate_unset_sport_params(struct MLt_vpm_api__lacp_sport_params *pla
                              MLm_vpm_api__get_sport);
 
     if (status != R_SUCCESS) {
-        RDEBUG(DL_ERROR, "could not find sport handle 0x%llx\n",
-               placp_params->sport_handle);
+        VLOG_ERR("could not find sport handle 0x%llx",
+                 placp_params->sport_handle);
         goto end;
     }
 
@@ -216,8 +216,8 @@ mvlan_api_validate_set_sport_params(struct MLt_vpm_api__lacp_sport_params *placp
                              MLm_vpm_api__get_sport);
 
     if (status != R_SUCCESS) {
-        RDEBUG(DL_ERROR, "could not find sport handle 0x%llx\n",
-               placp_params->sport_handle);
+        VLOG_ERR("could not find sport handle 0x%llx",
+                 placp_params->sport_handle);
         goto end;
     }
 
@@ -309,7 +309,7 @@ mvlan_set_sport_params(struct MLt_vpm_api__lacp_sport_params *pin_lacp_params)
         placp_sport_params = (lacp_int_sport_params_t *)malloc(sizeof(lacp_int_sport_params_t));
 
         if (placp_sport_params == NULL ) {
-            RDEBUG(DL_ERROR, "mvlan_set_sport_params: No mem\n");
+            VLOG_ERR("mvlan_set_sport_params: No mem");
             status = MVLAN_SPORT_NO_MEM;
             goto end;
 
@@ -887,8 +887,8 @@ mvlan_api_clear_sport_params(unsigned long long sport_handle)
     status = mvlan_get_sport(sport_handle, &psport, MLm_vpm_api__get_sport);
 
     if (status != R_SUCCESS) {
-        RDEBUG(DL_ERROR, "Could not get sport 0x%llx (already cleaned up ?)\n",
-               sport_handle);
+        VLOG_ERR("Could not get sport 0x%llx (already cleaned up ?)",
+                 sport_handle);
         goto end;
     }
 
@@ -896,8 +896,8 @@ mvlan_api_clear_sport_params(unsigned long long sport_handle)
 
     if (sport_lacp_params == NULL) {
         status = MVLAN_LACP_SPORT_PARAMS_NOT_FOUND;
-        RDEBUG(DL_ERROR, "aggregator params vanished before clear (handle = 0x%llx)!\n",
-               psport->handle);
+        VLOG_ERR("aggregator params vanished before clear (handle = 0x%llx)!",
+                 psport->handle);
         goto end;
     }
 

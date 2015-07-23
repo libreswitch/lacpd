@@ -149,8 +149,7 @@ mlacp_process_vlan_msg(ML_event *pevent)
 
         default:
         {
-            RDEBUG(DL_ERROR, "%s : Unknown req (%d) \n",
-                   __FUNCTION__, pevent->msgnum);
+            VLOG_ERR("%s : Unknown req (%d)", __FUNCTION__, pevent->msgnum);
         }
         break;
     }
@@ -181,8 +180,6 @@ mlacp_process_api_msg(ML_event *pevent)
         }
         break;
 
-        // Halon: This should be for debugging only.  System
-        //          MAC address should be read from h/w.
         case MLm_lacp_api__setActorSysMac:
         {
             struct MLt_lacp_api__actorSysMac *pMsg = pevent->msg;
@@ -196,143 +193,6 @@ mlacp_process_api_msg(ML_event *pevent)
         }
         break;
 
-        // HALON_TODO: remove static LAG related stuff here...
-
-        // Halon: static LAG support.
-        case MLm_vpm_api__static_lag_create:
-        {
-            int lag_id;
-            struct MLt_vpm_api__static_lag *pMsg = pevent->msg;
-
-            lag_id = (int)PM_HANDLE2LAG(pMsg->sport_handle);
-            RDEBUG(DL_LACP_RCV, "Create STATIC LAG %d.  handle=0x%llx\n",
-                   lag_id, pMsg->sport_handle);
-
-            // Static LAGs are not tracked in the LACP
-            // state machine. Simply create trunk in h/w.
-            halon_create_lag_in_hw(lag_id);
-        }
-        break;
-
-        // Halon: static LAG support.
-        case MLm_vpm_api__static_lag_delete:
-        {
-            int lag_id;
-            struct MLt_vpm_api__static_lag *pMsg = pevent->msg;
-
-            lag_id = (int)PM_HANDLE2LAG(pMsg->sport_handle);
-            RDEBUG(DL_LACP_RCV, "Destroy STATIC LAG %d.  handle=0x%llx\n",
-                   lag_id, pMsg->sport_handle);
-
-            // Static LAGs are not tracked in the LACP
-            // state machine. Simply destroy trunk in h/w.
-            halon_destroy_lag_in_hw(lag_id);
-        }
-        break;
-
-        // Halon: static LAG support.
-        case MLm_vpm_api__static_lag_attach_lport:
-        {
-            int port;
-            int lag_id;
-            struct MLt_vpm_api__static_lag *pMsg = pevent->msg;
-
-            lag_id = (int)PM_HANDLE2LAG(pMsg->sport_handle);
-            port = (int)PM_HANDLE2PORT(pMsg->lport_handle);
-
-            RDEBUG(DL_LACP_RCV, "Attach lport %d to STATIC LAG %d."
-                   "sport_handle=0x%llx, lport_handle=0x%llx\n",
-                   port, lag_id, pMsg->sport_handle, pMsg->lport_handle);
-
-            // Static LAGs are not tracked in the LACP
-            // state machine. Simply attach port in h/w.
-            halon_attach_port_in_hw(lag_id, port);
-
-            // For static LAGs, enable distributing right away.
-            halon_trunk_port_egr_enable(lag_id, port);
-
-            // Update DB with new info.
-            db_add_lag_port(lag_id, port);
-        }
-        break;
-
-        // Halon: static LAG support.
-        case MLm_vpm_api__static_lag_detach_lport:
-        {
-            int port;
-            int lag_id;
-            struct MLt_vpm_api__static_lag *pMsg = pevent->msg;
-
-            lag_id = (int)PM_HANDLE2LAG(pMsg->sport_handle);
-            port = (int)PM_HANDLE2PORT(pMsg->lport_handle);
-
-            RDEBUG(DL_LACP_RCV, "Detach lport %d from STATIC LAG %d."
-                   "sport_handle=0x%llx, lport_handle=0x%llx\n",
-                   port, lag_id, pMsg->sport_handle, pMsg->lport_handle);
-
-            // Static LAGs are not tracked in the LACP
-            // state machine. Simply detach port in h/w.
-            halon_detach_port_in_hw(lag_id, port);
-
-            // Update DB with new info.
-            db_delete_lag_port(lag_id, port);
-        }
-        break;
-
-        // Halon: static LAG support.
-        case MLm_vpm_api__static_to_dynamic_lag:
-        {
-            int lag_id;
-            int status;
-            super_port_t *psport;
-            struct MLt_vpm_api__create_sport create_msg;
-            struct MLt_vpm_api__static_lag *pMsg = pevent->msg;
-
-            lag_id = (int)PM_HANDLE2LAG(pMsg->sport_handle);
-
-            RDEBUG(DL_LACP_RCV, "Changing from STATIC to dynamic LAG %d. "
-                   " handle=0x%llx\n", lag_id, pMsg->sport_handle);
-
-            // No need to delete trunk in h/w, but do need
-            // to get this LAG into the state machine.
-            memset(&create_msg, 0, sizeof(create_msg));
-            create_msg.handle = pMsg->sport_handle;
-            create_msg.type   = STYPE_802_3AD;
-            status = mvlan_sport_create(&create_msg, &psport);
-            if (R_SUCCESS != status) {
-                RDEBUG(DL_ERROR, "Failed to create LAG sport, status=%d\n", status);
-            }
-        }
-        break;
-
-        // Halon: static LAG support.
-        case MLm_vpm_api__dynamic_to_static_lag:
-        {
-            int status = R_SUCCESS;
-            super_port_t *psport;
-            struct MLt_vpm_api__static_lag *pMsg = pevent->msg;
-
-            RDEBUG(DL_LACP_RCV, "Changing from dynamic to STATIC LAG %d. "
-                   " handle=0x%llx\n",
-                   (int)PM_HANDLE2LAG(pMsg->sport_handle), pMsg->sport_handle);
-
-            status = mvlan_get_sport(pMsg->sport_handle, &psport,
-                                     MLm_vpm_api__get_sport);
-            if (R_SUCCESS == status) {
-                status = mvlan_destroy_sport(psport);
-                RDEBUG(DL_LACP_RCV, "Destroy sport.  handle=0x%llx\n", pMsg->sport_handle);
-
-                if (R_SUCCESS != status) {
-                    RDEBUG(DL_ERROR, "Failed to delete LAG sport, status=%d\n", status);
-                }
-            } else {
-                RDEBUG(DL_ERROR, "Failed to find sport on change to static LAG, "
-                       "handle=0x%llx.\n", pMsg->sport_handle);
-            }
-        }
-        break;
-
-        // Halon: Added this here instead of using VPM.
         case MLm_vpm_api__create_sport:
         {
             struct MLt_vpm_api__create_sport *pMsg = pevent->msg;
@@ -343,16 +203,12 @@ mlacp_process_api_msg(ML_event *pevent)
 
             RDEBUG(DL_LACP_RCV, "Create LAG.  handle=0x%llx\n", pMsg->handle);
 
-            if (R_SUCCESS == status) {
-                // Halon: Add hook to create trunk entity in switch h/w.
-                halon_create_lag_in_hw(PM_HANDLE2LAG(psport->handle));
-            } else {
-                RDEBUG(DL_ERROR, "Failed to create LAG sport, status=%d\n", status);
+            if (R_SUCCESS != status) {
+                VLOG_ERR("Failed to create LAG sport, status=%d", status);
             }
         }
         break;
 
-        // Halon: Added this here instead of using VPM.
         case MLm_vpm_api__delete_sport:
         {
             struct MLt_vpm_api__delete_sport *pMsg = pevent->msg;
@@ -362,28 +218,21 @@ mlacp_process_api_msg(ML_event *pevent)
             status = mvlan_get_sport(pMsg->handle, &psport,
                                      MLm_vpm_api__get_sport);
             if (R_SUCCESS == status) {
-                int lag_id;
 
-                // Save LAG ID first.
-                lag_id = PM_HANDLE2LAG(psport->handle);
                 status = mvlan_destroy_sport(psport);
 
                 RDEBUG(DL_LACP_RCV, "Delete LAG.  handle=0x%llx\n", pMsg->handle);
 
-                if (R_SUCCESS == status) {
-                    // Halon: Add hook to destroy trunk entity in switch h/w.
-                    halon_destroy_lag_in_hw(lag_id);
-                } else {
-                    RDEBUG(DL_ERROR, "Failed to delete LAG sport, status=%d\n", status);
+                if (R_SUCCESS != status) {
+                    VLOG_ERR("Failed to delete LAG sport, status=%d", status);
                 }
             } else {
-                RDEBUG(DL_ERROR, "Failed to find sport on delete, haldne=0x%llx.\n",
-                       pMsg->handle);
+                VLOG_ERR("Failed to find sport on delete, handle=0x%llx.",
+                         pMsg->handle);
             }
         }
         break;
 
-        // Halon: Added this here instead of using VPM.
         case MLm_vpm_api__set_lacp_sport_params:
         {
             struct MLt_vpm_api__lacp_sport_params *pMsg = pevent->msg;
@@ -395,15 +244,14 @@ mlacp_process_api_msg(ML_event *pevent)
             status = mvlan_api_modify_sport_params(pMsg, pevent->msgnum);
 
             if (status != R_SUCCESS) {
-                RDEBUG(DL_ERROR, "Failed to set LAG Sport parms, status=%d\n", status);
+                VLOG_ERR("Failed to set LAG Sport parms, status=%d", status);
             }
         }
         break;
 
         default:
         {
-            RDEBUG(DL_ERROR, "%s : Unknown req (%d) \n",
-                   __FUNCTION__, pevent->msgnum);
+            VLOG_ERR("%s : Unknown req (%d)", __FUNCTION__, pevent->msgnum);
         }
         break;
     }
@@ -419,7 +267,7 @@ mlacp_process_api_msg(ML_event *pevent)
 void
 mlacp_process_showmgr_msg(ML_event *pevent __attribute__ ((unused)))
 {
-    RDEBUG(DL_ERROR, " !!! Halon !!! %s not yet implemented\n", __FUNCTION__);
+    VLOG_ERR(" !!! Halon !!! %s not yet implemented\n", __FUNCTION__);
 
 #if 0  // Halon
     struct MLt_mgmt_transport__show *preq;
@@ -560,8 +408,7 @@ mlacp_process_showmgr_msg(ML_event *pevent __attribute__ ((unused)))
 
         default:
         {
-            RDEBUG(DL_ERROR, "%s : Unknown req (%d) \n",
-                   __FUNCTION__, preq->object_id);
+            VLOG_ERR("%s : Unknown req (%d)", __FUNCTION__, preq->object_id);
             bad = 1;
         }
         break;
@@ -654,7 +501,7 @@ mlacpVapiLportEvent(struct ML_event *pevent)
 void
 mlacp_process_diagmgr_msg(ML_event *pevent __attribute__ ((unused)))
 {
-    RDEBUG(DL_ERROR, " !!! Halon !!! %s not yet implemented\n", __FUNCTION__);
+    VLOG_ERR(" !!! Halon !!! %s not yet implemented\n", __FUNCTION__);
 
 #if 0  // Halon
     struct MLt_mgmt_transport__show *preq;
@@ -743,8 +590,7 @@ mlacp_process_diagmgr_msg(ML_event *pevent __attribute__ ((unused)))
 
         default:
         {
-            RDEBUG(DL_ERROR, "%s : Unknown req (%d) \n",
-                   __FUNCTION__, preq->object_id);
+            VLOG_ERR("%s : Unknown req (%d)", __FUNCTION__, preq->object_id);
             bad = 1;
         }
         break;

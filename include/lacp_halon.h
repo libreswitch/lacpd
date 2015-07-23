@@ -45,13 +45,6 @@ struct MLt_lacp_api__actorSysMac {
 /******************************************************************************************/
 
 // VPM message types
-#define MLm_vpm_api__static_lag_create                 50
-#define MLm_vpm_api__static_lag_delete                 51
-#define MLm_vpm_api__static_lag_attach_lport           52
-#define MLm_vpm_api__static_lag_detach_lport           53
-#define MLm_vpm_api__static_to_dynamic_lag             54
-#define MLm_vpm_api__dynamic_to_static_lag             55
-
 #define MLm_vpm_api__create_sport                      78
 #define MLm_vpm_api__delete_sport                      79
 #define MLm_vpm_api__get_sport                         80

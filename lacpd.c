@@ -98,7 +98,7 @@ timerHandler(void)
 
     timerEvent = (ML_event *)malloc(sizeof(ML_event));
     if (NULL == timerEvent) {
-        RDEBUG(DL_ERROR, "Out of memory for LACP timer message.\n");
+        VLOG_ERR("Out of memory for LACP timer message.");
         return;
     }
     memset(timerEvent, 0, sizeof(ML_event));

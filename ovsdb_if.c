@@ -70,6 +70,10 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
 #define LACP_ENABLED_ON_PORT(m)    ((m) == PORT_LACP_PASSIVE || \
                                     (m) == PORT_LACP_ACTIVE)
 
+/* Scale OVS interface speed number (bps) down to
+ * that used by LACP state machine (Mbps). */
+#define INTF_TO_LACP_LINK_SPEED(s)    ((s)/1000000)
+
 struct ovsdb_idl *idl;           /*!< Session handle for OVSDB IDL session. */
 static unsigned int idl_seqno;
 static int system_configured = false;
@@ -240,6 +244,39 @@ alloc_msg(int size)
     return msg;
 } /* alloc_msg */
 
+#if 0
+/* HALON_TODO: OVS defines system_priority as part of Port table,
+ * under other_config:lacp_system_priority.  Port table also has the
+ * system ID (MAC) address under other_config:lacp_system_id.  These
+ * two attributes should not be configurable on a per-Port (LAG) basis.
+ * System ID & priority should be defined at the system level, e.g.
+ * under Open_vSwitch, Subsystem, or Bridge table. TBD. */
+static void
+send_sys_pri_msg(int priority)
+{
+    ML_event *event;
+    struct MLt_lacp_api__actorSysPriority *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: priority=%d", __FUNCTION__, priority);
+
+    msgSize = sizeof(ML_event)+sizeof(struct MLt_lacp_api__actorSysPriority);
+
+    event = (ML_event*)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_lacp_api__setActorSysPriority;
+
+        msg = (struct MLt_lacp_api__actorSysPriority *)(event+1);
+        msg->actor_system_priority = priority;
+
+        ml_send_event(event);
+    }
+} /* send_sys_pri_msg */
+#endif
+
 static void
 send_sys_mac_msg(struct ether_addr *macAddr)
 {
@@ -375,7 +412,7 @@ send_config_lport_msg(struct iface_data *info_ptr)
         msg->lport_handle = PM_SMPT2HANDLE(0,0,info_ptr->index,
                                            info_ptr->cycl_port_type);
         msg->link_state = (info_ptr->link_state == INTERFACE_LINK_STATE_UP) ? 1 : 0;
-        msg->link_speed = (info_ptr->link_speed/1000000);
+        msg->link_speed = INTF_TO_LACP_LINK_SPEED(info_ptr->link_speed);
 
         /* NOTE: 802.3ad requires port number to be non-zero.  So we'll
          *       just use 1-based port number, instead of 0-based.
@@ -401,9 +438,78 @@ send_config_lport_msg(struct iface_data *info_ptr)
     }
 } /* send_config_lport_msg */
 
+#if 0
+/* HALON_TODO */
+static void
+send_lport_lacp_change_msg(struct iface_data *info_ptr, unsigned int flags)
+{
+    ML_event *event;
+    struct MLt_vpm_api__lport_lacp_change *msg;
+    int msgSize;
 
-/* HALON_TODO: add link state change config messages. */
+    VLOG_DBG("%s: port=%s, index=%d, flags=0x%x", __FUNCTION__,
+             info_ptr->name, info_ptr->index, flags);
 
+    msgSize = sizeof(ML_event)+sizeof(struct MLt_vpm_api__lport_lacp_change);
+
+    event = (ML_event*)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From LPORT peer. ***/
+        event->sender.peer = ml_lport_index;
+        event->msgnum = MLm_vpm_api__set_lacp_lport_params_event;
+
+        msg = (struct MLt_vpm_api__lport_lacp_change *)(event+1);
+        msg->lport_handle = PM_SMPT2HANDLE(0,0,info_ptr->index,
+                                           info_ptr->cycl_port_type);
+
+        /* NOTE: 802.3ad requires port number to be non-zero.  So we'll
+         *       just use 1-based port number, instead of 0-based.
+         * (ANVL LACP Conformance Test numbers 4.11)
+         */
+        msg->port_id          = (info_ptr->index+1);
+        msg->lacp_state       = info_ptr->lacp_state;
+        msg->lacp_timeout     = info_ptr->timeout_mode;
+        msg->collecting_ready = info_ptr->collecting_ready;
+
+        msg->flags        = (flags | LACP_LPORT_DYNAMIC_FIELDS_PRESENT);
+
+        ml_send_event(event);
+    }
+} /* send_lport_lacp_change_msg */
+#endif
+
+#if 0
+/* HALON_TODO */
+static void
+send_link_state_change_msg(struct iface_data *info_ptr, int state, int speed)
+{
+    ML_event *event;
+    struct MLt_vpm_api__lport_state_change *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: port=%s, state=%d, speed=%d", __FUNCTION__,
+             info_ptr->name, state, speed);
+
+    msgSize = sizeof(ML_event)+sizeof(struct MLt_vpm_api__lport_state_change);
+
+    event = (ML_event*)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From LPORT peer. ***/
+        event->sender.peer = ml_lport_index;
+        event->msgnum = (state ? MLm_vpm_api__lport_state_up :
+                                 MLm_vpm_api__lport_state_down);
+
+        msg = (struct MLt_vpm_api__lport_state_change *)(event+1);
+        msg->lport_handle = PM_SMPT2HANDLE(0, 0, info_ptr->index,
+                                           info_ptr->cycl_port_type);
+        msg->link_speed = speed;
+
+        ml_send_event(event);
+    }
+} /* send_link_state_change_msg */
+#endif
 
 static void
 configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
@@ -1247,20 +1353,6 @@ lacpd_thread_intf_update_hw_bond_config(struct iface_data *idp,
     OVSDB_UNLOCK;
 
 } /* halon_intf_update_hw_bond_config */
-
-void
-halon_create_lag_in_hw(uint16_t lag_id)
-{
-    /* HALON_TODO: this is probably no longer necessary. */
-    VLOG_DBG("%s: HALON_TODO lag_id=%d", __FUNCTION__, lag_id);
-} /* halon_create_lag_in_hw */
-
-void
-halon_destroy_lag_in_hw(uint16_t lag_id)
-{
-    /* HALON_TODO: this is probably no longer necessary. */
-    VLOG_DBG("%s: HALON_TODO lag_id=%d", __FUNCTION__, lag_id);
-} /* halon_destroy_lag_in_hw */
 
 void
 halon_attach_port_in_hw(uint16_t lag_id, int port)

@@ -64,12 +64,12 @@ mvlan_sport_init(u_long  first_time)
     int status = R_SUCCESS;
 
     if (first_time != TRUE) {
-        RDEBUG(DL_ERROR, "Cannot handle revival from dead");
+        VLOG_ERR("Cannot handle revival from dead");
         return -1;
     }
 
     if (sport_init_done == TRUE) {
-        RDEBUG(DL_WARNING, "Already initialized");
+        VLOG_WARN("Already initialized");
         return -1;
     }
 
@@ -179,7 +179,7 @@ mvlan_sport_create(struct MLt_vpm_api__create_sport  *psport_create,
     psport  = malloc(memSize);
 
     if (psport == NULL) {
-        RDEBUG(DL_ERROR, "sport no memory !!\n");
+        VLOG_ERR("sport no memory !!\n");
         status = -1;
         goto end;
 

@@ -416,7 +416,7 @@ LACP_transmit_lacpdu(lacp_per_port_variables_t *plpinfo)
     if (!(lacpdu_payload = LACP_build_lacpdu_payload(plpinfo))) {
 
         // Report error and exit
-        RDEBUG(DL_ERROR, "error");
+        VLOG_ERR("Failed to build LACPDU payload");
         goto exit;
     }
 
@@ -459,7 +459,7 @@ LACP_build_lacpdu_payload(lacp_per_port_variables_t *plpinfo)
     // Allocate memory for the lacpdu
     lacpdu_payload = (lacpdu_payload_t *)malloc(sizeof(lacpdu_payload_t));
     if (lacpdu_payload == NULL) {
-        RDEBUG(DL_FATAL, "out of memory");
+        VLOG_FATAL("out of memory");
         goto exit;
     }
 
