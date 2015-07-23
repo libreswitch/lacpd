@@ -318,6 +318,9 @@ register_mcast_addr(port_handle_t lport_handle)
 
     /* Add new FD to epoll.  Save interface data pointer.
      * NOTE: assumption is that interfaces are not deleted in h/w switch! */
+    /* HALON_TODO: OVSDB allows interface to be deleted.  Maybe it's better
+     * to save port index & find data?  Or in OVSDB interface delete code,
+     * modify the epoll event data to remove the pointer. */
     event.events = EPOLLIN;
     event.data.ptr = (void *)idp;
 

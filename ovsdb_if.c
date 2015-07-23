@@ -67,12 +67,13 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
  * @{
  **************************************/
 
-#define LACP_ENABLED_ON_PORT(m)    ((m) == PORT_LACP_PASSIVE || \
-                                    (m) == PORT_LACP_ACTIVE)
+#define LACP_ENABLED_ON_PORT(p)    ((p)->lacp_mode == PORT_LACP_PASSIVE || \
+                                    (p)->lacp_mode == PORT_LACP_ACTIVE)
 
 /* Scale OVS interface speed number (bps) down to
  * that used by LACP state machine (Mbps). */
-#define INTF_TO_LACP_LINK_SPEED(s)    ((s)/1000000)
+#define MEGA_BITS_PER_SEC  1000000
+#define INTF_TO_LACP_LINK_SPEED(s)    ((s)/MEGA_BITS_PER_SEC)
 
 struct ovsdb_idl *idl;           /*!< Session handle for OVSDB IDL session. */
 static unsigned int idl_seqno;
@@ -130,6 +131,7 @@ pthread_mutex_t ovsdb_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int update_interface_lag_eligibility(struct iface_data *idp);
 static int update_interface_hw_bond_config_map_entry(struct iface_data *idp,
                                                      const char *key, const char *value);
+static char *lacp_mode_str(enum ovsrec_port_lacp_e mode);
 
 /**********************************************************************/
 /*                               UTILS                                */
@@ -172,8 +174,6 @@ alloc_lag_id(void)
 
 } /* alloc_lag_id */
 
-#if 0
-/* HALON_TODO */
 static void
 free_lag_id(uint16_t id)
 {
@@ -193,7 +193,6 @@ free_lag_id(uint16_t id)
     }
 
 } /* free_lag_id */
-#endif
 
 struct iface_data *
 find_iface_data_by_index(int index)
@@ -330,8 +329,6 @@ send_lag_create_msg(int lag_id)
     }
 } /* send_lag_create_msg */
 
-#if 0
-/* HALON_TODO */
 static void
 send_lag_delete_msg(int lag_id)
 {
@@ -356,17 +353,16 @@ send_lag_delete_msg(int lag_id)
         ml_send_event(event);
     }
 } /* send_lag_delete_msg */
-#endif
 
 static void
-send_config_lag_msg(int lag_id, int actorKey, int cycl_ptype)
+send_config_lag_msg(int lag_id, int actor_key, int cycl_ptype)
 {
     ML_event *event;
     struct MLt_vpm_api__lacp_sport_params *msg;
     int msgSize;
 
     VLOG_DBG("%s: lag_id=%d, actor_key=%d, cycl_ptype=%d",
-             __FUNCTION__, lag_id, actorKey, cycl_ptype);
+             __FUNCTION__, lag_id, actor_key, cycl_ptype);
 
     msgSize = sizeof(ML_event) + sizeof(struct MLt_vpm_api__lacp_sport_params);
 
@@ -383,7 +379,7 @@ send_config_lag_msg(int lag_id, int actorKey, int cycl_ptype)
                       LACP_LAG_ACTOR_KEY_FIELD_PRESENT);
 
         msg->port_type = cycl_ptype;
-        msg->actor_key = actorKey;
+        msg->actor_key = actor_key;
 
         ml_send_event(event);
     }
@@ -438,8 +434,6 @@ send_config_lport_msg(struct iface_data *info_ptr)
     }
 } /* send_config_lport_msg */
 
-#if 0
-/* HALON_TODO */
 static void
 send_lport_lacp_change_msg(struct iface_data *info_ptr, unsigned int flags)
 {
@@ -472,24 +466,21 @@ send_lport_lacp_change_msg(struct iface_data *info_ptr, unsigned int flags)
         msg->lacp_timeout     = info_ptr->timeout_mode;
         msg->collecting_ready = info_ptr->collecting_ready;
 
-        msg->flags        = (flags | LACP_LPORT_DYNAMIC_FIELDS_PRESENT);
+        msg->flags = (flags | LACP_LPORT_DYNAMIC_FIELDS_PRESENT);
 
         ml_send_event(event);
     }
 } /* send_lport_lacp_change_msg */
-#endif
 
-#if 0
-/* HALON_TODO */
 static void
-send_link_state_change_msg(struct iface_data *info_ptr, int state, int speed)
+send_link_state_change_msg(struct iface_data *info_ptr)
 {
     ML_event *event;
     struct MLt_vpm_api__lport_state_change *msg;
     int msgSize;
 
     VLOG_DBG("%s: port=%s, state=%d, speed=%d", __FUNCTION__,
-             info_ptr->name, state, speed);
+             info_ptr->name, info_ptr->link_state, info_ptr->link_speed);
 
     msgSize = sizeof(ML_event)+sizeof(struct MLt_vpm_api__lport_state_change);
 
@@ -498,18 +489,18 @@ send_link_state_change_msg(struct iface_data *info_ptr, int state, int speed)
     if (event != NULL) {
         /*** From LPORT peer. ***/
         event->sender.peer = ml_lport_index;
-        event->msgnum = (state ? MLm_vpm_api__lport_state_up :
-                                 MLm_vpm_api__lport_state_down);
+        event->msgnum = ((info_ptr->link_state == INTERFACE_LINK_STATE_UP) ?
+                         MLm_vpm_api__lport_state_up :
+                         MLm_vpm_api__lport_state_down);
 
         msg = (struct MLt_vpm_api__lport_state_change *)(event+1);
         msg->lport_handle = PM_SMPT2HANDLE(0, 0, info_ptr->index,
                                            info_ptr->cycl_port_type);
-        msg->link_speed = speed;
+        msg->link_speed = INTF_TO_LACP_LINK_SPEED(info_ptr->link_speed);
 
         ml_send_event(event);
     }
 } /* send_link_state_change_msg */
-#endif
 
 static void
 configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
@@ -774,6 +765,24 @@ update_interface_cache(void)
 
                 if (update_interface_lag_eligibility(idp)) {
                     rc++;
+                } else {
+                    /* If no change to eligibility, but this interface is
+                     * part of a dynamic LAG, then we need to send link
+                     * change notification message to the state machine. */
+                    if (idp->lag_eligible && idp->port_datap &&
+                        LACP_ENABLED_ON_PORT(idp->port_datap)) {
+                        send_link_state_change_msg(idp);
+
+                        /* HALON_TODO: need to trigger the LACP state machine
+                         * to advance to collecting/distributing state.  In the
+                         * past, this was triggered by stpd when it set the port
+                         * to forwarding.  In Halon environment, this really
+                         * needs to be done only after the interface has been
+                         * attached to the h/w LAG, thus collecting-ready.
+                         * For now, force this trigger here. */
+                        send_lport_lacp_change_msg(idp, (LACP_LPORT_TIMEOUT_FIELD_PRESENT |
+                                                         LACP_LPORT_HW_COLL_STATUS_PRESENT));
+                    }
                 }
             }
         }
@@ -873,6 +882,7 @@ set_interface_lag_eligibility(struct port_data *portp, struct iface_data *idp,
  * Checks whether the interface is eligibile to become a member of
  * configured LAG by applying the following rules:
  *     - interface configured to be member of a LAG
+ * For static LAGs, additional rules apply:
  *     - interface is linked up
  *     - interface is in full duplex mode
  *     - interface link speed is same as the lag_member_speed. The link
@@ -909,27 +919,36 @@ update_interface_lag_eligibility(struct iface_data *idp)
     }
 
     if (!shash_find_data(&portp->cfg_member_ifs, idp->name)) {
+        /* Interface must be configured as part of the Port first. */
         new_eligible = false;
-    }
 
-    if (INTERFACE_LINK_STATE_UP != idp->link_state) {
+    } else if (LACP_ENABLED_ON_PORT(portp)) {
+        /* For dynamic LAGs, interface is considered eligible as long
+         * as the interface is a configured member of the port. */
+        new_eligible = true;
+
+    } else {
+        /* For static LAGs, interface eligibility is based on
+         * additional link status. */
+        if (INTERFACE_LINK_STATE_UP != idp->link_state) {
             new_eligible = false;
-    }
+        }
 
-    if (INTERFACE_DUPLEX_FULL != idp->duplex) {
+        if (INTERFACE_DUPLEX_FULL != idp->duplex) {
             new_eligible = false;
+        }
+
+        if ((portp->lag_member_speed == 0) && new_eligible) {
+            /* First member to join the LAG decides LAG member speed. */
+            portp->lag_member_speed = idp->link_speed;
+        }
+
+        if (portp->lag_member_speed != idp->link_speed) {
+            new_eligible = false;
+        }
     }
 
-    if ((portp->lag_member_speed == 0) && new_eligible) {
-        /* First member to join the LAG decides LAG member speed. */
-        portp->lag_member_speed = idp->link_speed;
-    }
-
-    if (portp->lag_member_speed != idp->link_speed) {
-        new_eligible = false;
-    }
-
-    VLOG_DBG("%s member %s old_eligible=%d new_eligible=%d",
+    VLOG_DBG("%s: interface %s - old_eligible=%d new_eligible=%d",
              __FUNCTION__, idp->name,
              old_eligible, new_eligible);
 
@@ -941,7 +960,7 @@ update_interface_lag_eligibility(struct iface_data *idp)
 } /* update_interface_lag_eligibility */
 
 /**
- * Handles LAG related configuration changes for a given port table entry.
+ * Handles Port related configuration changes for a given port table entry.
  *
  * @param row pointer to port row in IDL.
  * @param portp pointer to daemon's internal port data struct.
@@ -949,7 +968,7 @@ update_interface_lag_eligibility(struct iface_data *idp)
  * @return
  */
 static int
-handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
+handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
 {
     enum ovsrec_port_lacp_e lacp_mode;
     struct ovsrec_interface *intf;
@@ -958,58 +977,7 @@ handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
     int rc = 0;
     size_t i;
 
-    lacp_mode = PORT_LACP_OFF;
-    if (row->lacp) {
-        if (strcmp(OVSREC_PORT_LACP_ACTIVE, row->lacp) == 0) {
-            lacp_mode = PORT_LACP_ACTIVE;
-        } else if (strcmp(OVSREC_PORT_LACP_PASSIVE, row->lacp) == 0) {
-            lacp_mode = PORT_LACP_PASSIVE;
-        }
-    }
-    if (portp->lacp_mode != lacp_mode) {
-        VLOG_DBG("port %s:lacp_mode changed  %d -> %d",
-                 row->name, portp->lacp_mode, lacp_mode);
-
-        /* LACP mode changed.  In either case, mark all existing interfaces
-         * as ineligible to detach them first.  Then the interfaces will be
-         * reconfigured based on the new LACP mode. */
-        SHASH_FOR_EACH_SAFE(node, next, &portp->eligible_member_ifs) {
-            struct iface_data *idp =
-                shash_find_data(&all_interfaces, node->name);
-            set_interface_lag_eligibility(portp, idp, false);
-        }
-
-        if (!LACP_ENABLED_ON_PORT(portp->lacp_mode)) {
-            /* LACP was not on (static LAG).  Need to turn on LACP. */
-
-            /* Create super port in LACP state machine. */
-            if (!portp->lag_id) {
-                portp->lag_id = alloc_lag_id();
-            }
-
-            if (portp->lag_id) {
-                /* Send LAG creation information. */
-                send_lag_create_msg(portp->lag_id);
-
-                /* Send LAG configuration information
-                 * NOTE: Halon now controls actor_key and port type
-                 *       parameters, so we'll simply initialize them
-                 *       with default values.
-                 * HALON_TODO: Allow the user to configure actor_key.
-                 */
-                send_config_lag_msg(portp->lag_id,
-                                    portp->lag_id, /* Just use LAGID as actor key...*/
-                                    PM_LPORT_INVALID);
-            } else {
-                VLOG_ERR("Failed to allocate LAGID for port %s!", portp->name);
-            }
-        }
-
-        /* Save new LACP mode. */
-        portp->lacp_mode = lacp_mode;
-    }
-
-    VLOG_DBG("%s: port %s n_interfaces=%d",
+    VLOG_DBG("%s: port %s, n_interfaces=%d",
              __FUNCTION__, row->name, (int)row->n_interfaces);
 
     /* Build a new map for this port's interfaces in idl. */
@@ -1021,7 +989,7 @@ handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
         }
     }
 
-    /* Look for deleted interfaces. */
+    /* Process deleted interfaces first. */
     SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
         struct ovsrec_interface *ifrow =
             shash_find_data(&sh_idl_port_intfs, node->name);
@@ -1038,6 +1006,70 @@ handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
         }
     }
 
+    /* Update LACP mode for existing interfaces. */
+    lacp_mode = PORT_LACP_OFF;
+    if (row->lacp) {
+        if (strcmp(OVSREC_PORT_LACP_ACTIVE, row->lacp) == 0) {
+            lacp_mode = PORT_LACP_ACTIVE;
+        } else if (strcmp(OVSREC_PORT_LACP_PASSIVE, row->lacp) == 0) {
+            lacp_mode = PORT_LACP_PASSIVE;
+        }
+    }
+
+    if (portp->lacp_mode != lacp_mode) {
+        VLOG_DBG("port %s:lacp_mode changed  %s -> %s",
+                 row->name, lacp_mode_str(portp->lacp_mode),
+                 lacp_mode_str(lacp_mode));
+
+        /* LACP mode changed.  In either case, mark all existing interfaces
+         * as ineligible to detach them first.  Then the interfaces will be
+         * reconfigured based on the new LACP mode. */
+        SHASH_FOR_EACH_SAFE(node, next, &portp->eligible_member_ifs) {
+            struct iface_data *idp =
+                shash_find_data(&all_interfaces, node->name);
+            set_interface_lag_eligibility(portp, idp, false);
+        }
+
+        if (!LACP_ENABLED_ON_PORT(portp)) {
+            /* LACP was not on (static LAG).  Need to turn on LACP. */
+
+            /* Create super port in LACP state machine. */
+            if (!portp->lag_id) {
+                portp->lag_id = alloc_lag_id();
+            }
+
+            if (portp->lag_id) {
+                /* Send LAG creation information. */
+                send_lag_create_msg(portp->lag_id);
+
+                /* Send LAG configuration information.
+                 * We control actor_key and port type parameters,
+                 * so we'll simply initialize them with default values.
+                 * For now, just use LAG ID as actor key.
+                 * HALON_TODO: Allow the user to configure actor_key.
+                 */
+                send_config_lag_msg(portp->lag_id,
+                                    portp->lag_id, /* actor key*/
+                                    PM_LPORT_INVALID);
+            } else {
+                VLOG_ERR("Failed to allocate LAGID for port %s!", portp->name);
+            }
+
+        } else {
+            /* LACP was on (dynamic LAG).  Need to turn off LACP. */
+
+            /* Delete super port in LACP state machine. */
+            if (portp->lag_id) {
+                send_lag_delete_msg(portp->lag_id);
+                free_lag_id(portp->lag_id);
+                portp->lag_id = 0;
+            }
+        }
+
+        /* Save new LACP mode. */
+        portp->lacp_mode = lacp_mode;
+    }
+
     /* Look for newly added interfaces. */
     SHASH_FOR_EACH(node, &sh_idl_port_intfs) {
         struct ovsrec_interface *ifrow =
@@ -1047,7 +1079,7 @@ handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
             struct iface_data *idp =
                 shash_find_data(&all_interfaces, node->name);
             if (!idp) {
-                VLOG_ERR("Error adding interface to port %s."
+                VLOG_ERR("Error adding interface to port %s. "
                          "Interface %s not found.",
                          portp->name, node->name);
                 continue;
@@ -1071,7 +1103,7 @@ handle_lag_config(const struct ovsrec_port *row, struct port_data *portp)
     shash_destroy(&sh_idl_port_intfs);
 
     return rc;
-} /* handle_lag_config */
+} /* handle_port_config */
 
 static int
 del_old_port(struct shash_node *sh_node)
@@ -1117,10 +1149,8 @@ add_new_port(const struct ovsrec_port *port_row)
     } else {
         size_t i;
 
-        portp->lag_id = 0;
         portp->name = xstrdup(port_row->name);
         portp->lacp_mode = PORT_LACP_OFF;
-        portp->lag_member_speed = 0;
         shash_init(&portp->cfg_member_ifs);
         shash_init(&portp->eligible_member_ifs);
 
@@ -1131,7 +1161,7 @@ add_new_port(const struct ovsrec_port *port_row)
             intf = port_row->interfaces[i];
             idp = shash_find_data(&all_interfaces, intf->name);
             if (!idp) {
-                VLOG_ERR("Error adding interface to new port %s."
+                VLOG_ERR("Error adding interface to new port %s. "
                          "Interface %s not found.",
                          portp->name, intf->name);
                 continue;
@@ -1195,9 +1225,8 @@ update_port_cache(void)
         if (OVSREC_IDL_IS_ROW_INSERTED(row, idl_seqno) ||
             OVSREC_IDL_IS_ROW_MODIFIED(row, idl_seqno)) {
             struct port_data *portp = sh_node->data;
-
-            /* Handle LAG config update. */
-            if (handle_lag_config(row, portp)) {
+            /* Handle Port config update. */
+            if (handle_port_config(row, portp)) {
                 rc++;
             }
         }
@@ -1323,6 +1352,9 @@ lacpd_wait(void)
     ovsdb_idl_wait(idl);
 } /* lacpd_wait */
 
+/**********************************************************************/
+/* Interface attach/detach functions called from LACP state machine.  */
+/**********************************************************************/
 static void
 lacpd_thread_intf_update_hw_bond_config(struct iface_data *idp,
                                         bool update_rx, bool rx_enabled,
@@ -1359,14 +1391,21 @@ halon_attach_port_in_hw(uint16_t lag_id, int port)
 {
     struct iface_data *idp = NULL;
 
+    VLOG_DBG("%s: lag_id=%d, port=%d", __FUNCTION__, lag_id, port);
+
     idp = find_iface_data_by_index(port);
     if (idp) {
-        /* Attaching port means just RX. */
-        lacpd_thread_intf_update_hw_bond_config(idp,
-                                                true,   /* update_rx */
-                                                true,   /* rx_enabled */
-                                                false,  /* update_tx */
-                                                false); /* tx_enabled */
+        if (idp->lacp_state == LACP_STATE_ENABLED) {
+            /* Attaching port means just RX. */
+            lacpd_thread_intf_update_hw_bond_config(idp,
+                                                    true,   /* update_rx */
+                                                    true,   /* rx_enabled */
+                                                    false,  /* update_tx */
+                                                    false); /* tx_enabled */
+        } else {
+            VLOG_ERR("LACP state machine trying to attach port %d "
+                     "when LACP is not enabled!", port);
+        }
     } else {
         VLOG_ERR("Failed to find interface data for attaching port in hw. "
                  "port index=%d", port);
@@ -1378,14 +1417,23 @@ halon_detach_port_in_hw(uint16_t lag_id, int port)
 {
     struct iface_data *idp = NULL;
 
+    VLOG_DBG("%s: lag_id=%d, port=%d", __FUNCTION__, lag_id, port);
+
     idp = find_iface_data_by_index(port);
     if (idp) {
-        /* Detaching port means both RX/TX are disabled. */
-        lacpd_thread_intf_update_hw_bond_config(idp,
-                                                true,   /* update_rx */
-                                                false,  /* rx_enabled */
-                                                true,   /* update_tx */
-                                                false); /* tx_enabled */
+        if (idp->lacp_state == LACP_STATE_ENABLED) {
+            /* Detaching port means both RX/TX are disabled. */
+            lacpd_thread_intf_update_hw_bond_config(idp,
+                                                    true,   /* update_rx */
+                                                    false,  /* rx_enabled */
+                                                    true,   /* update_tx */
+                                                    false); /* tx_enabled */
+        } else {
+            /* Probably just a race condition between static <-> dynamic
+             * LAG conversion.  Ignore the request. */
+            VLOG_DBG("Ignoring detach port request from LACP state "
+                     "machine. LACP is not enabled on %d", port);
+        }
     } else {
         VLOG_ERR("Failed to find interface data for attaching port in hw. "
                  "port index=%d", port);
@@ -1404,14 +1452,21 @@ halon_trunk_port_egr_enable(uint16_t lag_id, int port)
 {
     struct iface_data *idp = NULL;
 
+    VLOG_DBG("%s: lag_id=%d, port=%d", __FUNCTION__, lag_id, port);
+
     idp = find_iface_data_by_index(port);
     if (idp) {
-        /* Egress enable means TX. */
-        lacpd_thread_intf_update_hw_bond_config(idp,
-                                                false, /* update_rx */
-                                                false, /* rx_enabled */
-                                                true,  /* update_tx */
-                                                true); /* tx_enabled */
+        if (idp->lacp_state == LACP_STATE_ENABLED) {
+            /* Egress enable means TX. */
+            lacpd_thread_intf_update_hw_bond_config(idp,
+                                                    false, /* update_rx */
+                                                    false, /* rx_enabled */
+                                                    true,  /* update_tx */
+                                                    true); /* tx_enabled */
+        } else {
+            VLOG_ERR("LACP state machine trying to enable egress on "
+                     "port %d when LACP is not enabled!", port);
+        }
     } else {
         VLOG_ERR("Failed to find interface data for egress enable. "
                  "port index=%d", port);
@@ -1440,7 +1495,16 @@ db_update_lag_partner_info(uint16_t lag_id,
 /**********************************************************************/
 /*                               DEBUG                                */
 /**********************************************************************/
-#define MEGA_BITS_PER_SEC  1000000
+static char *
+lacp_mode_str(enum ovsrec_port_lacp_e mode)
+{
+    switch (mode) {
+    case PORT_LACP_OFF:     return OVSREC_PORT_LACP_OFF;
+    case PORT_LACP_ACTIVE:  return OVSREC_PORT_LACP_ACTIVE;
+    case PORT_LACP_PASSIVE: return OVSREC_PORT_LACP_PASSIVE;
+    default:                return "???";
+    }
+} /* lacp_mode_str */
 
 static void
 lacpd_interface_dump(struct ds *ds, struct iface_data *idp)
@@ -1450,9 +1514,8 @@ lacpd_interface_dump(struct ds *ds, struct iface_data *idp)
                   idp->link_state == INTERFACE_LINK_STATE_UP
                   ? OVSREC_INTERFACE_LINK_STATE_UP :
                   OVSREC_INTERFACE_LINK_STATE_DOWN);
-    /* Convert OVS's bps to Mbps to make it easier to read. */
     ds_put_format(ds, "    link_speed           : %d Mbps\n",
-                  (idp->link_speed/MEGA_BITS_PER_SEC));
+                  INTF_TO_LACP_LINK_SPEED(idp->link_speed));
     ds_put_format(ds, "    duplex               : %s\n",
                   idp->duplex == INTERFACE_DUPLEX_FULL
                   ? OVSREC_INTERFACE_DUPLEX_FULL :
@@ -1496,11 +1559,7 @@ lacpd_port_dump(struct ds *ds, struct port_data *portp)
 
     ds_put_format(ds, "Port %s:\n", portp->name);
     ds_put_format(ds, "    lacp                 : %s\n",
-                  (portp->lacp_mode == PORT_LACP_ACTIVE)
-                  ? OVSREC_PORT_LACP_ACTIVE :
-                  ((portp->lacp_mode == PORT_LACP_PASSIVE)
-                   ? OVSREC_PORT_LACP_PASSIVE :
-                   OVSREC_PORT_LACP_OFF));
+                  lacp_mode_str(portp->lacp_mode));
     ds_put_format(ds, "    lag_member_speed     : %d\n",
                   portp->lag_member_speed);
     ds_put_format(ds, "    configured_members   :");
@@ -1571,7 +1630,6 @@ lacpd_debug_dump(struct ds *ds, int argc, const char *argv[])
 /**********************************************************************/
 /*                        OVS Main Thread                             */
 /**********************************************************************/
-
 /**
  * Cleanup function at daemon shutdown time.
  */
