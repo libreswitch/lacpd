@@ -42,10 +42,13 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <netinet/ether.h>
+#include <ctype.h>
 
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
 #include <nemo/protocol/lacp/api.h>
+
+#include <hc-utils.h>
 
 #include "lacp_halon_if.h"
 #include "lacp.h"
@@ -55,6 +58,7 @@
 #include <unixctl.h>
 #include <dynamic-string.h>
 #include <openhalon-idl.h>
+#include <openhalon-dflt.h>
 #include <openvswitch/vlog.h>
 #include <poll-loop.h>
 #include <hash.h>
@@ -70,6 +74,9 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
 #define LACP_ENABLED_ON_PORT(p)    ((p)->lacp_mode == PORT_LACP_PASSIVE || \
                                     (p)->lacp_mode == PORT_LACP_ACTIVE)
 
+#define IS_VALID_SYS_PRIO(p)       (((p) >= MIN_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY) && \
+                                    ((p) <= MAX_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY))
+
 /* Scale OVS interface speed number (bps) down to
  * that used by LACP state machine (Mbps). */
 #define MEGA_BITS_PER_SEC  1000000
@@ -78,6 +85,8 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
 struct ovsdb_idl *idl;           /*!< Session handle for OVSDB IDL session. */
 static unsigned int idl_seqno;
 static int system_configured = false;
+static char system_id[HC_MAC_STR_SIZE] = {0};
+static int system_priority = DFLT_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY;
 
 /**
  * A hash map of daemon's internal data for all the interfaces maintained by
@@ -136,6 +145,7 @@ static char *lacp_mode_str(enum ovsrec_port_lacp_e mode);
 /**********************************************************************/
 /*                               UTILS                                */
 /**********************************************************************/
+
 static void
 init_lag_id_pool(uint16_t count)
 {
@@ -243,13 +253,6 @@ alloc_msg(int size)
     return msg;
 } /* alloc_msg */
 
-#if 0
-/* HALON_TODO: OVS defines system_priority as part of Port table,
- * under other_config:lacp_system_priority.  Port table also has the
- * system ID (MAC) address under other_config:lacp_system_id.  These
- * two attributes should not be configurable on a per-Port (LAG) basis.
- * System ID & priority should be defined at the system level, e.g.
- * under Open_vSwitch, Subsystem, or Bridge table. TBD. */
 static void
 send_sys_pri_msg(int priority)
 {
@@ -274,7 +277,6 @@ send_sys_pri_msg(int priority)
         ml_send_event(event);
     }
 } /* send_sys_pri_msg */
-#endif
 
 static void
 send_sys_mac_msg(struct ether_addr *macAddr)
@@ -550,6 +552,8 @@ lacpd_ovsdb_if_init(const char *db_path)
     /* Cache Open_vSwitch table. */
     ovsdb_idl_add_table(idl, &ovsrec_table_open_vswitch);
     ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_cur_cfg);
+    ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_system_mac);
+    ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_lacp_config);
 
     /* Cache Subsystem table. */
     ovsdb_idl_add_table(idl, &ovsrec_table_subsystem);
@@ -1238,16 +1242,80 @@ update_port_cache(void)
     return rc;
 } /* update_port_cache */
 
+static void
+update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_init)
+{
+    bool sys_mac_changed = false;
+    const char *sys_mac = NULL;
+    int sys_prio = -1;
+    struct ether_addr *eth_addr;
+
+    if (ovs_vsw) {
+
+        /* See if user set lacp-system-id */
+        sys_mac = smap_get(&(ovs_vsw->lacp_config),
+                      OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_ID);
+        /* If LACP system ID is not configured, then use system mac. */
+        if (sys_mac == NULL || (strlen(sys_mac) != HC_MAC_STR_SIZE - 1)) {
+            if (lacpd_init) {
+                sys_mac = ovs_vsw->system_mac;
+            } else {
+                sys_mac = system_id;
+            }
+        }
+
+        if (sys_mac == NULL || (strlen(sys_mac) != HC_MAC_STR_SIZE - 1)) {
+            VLOG_FATAL("LACP System ID is not available.");
+        }
+
+        if (strcmp(sys_mac, system_id) != 0) {
+            sys_mac_changed = true;
+        }
+
+        if (sys_mac_changed || lacpd_init) {
+            eth_addr = ether_aton(sys_mac);
+            if (eth_addr) {
+
+                send_sys_mac_msg(eth_addr);
+
+                /* Only save after we know it is a valid MAC addr */
+                strncpy(system_id, sys_mac, HC_MAC_STR_SIZE);
+            }
+        }
+
+        /* Send system priority */
+
+        /* See if user set lacp-system-priority */
+        sys_prio = smap_get_int(&(ovs_vsw->lacp_config),
+                                OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_PRIORITY, -1);
+
+        if (IS_VALID_SYS_PRIO(sys_prio) || lacpd_init) {
+
+            if (IS_VALID_SYS_PRIO(sys_prio)) {
+                system_priority = sys_prio;
+            }
+            send_sys_pri_msg(system_priority);
+        }
+    }
+}
+/* update_system_prio_n_id */
+
+
 static int
 lacpd_reconfigure(void)
 {
     int rc = 0;
     unsigned int new_idl_seqno = ovsdb_idl_get_seqno(idl);
+    const struct ovsrec_open_vswitch *ovs_vsw = NULL;
 
     if (new_idl_seqno == idl_seqno) {
         /* There was no change in the DB. */
         return 0;
     }
+
+    /* Update system priority and system id */
+    ovs_vsw = ovsrec_open_vswitch_first(idl);
+    update_system_prio_n_id(ovs_vsw, false);
 
     /* Update lacpd's Interfaces table cache. */
     if (update_interface_cache()) {
@@ -1277,27 +1345,11 @@ lacpd_chk_for_system_configured(void)
 
     ovs_vsw = ovsrec_open_vswitch_first(idl);
     if (ovs_vsw && ovs_vsw->cur_cfg > (int64_t)0) {
-        const char *sys_mac;
-        const struct ovsrec_subsystem *ovs_subsys = NULL;
 
-        /* HALON_TODO: temprarily using base_mac_address, which is
-         * used for interface MACs.  We really need to reserve one
-         * dedicated to the entire switching system. */
-        /* HALON_TODO: handle multiple subsystems. */
-        ovs_subsys = ovsrec_subsystem_first(idl);
+        /* Send system id (MAC) and system priority */
+        update_system_prio_n_id(ovs_vsw, true);
 
-        if (ovs_subsys) {
-            sys_mac = smap_get(&ovs_subsys->other_info, "base_mac_address");
-            if (sys_mac) {
-                struct ether_addr *eth_addr;
-                eth_addr = ether_aton(sys_mac);
-                send_sys_mac_msg(eth_addr);
-
-                system_configured = true;
-                VLOG_INFO("System is now configured (cur_cfg=%d, sys_mac=%s).",
-                          (int)ovs_vsw->cur_cfg, sys_mac);
-            }
-        }
+        system_configured = true;
     }
 
 } /* lacpd_chk_for_system_configured */

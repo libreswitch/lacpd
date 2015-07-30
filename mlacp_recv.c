@@ -186,6 +186,7 @@ mlacp_process_api_msg(ML_event *pevent)
             unsigned char *mac_addr = pMsg->actor_sys_mac;
 
             memcpy(my_mac_addr, mac_addr, MAC_ADDR_LENGTH);
+            set_all_port_system_mac_addr();
 
             RDEBUG(DL_LACP_RCV, "Set sys mac addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
                    my_mac_addr[0], my_mac_addr[1], my_mac_addr[2],

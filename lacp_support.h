@@ -147,6 +147,7 @@ extern void LACP_poll_link_state(lacp_per_port_variables_t *);
 extern void display_marker_response_pdu(marker_pdu_payload_t *, char *, char *, int);
 extern void LACPPutPortUp(ulong);
 extern void set_all_port_system_priority(void);
+extern void set_all_port_system_mac_addr(void);
 extern void lacp_support_diag_dump(int port);
 
 /*****************************************************************************

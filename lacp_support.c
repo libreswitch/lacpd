@@ -1716,6 +1716,26 @@ mlacpVapiLinkDown(port_handle_t lport_handle)
 } /* mlacpVapiLinkDown */
 
 //*****************************************************************
+// Function : set_all_port_system_mac_addr
+//*****************************************************************
+void
+set_all_port_system_mac_addr(void)
+{
+    lacp_per_port_variables_t *plpinfo;
+
+    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+
+    while (plpinfo) {
+        memcpy(plpinfo->actor_admin_system_variables.system_mac_addr, my_mac_addr,
+               MAC_ADDR_LENGTH);
+        memcpy(plpinfo->actor_oper_system_variables.system_mac_addr, my_mac_addr,
+               MAC_ADDR_LENGTH);
+        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+    }
+
+} /* set_all_port_system_mac_addr */
+
+//*****************************************************************
 // Function : set_all_port_system_priority
 //*****************************************************************
 void
