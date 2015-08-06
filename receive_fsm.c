@@ -52,6 +52,8 @@
 #include "lacp.h"
 #include "lacp_stubs.h"
 #include "lacp_support.h"
+#include "lacp_halon.h"
+#include "lacp_halon_if.h"
 
 VLOG_DEFINE_THIS_MODULE(receive_fsm);
 
@@ -259,6 +261,8 @@ LACP_receive_fsm(int event, int current_state,
     default:
         break;
     }
+
+    db_update_interface(plpinfo);
 
     REXIT();
 
