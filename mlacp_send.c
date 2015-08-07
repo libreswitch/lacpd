@@ -223,7 +223,7 @@ mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port)
 #endif
 
         // Update DB with new info.
-        db_add_lag_port(lag_id, port);
+        db_add_lag_port(lag_id, port, lacp_port);
 
         // Set indicator.
         lacp_port->hw_attached_to_mux = TRUE;
@@ -279,7 +279,7 @@ mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
 #endif
 
         // Update DB with new info.
-        db_delete_lag_port(lag_id, port);
+        db_delete_lag_port(lag_id, port, lacp_port);
 
         // Clear out indicator.
         lacp_port->hw_collecting = FALSE;

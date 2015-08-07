@@ -904,7 +904,7 @@ mvlan_api_clear_sport_params(unsigned long long sport_handle)
     // All logical ports have been detached from this aggregator (sport).
     // Clean up partner information so that we can reuse this sport
     // for subsequent aggregation.
-    RDEBUG(DL_VPM, "Clearing LAG.%d info in MED, port_type was %d",
+    RDEBUG(DL_VPM, "Clearing LAG.%d info, port_type was %d",
            (int)PM_HANDLE2LAG(psport->handle),
            sport_lacp_params->lacp_params.port_type);
 

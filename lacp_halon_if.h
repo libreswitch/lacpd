@@ -116,6 +116,14 @@
 #include <dynamic-string.h>
 #include <vswitch-idl.h>
 #include "vpm/mvlan_lacp.h"
+#include "lacp.h"
+
+struct lacp_status_values {
+    char *system_id;
+    char *port_id;
+    char *key;
+    char *state;
+};
 
 /*************************************************************************//**
  * @ingroup lacpd_ovsdb_if
@@ -133,22 +141,30 @@ struct iface_data {
     /* These members are valid only within lacpd_reconfigure(). */
     const struct ovsrec_interface *cfg;     /*!< pointer to corresponding row in IDL cache */
 
-    int      index;                         /*!< Allocated index for interface */
+    int                 index;              /*!< Allocated index for interface */
+    int                 hw_port_number;     /*!< Hardware port number */
     enum PM_lport_type  cycl_port_type;     /*!< Cyclone port type */
 
     /* Configuration information from LACP element. */
-    uint16_t cfg_lag_id;       /*!< Configured LAG_ID */
-    int      lacp_state;       /*!< 0=disabled, 1=enabled */
-    int      actor_priority;   /*!< Integer */
-    int      actor_key;        /*!< Integer */
-    int      aggregateable;    /*!< 0=no, 1=yes */
-    int      activity_mode;    /*!< 0=passive, 1=active */
-    int      timeout_mode;     /*!< 0=long, 1=short */
-    int      collecting_ready; /*!< hardware is ready to collect */
+    uint16_t            cfg_lag_id;         /*!< Configured LAG_ID */
+    int                 lacp_state;         /*!< 0=disabled, 1=enabled */
+    int                 actor_priority;     /*!< Integer */
+    int                 actor_key;          /*!< Integer */
+    int                 aggregateable;      /*!< 0=no, 1=yes */
+    int                 activity_mode;      /*!< 0=passive, 1=active */
+    int                 timeout_mode;       /*!< 0=long, 1=short */
+    int                 collecting_ready;   /*!< hardware is ready to collect */
 
     /* LACPDU send/receive related. */
-    int      pdu_sockfd;       /*!< Socket FD for LACPDU rx/tx */
-    bool     pdu_registered;   /*!< Indicates if port is registered to receive LACPDU */
+    int                 pdu_sockfd;         /*!< Socket FD for LACPDU rx/tx */
+    bool                pdu_registered;     /*!< Indicates if port is registered to receive LACPDU */
+
+    /* LACP status values formatted */
+    struct lacp_status_values actor;        /*!< Currently set lacp status values - actor */
+    struct lacp_status_values partner;      /*!< Currently set lacp status values - partner */
+    bool                      lacp_current; /*!< Currently set lacp_current value */
+    bool                      lacp_current_set; /*!< false=lacp_current is not set, true=lacp_current is set */
+    struct state_parameters   local_state;
 };
 
 /**
@@ -165,8 +181,10 @@ extern void halon_send_lacpdu(unsigned char* data, int len, int port);
 // LAG status update functions
 extern void db_update_lag_partner_info(uint16_t lag_id, lacp_sport_params_t *param);
 extern void db_clear_lag_partner_info(uint16_t lag_id);
-extern void db_add_lag_port(uint16_t lag_id, int port);
-extern void db_delete_lag_port(uint16_t lag_id, int port);
+extern void db_add_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo);
+extern void db_delete_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo);
+
+extern void db_update_interface(lacp_per_port_variables_t *plpinfo);
 
 // Utility functions
 extern const char *find_ifname_by_index(int index);

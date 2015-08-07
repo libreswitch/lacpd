@@ -53,6 +53,7 @@
 #include "lacp_stubs.h"
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
+#include "lacp_halon_if.h"
 
 VLOG_DEFINE_THIS_MODULE(mux_fsm);
 
@@ -267,6 +268,9 @@ LACP_mux_fsm(int event,
         default:
         break;
     }
+
+    /* update interface lacp_status data with any changes */
+    db_update_interface(plpinfo);
 
     REXIT();
 } // LACP_mux_fsm

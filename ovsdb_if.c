@@ -46,6 +46,7 @@
 
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
+#include <nemo/lacp/lacp_fsm.h>
 #include <nemo/protocol/lacp/api.h>
 
 #include <hc-utils.h>
@@ -70,6 +71,27 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
  * @ingroup lacpd_ovsdb_if
  * @{
  **************************************/
+
+/*********************************
+ *
+ * Pool definitions
+ *
+ *********************************/
+#define BITS_PER_BYTE   8
+
+#define IS_AVAILABLE(a, idx)  ((a[idx/BITS_PER_BYTE] & (1 << (idx % BITS_PER_BYTE))) == 0)
+
+#define CLEAR(a, idx)   a[idx/BITS_PER_BYTE] &= ~(1 << (idx % BITS_PER_BYTE))
+#define SET(a, idx)     a[idx/BITS_PER_BYTE] |= (1 << (idx % BITS_PER_BYTE))
+
+#define POOL(name, size)     unsigned char name[size/BITS_PER_BYTE+1]
+
+int allocate_next(unsigned char *pool, int size);
+static void free_index(unsigned char *pool, int idx);
+
+POOL(port_index, 256);
+
+/*********************************************************/
 
 #define LACP_ENABLED_ON_PORT(p)    ((p)->lacp_mode == PORT_LACP_PASSIVE || \
                                     (p)->lacp_mode == PORT_LACP_ACTIVE)
@@ -106,11 +128,23 @@ static struct shash all_ports = SHASH_INITIALIZER(&all_ports);
 struct port_data {
     char                *name;              /*!< Name of the port */
     uint16_t            lag_id;             /*!< LAG ID of the port */
-    struct shash        cfg_member_ifs;     /*!< configured member interfaces */
+    struct shash        cfg_member_ifs;     /*!< Configured member interfaces */
     struct shash        eligible_member_ifs;/*!< Interfaces eligible to form a LAG */
+    struct shash        participant_ifs;    /*!< Interfaces currently in LAG */
     enum ovsrec_port_lacp_e lacp_mode;      /*!< port's LACP mode */
     unsigned int        lag_member_speed;   /*!< link speed of LAG members */
+    const struct ovsrec_port *cfg;          /*!< Port's idl entry */
+    char                *speed_str;         /*!< Most recent speed value */
+
+    int                 current_status;     /*!< Currently recorded status of LAG */
 };
+
+/* current_status values */
+#define STATUS_UNINITIALIZED    0
+#define STATUS_DOWN             1
+#define STATUS_UP               2
+#define STATUS_DEFAULTED        3
+#define STATUS_LACP_DISABLED    4
 
 /* NOTE: These LAG IDs are only used for LACP state machine.
  *       They are not necessarily the same as h/w LAG ID. */
@@ -136,11 +170,13 @@ pthread_mutex_t ovsdb_mutex = PTHREAD_MUTEX_INITIALIZER;
                 pthread_mutex_unlock(&ovsdb_mutex); \
 }
 
-
 static int update_interface_lag_eligibility(struct iface_data *idp);
 static int update_interface_hw_bond_config_map_entry(struct iface_data *idp,
                                                      const char *key, const char *value);
 static char *lacp_mode_str(enum ovsrec_port_lacp_e mode);
+static void db_clear_interface(struct iface_data *idp);
+static void db_update_port_status(struct port_data *portp);
+void db_clear_lag_partner_info_port(struct port_data *portp);
 
 /**********************************************************************/
 /*                               UTILS                                */
@@ -204,6 +240,23 @@ free_lag_id(uint16_t id)
 
 } /* free_lag_id */
 
+struct port_data *
+find_port_data_by_lag_id(int lag_id)
+{
+    struct port_data *pdp;
+    struct shash_node *sh_node;
+    SHASH_FOR_EACH(sh_node, &all_ports) {
+        pdp = sh_node->data;
+        if (pdp) {
+            if (pdp->lag_id == lag_id) {
+                return pdp;
+            }
+        }
+    }
+
+    return NULL;
+} /* find_port_data_by_lag_id */
+
 struct iface_data *
 find_iface_data_by_index(int index)
 {
@@ -235,6 +288,19 @@ find_ifname_by_index(int index)
     }
 
 } /* find_ifname_by_index */
+
+int
+find_hw_port_number_by_index(int index)
+{
+    struct iface_data *idp;
+
+    idp = find_iface_data_by_index(index);
+    if (idp) {
+        return idp->hw_port_number;
+    } else {
+        return -1;
+    }
+}
 
 /**********************************************************************/
 /*              Configuration Message Sending Utilities               */
@@ -394,8 +460,8 @@ send_config_lport_msg(struct iface_data *info_ptr)
     struct MLt_vpm_api__lport_lacp_change *msg;
     int msgSize;
 
-    VLOG_DBG("%s: port=%s, index=%d", __FUNCTION__,
-             info_ptr->name, info_ptr->index);
+    VLOG_DBG("%s: port=%s, hw_port=%d, index=%d", __FUNCTION__,
+             info_ptr->name, info_ptr->hw_port_number, info_ptr->index);
 
     msgSize = sizeof(ML_event) + sizeof(struct MLt_vpm_api__lport_lacp_change);
 
@@ -443,8 +509,8 @@ send_lport_lacp_change_msg(struct iface_data *info_ptr, unsigned int flags)
     struct MLt_vpm_api__lport_lacp_change *msg;
     int msgSize;
 
-    VLOG_DBG("%s: port=%s, index=%d, flags=0x%x", __FUNCTION__,
-             info_ptr->name, info_ptr->index, flags);
+    VLOG_DBG("%s: port=%s, hw_port=%d, index=%d, flags=0x%x", __FUNCTION__,
+             info_ptr->name, info_ptr->hw_port_number, info_ptr->index, flags);
 
     msgSize = sizeof(ML_event)+sizeof(struct MLt_vpm_api__lport_lacp_change);
 
@@ -564,6 +630,8 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_column(idl, &ovsrec_port_col_name);
     ovsdb_idl_add_column(idl, &ovsrec_port_col_lacp);
     ovsdb_idl_add_column(idl, &ovsrec_port_col_interfaces);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_lacp_status);
+    ovsdb_idl_omit_alert(idl, &ovsrec_port_col_lacp_status);
 
     /* Cache Inteface table and columns. */
     ovsdb_idl_add_table(idl, &ovsrec_table_interface);
@@ -574,6 +642,10 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_hw_bond_config);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_hw_bond_config);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_hw_intf_info);
+    ovsdb_idl_add_column(idl, &ovsrec_interface_col_lacp_current);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_lacp_current);
+    ovsdb_idl_add_column(idl, &ovsrec_interface_col_lacp_status);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_lacp_status);
 
     /* Initialize LAG ID pool. */
     /* HALON_TODO: read # of LAGs from somewhere? */
@@ -595,6 +667,7 @@ del_old_interface(struct shash_node *sh_node)
     if (sh_node) {
         struct iface_data *idp = sh_node->data;
         free(idp->name);
+        free_index(port_index, idp->index);
         free(idp);
         shash_delete(&all_interfaces, sh_node);
     }
@@ -630,9 +703,13 @@ add_new_interface(const struct ovsrec_interface *ifrow)
         /* Allocate interface index. */
         /* -- use hw_intf_info:switch_intf_id for now.
          * -- may be overridden with OVS's other_config:lacp-port-id. */
-        idp->index = hw_id ? atoi(hw_id) : -1;
-        if (idp->index <= 0) {
-            VLOG_ERR("Invalid interface index, hw_id=%p, id=%d", hw_id, idp->index);
+        idp->index = allocate_next(port_index, 256);
+        if (idp->index < 0) {
+            VLOG_ERR("Invalid interface index=%d", idp->index);
+        }
+        idp->hw_port_number = hw_id ? atoi(hw_id) : -1;
+        if (idp->hw_port_number <= 0) {
+            VLOG_ERR("Invalid interface id, hw_id=%p, id=%d", hw_id, idp->hw_port_number);
         }
 
         idp->link_state = INTERFACE_LINK_STATE_DOWN;
@@ -668,6 +745,9 @@ add_new_interface(const struct ovsrec_interface *ifrow)
             idp,
             INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED,
             INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE);
+
+        idp->lacp_current = false;
+        idp->lacp_current_set = false;
 
         VLOG_DBG("Created local data for interface %s", ifrow->name);
     }
@@ -824,6 +904,8 @@ update_interface_hw_bond_config_map_entry(struct iface_data *idp,
 
     ovsrec_interface_set_hw_bond_config(ifrow, &smap);
 
+    smap_destroy(&smap);
+
     return 1;
 } /* update_interface_hw_bond_config_map_entry */
 
@@ -880,6 +962,7 @@ set_interface_lag_eligibility(struct port_data *portp, struct iface_data *idp,
         shash_find_and_delete(&portp->eligible_member_ifs, idp->name);
     }
     idp->lag_eligible = eligible;
+
 } /* set_interface_lag_eligibility */
 
 /**
@@ -1003,6 +1086,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
             if (idp) {
                 VLOG_DBG("Found a deleted interface %s", node->name);
                 shash_delete(&portp->cfg_member_ifs, node);
+                db_clear_interface(idp);
                 set_interface_lag_eligibility(portp, idp, false);
                 idp->port_datap = NULL;
                 rc++;
@@ -1062,12 +1146,29 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
         } else {
             /* LACP was on (dynamic LAG).  Need to turn off LACP. */
 
+            /* clear port lacp_status */
+            db_clear_lag_partner_info_port(portp);
+
+            /* clear interface lacp_status */
+            SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+                struct ovsrec_interface *ifrow =
+                    shash_find_data(&sh_idl_port_intfs, node->name);
+                if (ifrow) {
+                    struct iface_data *idp =
+                        shash_find_data(&all_interfaces, node->name);
+                    if (idp) {
+                        db_clear_interface(idp);
+                    }
+                }
+            }
+
             /* Delete super port in LACP state machine. */
             if (portp->lag_id) {
                 send_lag_delete_msg(portp->lag_id);
                 free_lag_id(portp->lag_id);
                 portp->lag_id = 0;
             }
+            rc++;
         }
 
         /* Save new LACP mode. */
@@ -1126,6 +1227,7 @@ del_old_port(struct shash_node *sh_node)
 
                 shash_delete(&portp->cfg_member_ifs, node);
                 set_interface_lag_eligibility(portp, idp, false);
+                db_clear_interface(idp);
                 idp->port_datap = NULL;
                 rc++;
             }
@@ -1153,10 +1255,12 @@ add_new_port(const struct ovsrec_port *port_row)
     } else {
         size_t i;
 
+        portp->cfg = port_row;
         portp->name = xstrdup(port_row->name);
         portp->lacp_mode = PORT_LACP_OFF;
         shash_init(&portp->cfg_member_ifs);
         shash_init(&portp->eligible_member_ifs);
+        shash_init(&portp->participant_ifs);
 
         for (i = 0; i < port_row->n_interfaces; i++) {
             struct ovsrec_interface *intf;
@@ -1354,6 +1458,315 @@ lacpd_chk_for_system_configured(void)
 
 } /* lacpd_chk_for_system_configured */
 
+static char *
+format_system_id(system_variables_t *system_id)
+{
+    char *result = NULL;
+    asprintf(&result, "%d,%02x:%02x:%02x:%02x:%02x:%02x",
+             system_id->system_priority,
+             htons(system_id->system_mac_addr[0]) >> 8,
+             htons(system_id->system_mac_addr[0]) & 0xff,
+             htons(system_id->system_mac_addr[1]) >> 8,
+             htons(system_id->system_mac_addr[1]) & 0xff,
+             htons(system_id->system_mac_addr[2]) >> 8,
+             htons(system_id->system_mac_addr[2]) & 0xff);
+
+    return result;
+}
+
+static char *
+format_port_id(u_short port_priority, u_short port_number)
+{
+    char *result = NULL;
+    asprintf(&result, "%d,%d", port_priority, port_number);
+
+    return result;
+}
+
+static char *
+format_key(u_short key)
+{
+    char *result = NULL;
+    asprintf(&result, "%d", key);
+
+    return result;
+}
+
+static char *
+format_state(state_parameters_t state)
+{
+    char *result = NULL;
+    asprintf(&result,
+             INTERFACE_LACP_STATUS_STATE_ACTIVE
+             ":%c,"
+             INTERFACE_LACP_STATUS_STATE_TIMEOUT
+             ":%c,"
+             INTERFACE_LACP_STATUS_STATE_AGGREGATION
+             ":%c,"
+             INTERFACE_LACP_STATUS_STATE_SYNCHRONIZATION
+             ":%c,"
+             INTERFACE_LACP_STATUS_STATE_COLLECTING
+             ":%c,"
+             INTERFACE_LACP_STATUS_STATE_DISTRIBUTING
+             ":%c,"
+             INTERFACE_LACP_STATUS_STATE_DEFAULTED
+             ":%c,"
+             INTERFACE_LACP_STATUS_STATE_EXPIRED
+             ":%c",
+             state.lacp_activity ? '1' : '0',
+             state.lacp_timeout ? '1' : '0',
+             state.aggregation ? '1' : '0',
+             state.synchronization ? '1' : '0',
+             state.collecting ? '1' : '0',
+             state.distributing ? '1' : '0',
+             state.defaulted ? '1' : '0',
+             state.expired ? '1' : '0');
+
+    return result;
+}
+
+static void
+db_clear_interface(struct iface_data *idp)
+{
+    bool *bptr = NULL;
+    const struct ovsrec_interface *ifrow;
+    struct smap smap;
+
+    /*
+     * Note that this can only be called in the context of
+     * the idl loop, so we are already holding the OVSDB_LOCK.
+     * More specifically, we've scheduled a txn, so we don't
+     * need to call ovsdb_idl_txn_create(), either.
+     */
+
+    VLOG_DBG("clearing interface %s lacpd status", idp->name);
+
+    ifrow = idp->cfg;
+
+    smap_init(&smap);
+
+    ovsrec_interface_set_lacp_status(ifrow, &smap);
+    ovsrec_interface_set_lacp_current(ifrow, bptr, 0);
+
+    idp->lacp_current = false;
+    idp->lacp_current_set = false;
+
+    smap_destroy(&smap);
+}
+
+void
+db_update_interface(lacp_per_port_variables_t *plpinfo)
+{
+    struct iface_data *idp = NULL;
+    int port = PM_HANDLE2PORT(plpinfo->lport_handle);
+    const struct ovsrec_interface *ifrow;
+    bool lacp_current;
+    struct ovsdb_idl_txn *txn = NULL;
+    bool changes = false;
+    bool smap_changes = false;
+    char *system_id, *port_id, *key, *state;
+    struct smap smap;
+    struct port_data *portp;
+
+    OVSDB_LOCK;
+
+    /* get interface data */
+    idp = find_iface_data_by_index(port);
+
+    if (idp == NULL) {
+        VLOG_WARN("Unable to find interface for hardware index %d", port);
+        goto end;
+    }
+
+    portp = idp->port_datap;
+
+    idp->local_state = plpinfo->actor_oper_port_state;
+
+    ifrow = idp->cfg;
+
+    txn = ovsdb_idl_txn_create(idl);
+
+    smap_clone(&smap, &ifrow->lacp_status);
+
+    /* actor data */
+    system_id = format_system_id(&plpinfo->actor_oper_system_variables);
+    port_id = format_port_id(plpinfo->actor_oper_port_priority, plpinfo->actor_oper_port_number);
+    key = format_key(plpinfo->actor_oper_port_key);
+    state = format_state(plpinfo->actor_oper_port_state);
+
+    if (idp->actor.system_id == NULL ||
+        strcmp(idp->actor.system_id, system_id) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_ACTOR_SYSTEM_ID, system_id);
+        free(idp->actor.system_id);
+        idp->actor.system_id = system_id;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:actor_system_id = %s)",
+            idp->name, system_id);
+    } else {
+        free(system_id);
+    }
+
+    if (idp->actor.port_id == NULL ||
+        strcmp(idp->actor.port_id, port_id) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_ACTOR_PORT_ID, port_id);
+        free(idp->actor.port_id);
+        idp->actor.port_id = port_id;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:actor_port_id = %s)",
+            idp->name, port_id);
+    } else {
+        free(port_id);
+    }
+
+    if (idp->actor.key == NULL ||
+        strcmp(idp->actor.key, key) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_ACTOR_KEY, key);
+        free(idp->actor.key);
+        idp->actor.key = key;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:actor_key = %s)",
+            idp->name, key);
+    } else {
+        free(key);
+    }
+
+    if (idp->actor.state == NULL ||
+        strcmp(idp->actor.state, state) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_ACTOR_STATE, state);
+        free(idp->actor.state);
+        idp->actor.state = state;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:actor_state = %s)",
+            idp->name, state);
+    } else {
+        free(state);
+    }
+
+    /* partner data */
+    system_id = format_system_id(&plpinfo->partner_oper_system_variables);
+    port_id = format_port_id(plpinfo->partner_oper_port_priority, plpinfo->partner_oper_port_number);
+    key = format_key(plpinfo->partner_oper_key);
+    state = format_state(plpinfo->partner_oper_port_state);
+
+    if (idp->partner.system_id == NULL ||
+        strcmp(idp->partner.system_id, system_id) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_PARTNER_SYSTEM_ID, system_id);
+        free(idp->partner.system_id);
+        idp->partner.system_id = system_id;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:partner_system_id = %s)",
+            idp->name, system_id);
+    } else {
+        free(system_id);
+    }
+
+    if (idp->partner.port_id == NULL ||
+        strcmp(idp->partner.port_id, port_id) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_PARTNER_PORT_ID, port_id);
+        free(idp->partner.port_id);
+        idp->partner.port_id = port_id;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:partner_port_id = %s)",
+            idp->name, port_id);
+    } else {
+        free(port_id);
+    }
+
+    if (idp->partner.key == NULL ||
+        strcmp(idp->partner.key, key) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_PARTNER_KEY, key);
+        free(idp->partner.key);
+        idp->partner.key = key;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:partner_key = %s)",
+            idp->name, key);
+    } else {
+        free(key);
+    }
+
+    if (idp->partner.state == NULL ||
+        strcmp(idp->partner.state, state) != 0) {
+        smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_PARTNER_STATE, state);
+        free(idp->partner.state);
+        idp->partner.state = state;
+        smap_changes = true;
+        VLOG_DBG("updating interface %s (lacp_status:partner_state = %s)",
+            idp->name, state);
+    } else {
+        free(state);
+    }
+
+    if (smap_changes) {
+        ovsrec_interface_set_lacp_status(ifrow, &smap);
+        changes = true;
+    }
+
+    smap_destroy(&smap);
+
+    /* lacp_current data */
+    lacp_current = (plpinfo->recv_fsm_state == RECV_FSM_CURRENT_STATE);
+
+    if (idp->lacp_current_set == false || idp->lacp_current != lacp_current) {
+        ovsrec_interface_set_lacp_current(ifrow, &lacp_current, 1);
+        VLOG_DBG("updating interface %s (lacp_current = %s)", idp->name,
+            lacp_current ? "true" : "false");
+        changes = true;
+        idp->lacp_current = lacp_current;
+        idp->lacp_current_set = true;
+    }
+
+    if (changes) {
+        ovsdb_idl_txn_commit_block(txn);
+    } else {
+        ovsdb_idl_txn_abort(txn);
+    }
+    ovsdb_idl_txn_destroy(txn);
+
+    if (plpinfo->lag != NULL) {
+        portp->lag_member_speed = lport_type_to_speed(ntohs(plpinfo->lag->port_type));
+    }
+
+    db_update_port_status(portp);
+
+end:
+    OVSDB_UNLOCK;
+} /* db_update_interface */
+
+/**********************************************************************
+ * Pool implementation: this is diferrent from the LAG pool manager.
+ * This is currently only used for allocating interface indexes.
+ **********************************************************************/
+int
+allocate_next(unsigned char *pool, int size)
+{
+    int idx = 0;
+
+    while (pool[idx] == 0xff && idx * BITS_PER_BYTE < size) {
+        idx++;
+    }
+
+    if (idx * BITS_PER_BYTE < size) {
+        idx *= BITS_PER_BYTE;
+
+        while (idx < size && !IS_AVAILABLE(pool, idx)) {
+            idx++;
+        }
+
+        if (idx < size && IS_AVAILABLE(pool, idx)) {
+            SET(pool, idx);
+            return idx;
+        }
+    }
+
+    return -1;
+} /* allocate_next */
+
+static void
+free_index(unsigned char *pool, int idx)
+{
+    CLEAR(pool, idx);
+} /* free_index */
+
 /**@} end of lacpd_ovsdb_if group */
 
 /***
@@ -1494,12 +1907,6 @@ halon_detach_port_in_hw(uint16_t lag_id, int port)
 } /* halon_detach_port_in_hw */
 
 void
-db_delete_lag_port(uint16_t lag_id, int port)
-{
-    VLOG_DBG("%s: HALON_TODO lag_id=%d, port=%d", __FUNCTION__, lag_id, port);
-} /* db_delete_lag_port */
-
-void
 halon_trunk_port_egr_enable(uint16_t lag_id, int port)
 {
     struct iface_data *idp = NULL;
@@ -1525,23 +1932,317 @@ halon_trunk_port_egr_enable(uint16_t lag_id, int port)
     }
 } /* halon_trunk_port_egr_enable */
 
-void
-db_add_lag_port(uint16_t lag_id, int port)
+static void
+db_update_port_status(struct port_data *portp)
 {
-    VLOG_DBG("%s: HALON_TODO lag_id=%d, port=%d", __FUNCTION__, lag_id, port);
+    const struct ovsrec_port *prow;
+    struct smap smap;
+    struct ovsdb_idl_txn *txn;
+    bool changed = false;
+    char *speed_str;
+
+    prow = portp->cfg;
+
+    smap_clone(&smap, &prow->lacp_status);
+
+    if (portp->lacp_mode == PORT_LACP_OFF && portp->current_status != STATUS_LACP_DISABLED)
+    {
+        smap_remove(&smap, PORT_LACP_STATUS_MAP_BOND_STATUS_REASON);
+        smap_remove(&smap, PORT_LACP_STATUS_MAP_BOND_STATUS);
+
+        if (shash_count(&portp->participant_ifs) == 0) {
+            portp->lag_member_speed = 0;
+        }
+
+        portp->current_status = STATUS_LACP_DISABLED;
+        changed = true;
+    } else if (shash_count(&portp->participant_ifs) == 0) {
+
+        if (portp->current_status != STATUS_DOWN) {
+            /* record port as non-operational */
+            VLOG_WARN("Port %s isn't operational - no interfaces working",
+                      portp->name);
+
+            smap_replace(&smap,
+                         PORT_LACP_STATUS_MAP_BOND_STATUS_REASON,
+                         "No operational interfaces in bond");
+
+            smap_replace(&smap,
+                         PORT_LACP_STATUS_MAP_BOND_STATUS,
+                         PORT_LACP_STATUS_BOND_STATUS_DOWN);
+
+            portp->lag_member_speed = 0;
+
+            portp->current_status = STATUS_DOWN;
+            changed = true;
+        }
+
+    } else if (shash_count(&portp->participant_ifs) == 1) {
+        /* determine if interface is defaulted or not */
+        struct shash_node *node;
+        struct iface_data *idp;
+
+        /* get interface name and data */
+        node = shash_first(&portp->participant_ifs);
+        idp = (struct iface_data *)node->data;
+
+        if (idp->local_state.defaulted) {
+            if (portp->current_status != STATUS_DEFAULTED) {
+                smap_replace(&smap,
+                             PORT_LACP_STATUS_MAP_BOND_STATUS_REASON,
+                             "Remote LACP not responding on interfaces");
+
+                smap_replace(&smap,
+                             PORT_LACP_STATUS_MAP_BOND_STATUS,
+                             PORT_LACP_STATUS_BOND_STATUS_DEFAULTED);
+
+                portp->current_status = STATUS_DEFAULTED;
+                changed = true;
+            }
+        } else {
+            if (portp->current_status != STATUS_UP) {
+                smap_remove(&smap,
+                            PORT_LACP_STATUS_MAP_BOND_STATUS_REASON);
+
+                smap_replace(&smap,
+                             PORT_LACP_STATUS_MAP_BOND_STATUS,
+                             PORT_LACP_STATUS_BOND_STATUS_OK);
+
+                portp->current_status = STATUS_UP;
+                changed = true;
+            }
+        }
+    } else {
+        /* more than one participant -> operational */
+        if (portp->current_status != STATUS_UP) {
+            smap_remove(&smap,
+                        PORT_LACP_STATUS_MAP_BOND_STATUS_REASON);
+
+            smap_replace(&smap,
+                         PORT_LACP_STATUS_MAP_BOND_STATUS,
+                         PORT_LACP_STATUS_BOND_STATUS_OK);
+
+            portp->current_status = STATUS_UP;
+            changed = true;
+        }
+    }
+
+    /* update speed */
+    asprintf(&speed_str, "%d", portp->lag_member_speed);
+    if (portp->speed_str == NULL || strcmp(speed_str, portp->speed_str) != 0) {
+        free(portp->speed_str);
+        portp->speed_str = speed_str;
+        smap_replace(&smap, PORT_LACP_STATUS_MAP_BOND_SPEED, speed_str);
+        changed = true;
+    } else {
+        free(speed_str);
+    }
+
+    if (changed) {
+        txn = ovsdb_idl_txn_create(idl);
+
+        ovsrec_port_set_lacp_status(prow, &smap);
+
+        ovsdb_idl_txn_commit_block(txn);
+        ovsdb_idl_txn_destroy(txn);
+    }
+
+    smap_destroy(&smap);
+} /* db_update_port_status */
+
+void
+db_add_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo)
+{
+    struct port_data *portp;
+    struct iface_data *idp;
+    int index;
+
+    OVSDB_LOCK;
+
+    /* get port data */
+    portp = find_port_data_by_lag_id(lag_id);
+
+    if (portp == NULL) {
+        VLOG_WARN("Port not configured for LACP! lag_id = %d", lag_id);
+        goto end;
+    }
+
+    index = PM_HANDLE2PORT(plpinfo->lport_handle);
+    idp = find_iface_data_by_index(index);
+
+    if (idp == NULL) {
+        VLOG_WARN("Interface not configured in LAG. lag_id = %d, port = %d",
+                  lag_id, port);
+        goto end;
+    }
+
+    idp->local_state = plpinfo->actor_oper_port_state;
+
+    shash_add_once(&portp->participant_ifs, idp->name, idp);
+
+    VLOG_DBG("Adding interface (%d) to lag (%d): %d participants", port, lag_id, (int)shash_count(&portp->participant_ifs));
+
+    if (plpinfo->lag != NULL) {
+        portp->lag_member_speed = lport_type_to_speed(ntohs(plpinfo->lag->port_type));
+        VLOG_DBG("setting speed: %d\n", portp->lag_member_speed);
+    }
+
+    db_update_port_status(portp);
+end:
+    OVSDB_UNLOCK;
+
 } /* db_add_lag_port */
+
+void
+db_delete_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo)
+{
+    struct port_data *portp;
+    struct iface_data *idp;
+    struct shash_node *node;
+    int index;
+    struct ovsdb_idl_txn *txn = NULL;
+
+    OVSDB_LOCK;
+
+    index = PM_HANDLE2PORT(plpinfo->lport_handle);
+    idp = find_iface_data_by_index(index);
+
+    if (idp == NULL) {
+        VLOG_WARN("Interface not configured in LAG. lag_id = %d, port = %d",
+                  lag_id, port);
+        goto end;
+    }
+
+    /* get port data */
+    portp = find_port_data_by_lag_id(lag_id);
+
+    if (portp == NULL) {
+        VLOG_WARN("Port not configured for LACP! lag_id = %d", lag_id);
+        txn = ovsdb_idl_txn_create(idl);
+
+        db_clear_interface(idp);
+
+        ovsdb_idl_txn_commit_block(txn);
+        ovsdb_idl_txn_destroy(txn);
+
+        goto end;
+    }
+
+    node = shash_find(&portp->participant_ifs, idp->name);
+    shash_delete(&portp->participant_ifs, node);
+
+    if (plpinfo->lag != NULL) {
+        portp->lag_member_speed = lport_type_to_speed(plpinfo->lag->port_type);
+        VLOG_DBG("setting speed: %d\n", portp->lag_member_speed);
+    }
+
+    db_update_port_status(portp);
+
+end:
+    OVSDB_UNLOCK;
+
+} /* db_delete_lag_port */
+
+void
+db_clear_lag_partner_info_port(struct port_data *portp)
+{
+    const struct ovsrec_port *prow;
+    struct smap smap;
+
+    prow = portp->cfg;
+
+    smap_init(&smap);
+
+    /* set everything to empty */
+    ovsrec_port_set_lacp_status(prow, &smap);
+
+    smap_destroy(&smap);
+
+    free(portp->speed_str);
+    portp->speed_str = NULL;
+    portp->current_status = STATUS_UNINITIALIZED;
+}
 
 void
 db_clear_lag_partner_info(uint16_t lag_id)
 {
-    VLOG_DBG("%s: HALON_TODO lag_id %d", __FUNCTION__, lag_id);
+    struct port_data *portp;
+    struct ovsdb_idl_txn *txn = NULL;
+
+    /* acquire lock */
+    OVSDB_LOCK;
+
+    /* get port */
+    portp = find_port_data_by_lag_id(lag_id);
+
+    if (portp == NULL) {
+        VLOG_WARN("Updating port not configured for LACP! lag_id = %d", lag_id);
+        goto end;
+    }
+
+    txn = ovsdb_idl_txn_create(idl);
+
+    db_clear_lag_partner_info_port(portp);
+
+    ovsdb_idl_txn_commit_block(txn);
+    ovsdb_idl_txn_destroy(txn);
+
+end:
+    OVSDB_UNLOCK;
 } /* db_clear_lag_partner_info */
 
 void
-db_update_lag_partner_info(uint16_t lag_id,
-                           lacp_sport_params_t *param __attribute__((unused)))
+db_update_lag_partner_info(uint16_t lag_id, lacp_sport_params_t *param)
 {
-    VLOG_DBG("%s: HALON_TODO lag_id %d", __FUNCTION__, lag_id);
+    const struct ovsrec_port *prow;
+    struct port_data *portp;
+    struct smap smap;
+    struct ovsdb_idl_txn *txn = NULL;
+    bool changes = false;
+    char *speed_str;
+
+    /* acquire lock */
+    OVSDB_LOCK;
+
+    /* get port */
+    portp = find_port_data_by_lag_id(lag_id);
+
+    if (portp == NULL) {
+        VLOG_WARN("Updating port not configured for LACP! lag_id = %d", lag_id);
+        goto end;
+    }
+
+    prow = portp->cfg;
+
+    smap_clone(&smap, &prow->lacp_status);
+
+    txn = ovsdb_idl_txn_create(idl);
+
+    /* update speed */
+    asprintf(&speed_str, "%d", portp->lag_member_speed);
+    if (portp->speed_str == NULL || strcmp(speed_str, portp->speed_str) != 0) {
+        free(portp->speed_str);
+        portp->speed_str = speed_str;
+        smap_replace(&smap, PORT_LACP_STATUS_MAP_BOND_SPEED, speed_str);
+        changes = true;
+    } else {
+        free(speed_str);
+    }
+
+    if (changes) {
+        ovsrec_port_set_lacp_status(prow, &smap);
+        ovsdb_idl_txn_commit_block(txn);
+    } else {
+        ovsdb_idl_txn_abort(txn);
+    }
+
+    ovsdb_idl_txn_destroy(txn);
+
+    smap_destroy(&smap);
+
+end:
+    OVSDB_UNLOCK;
+
 } /* db_update_lag_partner_info */
 
 /**********************************************************************/
@@ -1631,6 +2332,8 @@ lacpd_port_dump(struct ds *ds, struct port_data *portp)
         }
     }
     ds_put_format(ds, "\n");
+    ds_put_format(ds, "    interface_count      : %d\n",
+                  (int)shash_count(&portp->participant_ifs));
 } /* lacpd_port_dump */
 
 static void

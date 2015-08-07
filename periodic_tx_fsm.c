@@ -57,6 +57,7 @@
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
 #include "lacp_halon.h"
+#include "lacp_halon_if.h"
 
 VLOG_DEFINE_THIS_MODULE(periodic_tx_fsm);
 
@@ -237,6 +238,8 @@ LACP_periodic_tx_fsm(int event,
         default:
         break;
     }
+
+    db_update_interface(plpinfo);
 
     REXIT();
 } // LACP_periodic_tx_fsm
