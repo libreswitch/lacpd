@@ -1483,7 +1483,7 @@ format_system_id(system_variables_t *system_id)
 {
     char *result = NULL;
     asprintf(&result, "%d,%02x:%02x:%02x:%02x:%02x:%02x",
-             system_id->system_priority,
+             ntohs(system_id->system_priority),
              htons(system_id->system_mac_addr[0]) >> 8,
              htons(system_id->system_mac_addr[0]) & 0xff,
              htons(system_id->system_mac_addr[1]) >> 8,
@@ -1498,7 +1498,7 @@ static char *
 format_port_id(u_short port_priority, u_short port_number)
 {
     char *result = NULL;
-    asprintf(&result, "%d,%d", port_priority, port_number);
+    asprintf(&result, "%d,%d", ntohs(port_priority), ntohs(port_number));
 
     return result;
 }
@@ -1507,7 +1507,7 @@ static char *
 format_key(u_short key)
 {
     char *result = NULL;
-    asprintf(&result, "%d", key);
+    asprintf(&result, "%d", ntohs(key));
 
     return result;
 }
