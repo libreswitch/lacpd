@@ -104,7 +104,7 @@ extern void LACP_transmit_lacpdu(lacp_per_port_variables_t *);
 extern void LACP_process_lacpdu(struct lacp_per_port_variables *,
                                 void *);
 extern void LACP_initialize_port(port_handle_t lport_handle,
-                                 short port_id,
+                                 unsigned short port_id,
                                  unsigned long flags,
                                  short port_key,
                                  short port_priority,

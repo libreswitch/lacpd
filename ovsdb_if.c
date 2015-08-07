@@ -96,6 +96,10 @@ POOL(port_index, 256);
 #define LACP_ENABLED_ON_PORT(p)    ((p)->lacp_mode == PORT_LACP_PASSIVE || \
                                     (p)->lacp_mode == PORT_LACP_ACTIVE)
 
+#define MIN_LACP_PORT_ID            1
+#define MAX_LACP_PORT_ID            65535
+#define IS_VALID_PORT_ID(id)        ((id) >= MIN_LACP_PORT_ID && \
+                                     (id) <= MAX_LACP_PORT_ID)
 #define IS_VALID_SYS_PRIO(p)       (((p) >= MIN_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY) && \
                                     ((p) <= MAX_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY))
 
@@ -482,7 +486,8 @@ send_config_lport_msg(struct iface_data *info_ptr)
          *       just use 1-based port number, instead of 0-based.
          * (ANVL LACP Conformance Test numbers 4.11)
          */
-        msg->port_id          = (info_ptr->index+1);
+        msg->port_id          = (info_ptr->port_id == 0) ?
+                                    info_ptr->index+1 : info_ptr->port_id;
         msg->port_key         = info_ptr->actor_key;
         msg->port_priority    = info_ptr->actor_priority;
         msg->lacp_state       = info_ptr->lacp_state;
@@ -529,7 +534,8 @@ send_lport_lacp_change_msg(struct iface_data *info_ptr, unsigned int flags)
          *       just use 1-based port number, instead of 0-based.
          * (ANVL LACP Conformance Test numbers 4.11)
          */
-        msg->port_id          = (info_ptr->index+1);
+        msg->port_id          = (info_ptr->port_id == 0) ?
+                                    info_ptr->index+1 : info_ptr->port_id;
         msg->lacp_state       = info_ptr->lacp_state;
         msg->lacp_timeout     = info_ptr->timeout_mode;
         msg->collecting_ready = info_ptr->collecting_ready;
@@ -640,6 +646,7 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_link_state);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_link_speed);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_hw_bond_config);
+    ovsdb_idl_add_column(idl, &ovsrec_interface_col_other_config);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_hw_bond_config);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_hw_intf_info);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_lacp_current);
@@ -809,6 +816,7 @@ update_interface_cache(void)
             unsigned int new_speed;
             enum ovsrec_interface_duplex_e new_duplex;
             enum ovsrec_interface_link_state_e new_link_state;
+            int new_port_id;
 
             new_link_state = INTERFACE_LINK_STATE_DOWN;
             if (ifrow->link_state) {
@@ -831,6 +839,18 @@ update_interface_cache(void)
                 if (!strcmp(ifrow->duplex, OVSREC_INTERFACE_DUPLEX_FULL)) {
                     new_duplex = INTERFACE_DUPLEX_FULL;
                 }
+            }
+            new_port_id = smap_get_int(&(ifrow->other_config),
+                                        INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_ID,
+                                        0);
+
+            if ((IS_VALID_PORT_ID(new_port_id) || new_port_id == 0) &&
+                new_port_id != idp->port_id) {
+                VLOG_DBG("Interface %s port_id changed in DB: "
+                         "new port_id=%d",
+                         ifrow->name, new_port_id);
+                idp->port_id = new_port_id;
+                send_config_lport_msg(idp);
             }
 
             if ((new_link_state != idp->link_state) ||

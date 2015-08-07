@@ -80,7 +80,7 @@ extern struct NList *mlacp_lag_tuple_list;
  ****************************************************************************/
 static void initialize_per_port_variables(
                               lacp_per_port_variables_t *plpinfo,
-                              short port_id,
+                              unsigned short port_id,
                               unsigned long flags,
                               short port_key,
                               short port_priority,
@@ -146,7 +146,7 @@ LACPResetProtocol(lacp_per_port_variables_t *plpinfo)
  *----------------------------------------------------------------------*/
 void
 LACP_initialize_port(port_handle_t lport_handle,
-                     short port_id,
+                     unsigned short port_id,
                      unsigned long flags,
                      short port_key,
                      short port_priority,
@@ -362,7 +362,7 @@ LACP_update_port_params(port_handle_t lport_handle,
 //***************************************************************
 static void
 initialize_per_port_variables(lacp_per_port_variables_t *plpinfo,
-                              short port_id,
+                              unsigned short port_id,
                               unsigned long flags,
                               short port_key,
                               short port_priority,

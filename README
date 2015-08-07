@@ -138,6 +138,7 @@ HALON_TODO: Update this file to reflect Halon changes.
  7. link_speed    - 1000 (for 1Gbe), etc.
  8. lacp_state    - enabled or disabled
  9. MAC address   - we're not using MAC addrs for individual ports.
+10. port_id       - 1-65535 (0xFFFF)
 
 
 --------------------------------

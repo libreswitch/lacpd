@@ -469,7 +469,7 @@ mlacpVapiLportEvent(struct ML_event *pevent)
                                     (short) placp_msg->collecting_ready);
         } else {
             LACP_initialize_port(placp_msg->lport_handle,
-                                 (short) placp_msg->port_id,
+                                 (unsigned short) placp_msg->port_id,
                                  placp_msg->flags,
                                  (short) placp_msg->port_key,
                                  (short) placp_msg->port_priority,
