@@ -71,6 +71,9 @@ def sw_clear_user_config(sw, interface):
     debug(c)
     return sw.cmd(c)
 
+# Parse the lacp_status:*_state string
+def parse_lacp_state(state):
+    return dict(map(lambda l:map(lambda j:j.strip(),l), map(lambda i: i.split(':'), state.split(','))))
 
 # Set pm_info for an Interface.
 def sw_set_intf_pm_info(sw, interface, config):
@@ -80,6 +83,29 @@ def sw_set_intf_pm_info(sw, interface, config):
     debug(c)
     return sw.cmd(c)
 
+# Set open_vsw_lacp_config parameter(s)
+def set_open_vsw_lacp_config(sw, config):
+    c = OVS_VSCTL + "set open_vswitch ."
+    for s in config:
+        c += " lacp_config:" + s
+    debug(c)
+    return sw.cmd(c)
+
+# Set open_vsw_lacp_config parameter(s)
+def set_port_parameter(sw, port, config):
+    c = OVS_VSCTL + "set port " + str(port)
+    for s in config:
+        c += ' %s' % s
+    debug(c)
+    return sw.cmd(c)
+
+# Set interface:other_config parameter(s)
+def set_intf_other_config(sw, intf, config):
+    c = OVS_VSCTL + "set interface " + str(intf)
+    for s in config:
+        c += ' other_config:%s' % s
+    debug(c)
+    return sw.cmd(c)
 
 # Simulate the link state on an Interface
 def simulate_link_state(sw, interface, link_state="up"):
@@ -397,7 +423,7 @@ class lacpdTest(HalonTest):
         # Disable one of the Interfaces, then it should be removed from the LAG.
         info("Verify that a interface is removed from LAG when it is disabled.\n")
         sw_set_intf_user_config(s1, sw_10G_intf[0], ['admin=down'])
-        short_sleep()
+        short_sleep(2)
         verify_intf_not_in_bond(s1, sw_10G_intf[0], \
                                 "Disabled interface is not removed from the LAG.")
 
@@ -474,12 +500,6 @@ class lacpdTest(HalonTest):
         # In VSI environment both the switches start with the same system ID.
         s1.cmd("ovs-vsctl set open_vswitch . lacp_config:lacp-system-id='70:72:aa:aa:aa:d4'")
 
-        # HALON_TODO: There are bugs in LACP code.
-        # Due to which it is not picking up the system_id change.
-        # Until it is fixed, restart lacpd.
-        s1.cmd("systemctl restart lacpd")
-        s2.cmd("systemctl restart lacpd")
-
         # Create two dynamic LAG with two ports each.
         # the current schema doesn't allow creating a bond
         # with less than two ports. Once that is changed
@@ -508,6 +528,157 @@ class lacpdTest(HalonTest):
                                           "both the switches are in active mode on switch1")
             verify_intf_in_bond(s2, intf, "Interfaces are expected to be part of dynamic LAG when "
                                           "both the switches are in active mode on switch1")
+
+        # Test open_vswitch:lacp_config:{lacp-system-id,lacp-system-priority}
+
+        intf = sw_1G_intf[0]
+
+        # Set sys_id and sys_pri
+        set_open_vsw_lacp_config(s1, ['lacp-system-id=aa:bb:cc:dd:ee:ff', 'lacp-system-priority=555'])
+
+        short_sleep(2)
+
+        # Get sys_id and sys_pri
+        sys = sw_get_intf_state(s1, intf, ['lacp_status:actor_system_id']).split(',')
+
+        info("Verify open_vswitch:lacp_config:lacp-system-id.\n")
+        assert sys[1] == "aa:bb:cc:dd:ee:ff", \
+                         "actor_system_id should be aa:bb:cc:dd:ee:ff, is %s".format(sys[1])
+
+        info("Verify open_vswitch:lacp_config:lacp-system-priority.\n")
+        assert sys[0] == "555", "actor_system_priority should be 555, is %s".format(sys[0])
+
+        # Attempt to set invalid sys_id and invalid sys_pri
+        set_open_vsw_lacp_config(s1, ['lacp-system-id=aa:bb:cc:dd:ee:fg'])
+        # HALON_TODO: smap_get_int returns 55 for "55a", so this test fails. Commenting out for now.
+        #set_open_vsw_lacp_config(s1, ['lacp-system-priority=55a'])
+        short_sleep(2)
+        sys = sw_get_intf_state(s1, intf, ['lacp_status:actor_system_id']).split(',')
+        assert sys[1] == "aa:bb:cc:dd:ee:ff", \
+                         "actor_system_id should be aa:bb:cc:dd:ee:ff, is %s".format(sys[1])
+        #assert sys[0] == "555", "actor_system_priority should be 555, is %s".format(sys[0])
+
+
+        # Test port:lacp
+        state_string = sw_get_intf_state(s1, intf, ['lacp_status:actor_state'])
+        states = parse_lacp_state(state_string)
+
+        info("Verify port:lacp.\n")
+        assert states['Activ'] == '1', "Actor mode should be Active(1), is %s".format(states['Activ'])
+
+        # Set lacp to "passive"
+        set_port_parameter(s1, "lag0" , [ 'lacp=passive'])
+
+        short_sleep(2)
+
+        state_string = sw_get_intf_state(s1, intf, ['lacp_status:actor_state'])
+        states = parse_lacp_state(state_string)
+        assert states['Activ'] == '0', "Actor mode should be Passive(0), is %s".format(states['Activ'])
+
+        # Set lacp to "off"
+        set_port_parameter(s1, "lag0" , [ 'lacp=off'])
+
+        short_sleep(6)
+
+        state_string = sw_get_intf_state(s1, intf, ['lacp_status:actor_state'])
+        if "no key actor_state" not in state_string:
+            assert 1 == 0, "lacp status should be empty, but state is [%s]" % state_string
+
+        # Set lacp to "active"
+        set_port_parameter(s1, "lag0" , [ 'lacp=active'])
+
+        short_sleep(6)
+
+        state_string = sw_get_intf_state(s1, intf, ['lacp_status:actor_state'])
+        states = parse_lacp_state(state_string)
+        assert states['Activ'] == '1', "Actor mode should be Active(1), is %s".format(states['Activ'])
+
+        # Test port:other_config:{lacp-system-id,lacp-system-priority,lacp-time}
+        # HALON_TODO: Add tests for sys_id and sys_pri when code is added.
+
+        # Test lacp-time
+
+        info("Verify port:other_config:lacp-time.\n")
+
+        # Verify default is "timeout", which is "fast"
+        state_string = sw_get_intf_state(s1, intf, ['lacp_status:actor_state'])
+        states = parse_lacp_state(state_string)
+        assert states['TmOut'] == '1', "Timeout should be set(1), is %s".format(states['TmOut'])
+
+        # Set lacp-time to "slow"
+        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=slow'])
+
+        short_sleep(2)
+
+        # Verify "timeout" is now "slow"
+        state_string = sw_get_intf_state(s1, intf, ['lacp_status:actor_state'])
+        states = parse_lacp_state(state_string)
+        assert states['TmOut'] == '0', "Timeout should be not set(0), is %s".format(states['TmOut'])
+
+        # Set lacp-time back to "fast"
+        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=fast'])
+
+        short_sleep(2)
+
+        # Verify "timeout" is now "fast"
+        state_string = sw_get_intf_state(s1, intf, ['lacp_status:actor_state'])
+        states = parse_lacp_state(state_string)
+        assert states['TmOut'] == '1', "Timeout should be set(1), is %s".format(states['TmOut'])
+
+        # Test interface:other_config:{lacp-port-id,lacp-port-priority,lacp-aggregation-key}
+
+        # Set port_id, port_priority, and aggregation-key
+        set_intf_other_config(s1, intf, ['lacp-port-id=222', 'lacp-port-priority=123', \
+                                         'lacp-aggregation-key=432'])
+        short_sleep()
+
+        # Get the new values
+        pri_info = sw_get_intf_state(s1, intf, ['lacp_status:actor_port_id']).split(',')
+
+        info("Verify port-priority.\n")
+        assert pri_info[0] == '123', "Port priority should be 123, is %s" % pri_info[0]
+
+        info("Verify port-id.\n")
+        assert pri_info[1] == '222', "Port id should be 222, is %s" % pri_info[1]
+
+        info("Verify aggregation-key.\n")
+        key = sw_get_intf_state(s1, intf, ['lacp_status:actor_key'])
+        assert key == '432', "Aggregation key should be 432, is %s" % key
+
+        # Set invalid port_id, port_priority, and aggregation-key
+        set_intf_other_config(s1, intf, ['lacp-port-id=-1', 'lacp-port-priority=-1', \
+                                         'lacp-aggregation-key=-1'])
+        short_sleep()
+
+        # Get the new values
+        pri_info = sw_get_intf_state(s1, intf, ['lacp_status:actor_port_id']).split(',')
+
+        info("Verify port-priority.\n")
+        assert pri_info[0] == '123', "Port priority should be 123, is %s" % pri_info[0]
+
+        info("Verify port-id.\n")
+        assert pri_info[1] == '222', "Port id should be 222, is %s" % pri_info[1]
+
+        info("Verify aggregation-key.\n")
+        key = sw_get_intf_state(s1, intf, ['lacp_status:actor_key'])
+        assert key == '432', "Aggregation key should be 432, is %s" % key
+
+        set_intf_other_config(s1, intf, ['lacp-port-id=65536', 'lacp-port-priority=65536', \
+                                         'lacp-aggregation-key=65536'])
+        short_sleep()
+
+        # Get the new values
+        pri_info = sw_get_intf_state(s1, intf, ['lacp_status:actor_port_id']).split(',')
+
+        info("Verify port-priority.\n")
+        assert pri_info[0] == '123', "Port priority should be 123, is %s" % pri_info[0]
+
+        info("Verify port-id.\n")
+        assert pri_info[1] == '222', "Port id should be 222, is %s" % pri_info[1]
+
+        info("Verify aggregation-key.\n")
+        key = sw_get_intf_state(s1, intf, ['lacp_status:actor_key'])
+        assert key == '432', "Aggregation key should be 432, is %s" % key
 
 
 class Test_lacpd:
@@ -547,12 +718,12 @@ class Test_lacpd:
 
     # Link aggregation(lacp) daemon tests.
     def test_lacpd_static_lag_config(self):
-         self.test.static_lag_config()
+        self.test.static_lag_config()
 
     def test_lacpd_static_lag_negative_tests(self):
-         self.test.static_lag_negative_tests()
+        self.test.static_lag_negative_tests()
 
     # HALON_TODO:  Dynamic LAG functionality is not working
     # as expected to write tests.
-    # def test_lacpd_dynamic_lag_config(self):
-    #    self.test.dynamic_lag_config()
+    def test_lacpd_dynamic_lag_config(self):
+        self.test.dynamic_lag_config()

@@ -42,7 +42,6 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <netinet/ether.h>
-#include <ctype.h>
 
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
@@ -93,8 +92,8 @@ POOL(port_index, 256);
 
 /*********************************************************/
 
-#define LACP_ENABLED_ON_PORT(p)    ((p)->lacp_mode == PORT_LACP_PASSIVE || \
-                                    (p)->lacp_mode == PORT_LACP_ACTIVE)
+#define LACP_ENABLED_ON_PORT(lpm)    (((lpm) == PORT_LACP_PASSIVE) || \
+                                      ((lpm) == PORT_LACP_ACTIVE))
 
 #define IS_VALID_PORT_ID(id)        ((id) >= MIN_INTERFACE_OTHER_CONFIG_LACP_PORT_ID && \
                                      (id) <= MAX_INTERFACE_OTHER_CONFIG_LACP_PORT_ID)
@@ -605,16 +604,23 @@ configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
 
 #if 0
     idp->cycl_port_type = speed_to_lport_type(portp->port_max_speed);
-    idp->activity_mode = lag_entry->activity_mode;
 #else
     /* HALON_TODO: temporary hard-code. */
     idp->cycl_port_type = PM_LPORT_10GIGE;
     idp->aggregateable = AGGREGATABLE;
-    idp->activity_mode = LACP_ACTIVE_MODE;
     idp->collecting_ready = 1;
 #endif
 
     idp->timeout_mode = portp->timeout_mode;
+    switch (portp->lacp_mode) {
+        case PORT_LACP_ACTIVE:
+            idp->activity_mode = LACP_ACTIVE_MODE;
+            break;
+        case PORT_LACP_PASSIVE:
+        case PORT_LACP_OFF:
+            idp->activity_mode = LACP_PASSIVE_MODE;
+            break;
+    }
 
 } /* configure_lacp_on_interface */
 
@@ -925,7 +931,7 @@ update_interface_cache(void)
                      * part of a dynamic LAG, then we need to send link
                      * change notification message to the state machine. */
                     if (idp->lag_eligible && idp->port_datap &&
-                        LACP_ENABLED_ON_PORT(idp->port_datap)) {
+                        LACP_ENABLED_ON_PORT(idp->port_datap->lacp_mode)) {
 
                         send_link_state_change_msg(idp);
 
@@ -1100,7 +1106,7 @@ update_interface_lag_eligibility(struct iface_data *idp)
         /* Interface must be configured as part of the Port first. */
         new_eligible = false;
 
-    } else if (LACP_ENABLED_ON_PORT(portp)) {
+    } else if (LACP_ENABLED_ON_PORT(portp->lacp_mode)) {
         /* For dynamic LAGs, interface is considered eligible as long
          * as the interface is a configured member of the port. */
         new_eligible = true;
@@ -1155,6 +1161,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
     int rc = 0;
     int timeout;
     bool timeout_changed = false;
+    bool lacp_mode_switched = false;
     size_t i;
     const char *cp;
 
@@ -1221,7 +1228,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
             set_interface_lag_eligibility(portp, idp, false);
         }
 
-        if (!LACP_ENABLED_ON_PORT(portp)) {
+        if (!LACP_ENABLED_ON_PORT(portp->lacp_mode)) {
             /* LACP was not on (static LAG).  Need to turn on LACP. */
 
             /* Create super port in LACP state machine. */
@@ -1247,31 +1254,39 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
             }
 
         } else {
-            /* LACP was on (dynamic LAG).  Need to turn off LACP. */
+            /* LACP was on (dynamic LAG). */
 
-            /* clear port lacp_status */
-            db_clear_lag_partner_info_port(portp);
+            /* If LACP switched from active to passive or passive to active
+             * we just want to reconfigure the interfaces.
+             */
+            if (LACP_ENABLED_ON_PORT(lacp_mode)) {
+                lacp_mode_switched = true;
+            } else {
+                /* Else, we need to turn off LACP */
+                /* clear port lacp_status */
+                db_clear_lag_partner_info_port(portp);
 
-            /* clear interface lacp_status */
-            SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
-                struct ovsrec_interface *ifrow =
-                    shash_find_data(&sh_idl_port_intfs, node->name);
-                if (ifrow) {
-                    struct iface_data *idp =
-                        shash_find_data(&all_interfaces, node->name);
-                    if (idp) {
-                        db_clear_interface(idp);
+                /* clear interface lacp_status */
+                SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+                    struct ovsrec_interface *ifrow =
+                        shash_find_data(&sh_idl_port_intfs, node->name);
+                    if (ifrow) {
+                        struct iface_data *idp =
+                            shash_find_data(&all_interfaces, node->name);
+                        if (idp) {
+                            db_clear_interface(idp);
+                        }
                     }
                 }
-            }
 
-            /* Delete super port in LACP state machine. */
-            if (portp->lag_id) {
-                send_lag_delete_msg(portp->lag_id);
-                free_lag_id(portp->lag_id);
-                portp->lag_id = 0;
+                /* Delete super port in LACP state machine. */
+                if (portp->lag_id) {
+                    send_lag_delete_msg(portp->lag_id);
+                    free_lag_id(portp->lag_id);
+                    portp->lag_id = 0;
+                }
+                rc++;
             }
-            rc++;
         }
 
         /* Save new LACP mode. */
@@ -1301,8 +1316,16 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
     SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
         struct iface_data *idp = shash_find_data(&all_interfaces, node->name);
         if (idp) {
-            /* If user changed timeout mode, send update */
-            if (timeout_changed) {
+            if (lacp_mode_switched) {
+
+                /* If mode switched reconfigure the port */
+                send_config_lport_msg(idp);
+
+            } else if (timeout_changed) {
+
+                /* Else, just update the port if any dynamic fields changed */
+
+                /* If user changed timeout mode, send update */
                 idp->timeout_mode = portp->timeout_mode;
                 send_lport_lacp_change_msg(idp, (LACP_LPORT_DYNAMIC_FIELDS_PRESENT |
                                                  LACP_LPORT_TIMEOUT_FIELD_PRESENT));
@@ -1473,7 +1496,7 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
 
         /* See if user set lacp-system-id */
         sys_mac = smap_get(&(ovs_vsw->lacp_config),
-                      OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_ID);
+                           OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_ID);
         /* If LACP system ID is not configured, then use system mac. */
         if (sys_mac == NULL || (strlen(sys_mac) != HC_MAC_STR_SIZE - 1)) {
             if (lacpd_init) {
