@@ -35,9 +35,23 @@
 /**                             System stuff...                                          **/
 /******************************************************************************************/
 #define MLm_lacp_api__setActorSysMac  100
+#define MLm_lacp_api__set_sport_ActorSysMac  101
+#define MLm_lacp_api__clear_sport_ActorSysMac  102
+#define MLm_lacp_api__set_sport_ActorSysPriority  103
+#define MLm_lacp_api__clear_sport_ActorSysPriority  104
 
 struct MLt_lacp_api__actorSysMac {
     unsigned char actor_sys_mac[6];
+};
+
+struct MLt_lacp_api__sport_actorSysMac {
+    unsigned char actor_sys_mac[6];
+    unsigned long long sport_handle;    /* extension - set sys mac by sport */
+};
+
+struct MLt_lacp_api__sport_actorSysPriority {
+    int priority;
+    unsigned long long sport_handle;    /* extension - set sys prio by sport */
 };
 
 /******************************************************************************************/
@@ -120,6 +134,8 @@ struct MLt_vpm_api__lport_lacp_change {
     int link_state;
     int link_speed;
     int collecting_ready;
+    int sys_priority;
+    char sys_id[6];
 };
 
 struct MLt_vpm_api__lport_state_change {

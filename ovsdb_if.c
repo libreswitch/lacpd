@@ -146,6 +146,8 @@ struct port_data {
 
     int                 current_status;     /*!< Currently recorded status of LAG */
     int                 timeout_mode;       /*!< 0=long, 1=short */
+    int                 sys_prio;           /*!< Port override for system priority */
+    char                *sys_id;            /*!< Port override for system mac */
 };
 
 /* current_status values */
@@ -366,6 +368,54 @@ send_sys_pri_msg(int priority)
 } /* send_sys_pri_msg */
 
 static void
+send_sport_sys_pri_msg(int lag_id, int priority)
+{
+        ML_event *event;
+        struct MLt_lacp_api__sport_actorSysPriority *msg;
+        int msgSize;
+
+        VLOG_DBG("%s: lag=%d, priority=%d", __FUNCTION__, lag_id, priority);
+
+        msgSize = sizeof(ML_event)+sizeof(struct MLt_lacp_api__sport_actorSysPriority);
+        event = (ML_event*)alloc_msg(msgSize);
+
+        if (event != NULL) {
+            event->sender.peer = ml_cfgMgr_index;
+            event->msgnum = MLm_lacp_api__set_sport_ActorSysPriority;
+
+            msg = (struct MLt_lacp_api__sport_actorSysPriority *)(event+1);
+            msg->priority = priority;
+            msg->sport_handle = PM_LAG2HANDLE(lag_id);
+
+            ml_send_event(event);
+        }
+} /* send_sport_sys_pri_msg */
+
+static void
+clear_sport_sys_pri_msg(int lag_id)
+{
+        ML_event *event;
+        struct MLt_lacp_api__sport_actorSysPriority *msg;
+        int msgSize;
+
+        VLOG_DBG("%s: lag_id=%d", __FUNCTION__, lag_id);
+
+        msgSize = sizeof(ML_event)+sizeof(struct MLt_lacp_api__sport_actorSysPriority);
+        event = (ML_event*)alloc_msg(msgSize);
+
+        if (event != NULL) {
+            event->sender.peer = ml_cfgMgr_index;
+            event->msgnum = MLm_lacp_api__clear_sport_ActorSysPriority;
+
+            msg = (struct MLt_lacp_api__sport_actorSysPriority *)(event+1);
+            msg->priority = 0;
+            msg->sport_handle = PM_LAG2HANDLE(lag_id);
+
+            ml_send_event(event);
+        }
+} /* clear_sport_sys_pri_msg */
+
+static void
 send_sys_mac_msg(struct ether_addr *macAddr)
 {
     ML_event *event;
@@ -391,6 +441,60 @@ send_sys_mac_msg(struct ether_addr *macAddr)
         ml_send_event(event);
     }
 } /* send_sys_mac_msg */
+
+static void
+send_sport_sys_mac_msg(int lag_id, struct ether_addr *macAddr)
+{
+    ML_event *event;
+    struct MLt_lacp_api__sport_actorSysMac *macMsg;
+    int msgSize;
+
+    VLOG_DBG("%s: entry", __FUNCTION__);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_lacp_api__sport_actorSysMac);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_lacp_api__set_sport_ActorSysMac;
+
+        macMsg = (struct MLt_lacp_api__sport_actorSysMac *)(event+1);
+
+        /* Copy MAC address. */
+        memcpy(macMsg->actor_sys_mac, macAddr, ETH_ALEN);
+        macMsg->sport_handle = PM_LAG2HANDLE(lag_id);
+
+        ml_send_event(event);
+    }
+} /* send_sport_sys_mac_msg */
+
+static void
+clear_sport_sys_mac_msg(int lag_id)
+{
+    ML_event *event;
+    struct MLt_lacp_api__sport_actorSysMac *macMsg;
+    int msgSize;
+
+    VLOG_DBG("%s: entry", __FUNCTION__);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_lacp_api__sport_actorSysMac);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_lacp_api__clear_sport_ActorSysMac;
+
+        macMsg = (struct MLt_lacp_api__sport_actorSysMac *)(event+1);
+
+        macMsg->sport_handle = PM_LAG2HANDLE(lag_id);
+
+        ml_send_event(event);
+    }
+} /* clear_sport_sys_mac_msg */
 
 static void
 send_lag_create_msg(int lag_id)
@@ -480,6 +584,7 @@ send_config_lport_msg(struct iface_data *info_ptr)
     ML_event *event;
     struct MLt_vpm_api__lport_lacp_change *msg;
     int msgSize;
+    struct port_data *portp;
 
     VLOG_DBG("%s: port=%s, hw_port=%d, index=%d", __FUNCTION__,
              info_ptr->name, info_ptr->hw_port_number, info_ptr->index);
@@ -519,6 +624,32 @@ send_config_lport_msg(struct iface_data *info_ptr)
                       LACP_LPORT_TIMEOUT_FIELD_PRESENT |
                       LACP_LPORT_AGGREGATION_FIELD_PRESENT |
                       LACP_LPORT_HW_COLL_STATUS_PRESENT);
+
+        /* Handle per-port (not interface) overrides. */
+
+        /*
+         * These have to be handled here in case per-port override was
+         * set before interface was added to port.
+         */
+
+        portp = info_ptr->port_datap;
+
+        if (portp->lacp_mode != PORT_LACP_OFF && portp->sys_prio != 0) {
+            msg->flags |= LACP_LPORT_SYS_PRIORITY_FIELD_PRESENT;
+            msg->sys_priority = portp->sys_prio;
+        }
+
+        if (portp->lacp_mode != PORT_LACP_OFF && portp->sys_id != NULL) {
+            struct ether_addr *eth_addr_p;
+            struct ether_addr eth_addr;
+
+            eth_addr_p = ether_aton_r(portp->sys_id, &eth_addr);
+
+            if (eth_addr_p != NULL) {
+                msg->flags |= LACP_LPORT_SYS_ID_FIELD_PRESENT;
+                memcpy(msg->sys_id, eth_addr_p, ETH_ALEN);
+            }
+        }
 
         ml_send_event(event);
     }
@@ -1336,6 +1467,59 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
         }
     }
 
+    if (lacp_mode != PORT_LACP_OFF) {
+        /* other_config:lacp-system-id and other_config:lacp-system-priority
+         * only make sense if lacp is enabled.
+         */
+        const char *sys_id;
+        int sys_prio;
+        struct ether_addr *eth_addr_p;
+        struct ether_addr eth_addr;
+
+        sys_id = smap_get(&(row->other_config),
+                      PORT_OTHER_CONFIG_MAP_LACP_SYSTEM_ID);
+        sys_prio = smap_get_int(&(row->other_config),
+                      PORT_OTHER_CONFIG_MAP_LACP_SYSTEM_PRIORITY,
+                      0);
+
+        /* If there's a change in the system-priority, send the update. */
+        if (sys_prio != portp->sys_prio) {
+            if (sys_prio == 0) {
+                clear_sport_sys_pri_msg(portp->lag_id);
+                portp->sys_prio = 0;
+            } else if (IS_VALID_SYS_PRIO(sys_prio)) {
+                send_sport_sys_pri_msg(portp->lag_id, sys_prio);
+                portp->sys_prio = sys_prio;
+            }
+        }
+
+        /* If there's a change in the system-id, send the update. */
+        if ((sys_id == NULL && portp->sys_id != NULL) ||
+            (sys_id != NULL && portp->sys_id == NULL) ||
+            (sys_id != NULL && portp->sys_id != NULL &&
+                strcmp(sys_id, portp->sys_id) != 0)) {
+            if (sys_id == NULL) {
+                clear_sport_sys_mac_msg(portp->lag_id);
+                free(portp->sys_id);
+                portp->sys_id = NULL;
+            } else {
+                /* Convert the string to a mac address. */
+                eth_addr_p = ether_aton_r(sys_id, &eth_addr);
+                if (eth_addr_p) {
+                    send_sport_sys_mac_msg(portp->lag_id, eth_addr_p);
+
+                    /* Save the system-id *after* it's been validated. */
+                    free(portp->sys_id);
+                    if (sys_id != NULL) {
+                        portp->sys_id = strdup(sys_id);
+                    } else {
+                        portp->sys_id = NULL;
+                    }
+                }
+            }
+        }
+    }
+
     /* Destroy the shash of the IDL interfaces. */
     shash_destroy(&sh_idl_port_intfs);
 
@@ -1490,7 +1674,8 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
     bool sys_mac_changed = false;
     const char *sys_mac = NULL;
     int sys_prio = -1;
-    struct ether_addr *eth_addr;
+    struct ether_addr *eth_addr_p;
+    struct ether_addr eth_addr;
 
     if (ovs_vsw) {
 
@@ -1515,10 +1700,10 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
         }
 
         if (sys_mac_changed || lacpd_init) {
-            eth_addr = ether_aton(sys_mac);
-            if (eth_addr) {
+            eth_addr_p = ether_aton_r(sys_mac, &eth_addr);
+            if (eth_addr_p) {
 
-                send_sys_mac_msg(eth_addr);
+                send_sys_mac_msg(eth_addr_p);
 
                 /* Only save after we know it is a valid MAC addr */
                 strncpy(system_id, sys_mac, HC_MAC_STR_SIZE);
@@ -1688,6 +1873,24 @@ db_clear_interface(struct iface_data *idp)
 
     idp->lacp_current = false;
     idp->lacp_current_set = false;
+
+    free(idp->actor.system_id);
+    idp->actor.system_id = NULL;
+    free(idp->actor.port_id);
+    idp->actor.port_id = NULL;
+    free(idp->actor.key);
+    idp->actor.key = NULL;
+    free(idp->actor.state);
+    idp->actor.state = NULL;
+
+    free(idp->partner.system_id);
+    idp->partner.system_id = NULL;
+    free(idp->partner.port_id);
+    idp->partner.port_id = NULL;
+    free(idp->partner.key);
+    idp->partner.key = NULL;
+    free(idp->partner.state);
+    idp->partner.state = NULL;
 
     smap_destroy(&smap);
 }

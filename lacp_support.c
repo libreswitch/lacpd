@@ -89,7 +89,9 @@ static void initialize_per_port_variables(
                               short lacp_aggregation,
                               int link_state,
                               int link_speed,
-                              int hw_collecting);
+                              int hw_collecting,
+                              short sys_priority,
+                              char *sys_id);
 
 static void print_lag_id(LAG_Id_t *);
 
@@ -155,7 +157,9 @@ LACP_initialize_port(port_handle_t lport_handle,
                      short aggregation,
                      int link_state,
                      int link_speed,
-                     int hw_collecting)
+                     int hw_collecting,
+                     short sys_priority,
+                     char *sys_id)
 {
     lacp_per_port_variables_t *plpinfo;
 
@@ -238,7 +242,9 @@ LACP_initialize_port(port_handle_t lport_handle,
                                   aggregation,
                                   link_state,
                                   link_speed,
-                                  hw_collecting);
+                                  hw_collecting,
+                                  sys_priority,
+                                  sys_id);
 
     /***************************************************************************
      *   Register the LACP Mcast address with the L2 Manager,
@@ -371,7 +377,9 @@ initialize_per_port_variables(lacp_per_port_variables_t *plpinfo,
                               short aggregation,
                               int link_state,
                               int link_speed,
-                              int hw_collecting)
+                              int hw_collecting,
+                              short sys_priority,
+                              char *sys_id)
 {
     RENTRY();
 
@@ -400,6 +408,7 @@ initialize_per_port_variables(lacp_per_port_variables_t *plpinfo,
         plpinfo->lacp_control.port_enabled = FALSE;
     }
 
+    /* There are override values that may be present, as noted below. */
     memcpy(plpinfo->actor_admin_system_variables.system_mac_addr,
            my_mac_addr,
            MAC_ADDR_LENGTH);
@@ -424,6 +433,22 @@ initialize_per_port_variables(lacp_per_port_variables_t *plpinfo,
 
     if (flags & LACP_LPORT_HW_COLL_STATUS_PRESENT) {
         plpinfo->hw_collecting = hw_collecting;
+    }
+
+    if (flags & LACP_LPORT_SYS_ID_FIELD_PRESENT) {
+        plpinfo->actor_sys_id_override = TRUE;
+        memcpy(plpinfo->actor_admin_system_variables.system_mac_addr, sys_id,
+               MAC_ADDR_LENGTH);
+    } else {
+        plpinfo->actor_sys_id_override = FALSE;
+    }
+
+    if (flags & LACP_LPORT_SYS_PRIORITY_FIELD_PRESENT) {
+        plpinfo->actor_prio_override = TRUE;
+        plpinfo->actor_admin_system_variables.system_priority =
+            htons(sys_priority);
+    } else {
+        plpinfo->actor_prio_override = FALSE;
     }
 
     RDEBUG(DL_INFO, "the updated settings are : "
@@ -1726,14 +1751,66 @@ set_all_port_system_mac_addr(void)
     plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
 
     while (plpinfo) {
-        memcpy(plpinfo->actor_admin_system_variables.system_mac_addr, my_mac_addr,
-               MAC_ADDR_LENGTH);
-        memcpy(plpinfo->actor_oper_system_variables.system_mac_addr, my_mac_addr,
-               MAC_ADDR_LENGTH);
+        if (plpinfo->actor_sys_id_override == FALSE) {
+            memcpy(plpinfo->actor_admin_system_variables.system_mac_addr, my_mac_addr,
+                   MAC_ADDR_LENGTH);
+            memcpy(plpinfo->actor_oper_system_variables.system_mac_addr, my_mac_addr,
+                   MAC_ADDR_LENGTH);
+        }
         plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
     }
 
-} /* set_all_port_system_mac_addr */
+}
+
+//*****************************************************************
+// Function : set_sport_system_mac_addr
+//*****************************************************************
+void
+set_sport_system_mac_addr(port_handle_t handle, unsigned char *mac)
+{
+    lacp_per_port_variables_t *plpinfo;
+
+    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+
+    while (plpinfo) {
+        if (plpinfo->sport_handle == handle) {
+            plpinfo->actor_sys_id_override = TRUE;
+            memcpy(plpinfo->actor_admin_system_variables.system_mac_addr,
+                   mac,
+                   MAC_ADDR_LENGTH);
+            memcpy(plpinfo->actor_oper_system_variables.system_mac_addr,
+                   mac,
+                   MAC_ADDR_LENGTH);
+        }
+        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+    }
+
+} /* set_sport_system_mac_addr */
+
+//*****************************************************************
+// Function : clear_sport_system_mac_addr
+//*****************************************************************
+void
+clear_sport_system_mac_addr(port_handle_t handle)
+{
+    lacp_per_port_variables_t *plpinfo;
+
+    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+
+    while (plpinfo) {
+        if (plpinfo->sport_handle == handle) {
+            plpinfo->actor_sys_id_override = FALSE;
+            memcpy(plpinfo->actor_admin_system_variables.system_mac_addr,
+                   my_mac_addr,
+                   MAC_ADDR_LENGTH);
+            memcpy(plpinfo->actor_oper_system_variables.system_mac_addr,
+                   my_mac_addr,
+                   MAC_ADDR_LENGTH);
+        }
+        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+    }
+
+}
 
 //*****************************************************************
 // Function : set_all_port_system_priority
@@ -1746,14 +1823,60 @@ set_all_port_system_priority(void)
     plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
 
     while (plpinfo) {
-        plpinfo->actor_admin_system_variables.system_priority =
-            htons(actor_system_priority);
-        plpinfo->actor_oper_system_variables.system_priority =
-            plpinfo->actor_admin_system_variables.system_priority;
+        if (plpinfo->actor_prio_override == FALSE) {
+            plpinfo->actor_admin_system_variables.system_priority =
+                htons(actor_system_priority);
+            plpinfo->actor_oper_system_variables.system_priority =
+                plpinfo->actor_admin_system_variables.system_priority;
+        }
         plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
     }
 
-} /* set_all_port_system_priority */
+}
+
+//*****************************************************************
+// Function : set_port_system_priority
+//*****************************************************************
+void
+set_sport_system_priority(port_handle_t handle, int prio)
+{
+    lacp_per_port_variables_t *plpinfo;
+
+    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+
+    while (plpinfo) {
+        if (plpinfo->sport_handle == handle) {
+            plpinfo->actor_prio_override = TRUE;
+            plpinfo->actor_admin_system_variables.system_priority = htons(prio);
+            plpinfo->actor_oper_system_variables.system_priority =
+                plpinfo->actor_admin_system_variables.system_priority;
+        }
+        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+    }
+
+} /* set_sport_system_priority */
+
+//*****************************************************************
+// Function : clear_port_system_priority
+//*****************************************************************
+void
+clear_sport_system_priority(port_handle_t handle)
+{
+    lacp_per_port_variables_t *plpinfo;
+
+    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+
+    while (plpinfo) {
+        if (plpinfo->sport_handle == handle) {
+            plpinfo->actor_prio_override = FALSE;
+            plpinfo->actor_admin_system_variables.system_priority =
+                htons(actor_system_priority);
+            plpinfo->actor_oper_system_variables.system_priority =
+                plpinfo->actor_admin_system_variables.system_priority;
+        }
+        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+    }
+} /* clear_sport_system_priority */
 
 //*****************************************************************
 // Function : mlacpVapiSportParamsChange

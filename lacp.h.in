@@ -258,6 +258,8 @@ typedef struct lacp_per_port_variables {
     state_parameters_t actor_oper_port_state;
     system_variables_t actor_admin_system_variables;
     system_variables_t actor_oper_system_variables;
+    bool actor_prio_override;
+    bool actor_sys_id_override;
 
     /********************************************************************
      *  Partner's variables

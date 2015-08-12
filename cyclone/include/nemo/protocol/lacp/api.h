@@ -86,6 +86,9 @@ struct MLt_lacp_api__lport_params {
     int  partner_distributing;
     int  partner_defaulted;
     int  partner_expired;
+
+    int  sys_priority;
+    char sys_id[6];
 };
 
 struct MLt_lacp_api__lport_protocol {
