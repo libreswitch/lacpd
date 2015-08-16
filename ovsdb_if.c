@@ -564,7 +564,7 @@ send_config_lport_msg(struct iface_data *info_ptr)
         msg->lport_handle = PM_SMPT2HANDLE(0,0,info_ptr->index,
                                            info_ptr->cycl_port_type);
         msg->link_state = (info_ptr->link_state == INTERFACE_LINK_STATE_UP) ? 1 : 0;
-        msg->link_speed = INTF_TO_LACP_LINK_SPEED(info_ptr->link_speed);
+        msg->link_speed = info_ptr->link_speed;
 
         /* NOTE: 802.3ad requires port number to be non-zero.  So we'll
          *       just use 1-based port number, instead of 0-based.
@@ -680,7 +680,7 @@ send_link_state_change_msg(struct iface_data *info_ptr)
         msg = (struct MLt_vpm_api__lport_state_change *)(event+1);
         msg->lport_handle = PM_SMPT2HANDLE(0, 0, info_ptr->index,
                                            info_ptr->cycl_port_type);
-        msg->link_speed = INTF_TO_LACP_LINK_SPEED(info_ptr->link_speed);
+        msg->link_speed = info_ptr->link_speed;
 
         ml_send_event(event);
     }
@@ -852,7 +852,7 @@ add_new_interface(const struct ovsrec_interface *ifrow)
         idp->link_speed = 0;
         if (ifrow->n_link_speed > 0) {
             /* There should only be one speed. */
-            idp->link_speed = ifrow->link_speed[0];
+            idp->link_speed = INTF_TO_LACP_LINK_SPEED(ifrow->link_speed[0]);
         }
 
         idp->lag_eligible = false;
@@ -977,7 +977,7 @@ update_interface_cache(void)
             new_speed = 0;
             if (ifrow->n_link_speed > 0) {
                 /* There should only be one speed. */
-                new_speed = ifrow->link_speed[0];
+                new_speed = INTF_TO_LACP_LINK_SPEED(ifrow->link_speed[0]);
             }
 
             new_duplex = INTERFACE_DUPLEX_HALF;
@@ -2581,7 +2581,7 @@ lacpd_interface_dump(struct ds *ds, struct iface_data *idp)
                   ? OVSREC_INTERFACE_LINK_STATE_UP :
                   OVSREC_INTERFACE_LINK_STATE_DOWN);
     ds_put_format(ds, "    link_speed           : %d Mbps\n",
-                  INTF_TO_LACP_LINK_SPEED(idp->link_speed));
+                  idp->link_speed);
     ds_put_format(ds, "    duplex               : %s\n",
                   idp->duplex == INTERFACE_DUPLEX_FULL
                   ? OVSREC_INTERFACE_DUPLEX_FULL :
