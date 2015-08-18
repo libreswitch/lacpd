@@ -343,6 +343,70 @@ alloc_msg(int size)
 } /* alloc_msg */
 
 static void
+set_port_overrides(struct port_data *portp, struct iface_data *idp)
+{
+    ML_event *event;
+    struct MLt_lacp_api__set_lport_overrides *msg;
+    int msgSize;
+
+    msgSize = sizeof(ML_event)+sizeof(struct MLt_lacp_api__set_lport_overrides);
+
+    event = (ML_event*)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_lacp_api__set_lport_overrides;
+
+        msg = (struct MLt_lacp_api__set_lport_overrides *)(event+1);
+
+        msg->lport_handle = PM_SMPT2HANDLE(0,0,idp->index,
+                                           idp->cycl_port_type);
+        msg->priority = portp->sys_prio;
+
+        memset(msg->actor_sys_mac, 0, sizeof(msg->actor_sys_mac));
+
+        if (portp->sys_id) {
+            struct ether_addr *eth_addr_p;
+            struct ether_addr eth_addr;
+
+            eth_addr_p = ether_aton_r(portp->sys_id, &eth_addr);
+
+            if (eth_addr_p != NULL) {
+                memcpy(msg->actor_sys_mac, eth_addr_p, sizeof(msg->actor_sys_mac));
+            }
+        }
+
+        ml_send_event(event);
+    }
+}
+
+static void
+clear_port_overrides(struct port_data *portp, struct iface_data *idp)
+{
+    ML_event *event;
+    struct MLt_lacp_api__set_lport_overrides *msg;
+    int msgSize;
+
+    msgSize = sizeof(ML_event)+sizeof(struct MLt_lacp_api__set_lport_overrides);
+
+    event = (ML_event*)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_lacp_api__set_lport_overrides;
+
+        msg = (struct MLt_lacp_api__set_lport_overrides *)(event+1);
+
+        msg->lport_handle = PM_SMPT2HANDLE(0,0,idp->index,
+                                           idp->cycl_port_type);
+        msg->priority = 0;
+        memset(msg->actor_sys_mac, 0, sizeof(msg->actor_sys_mac));
+
+        ml_send_event(event);
+    }
+}
+
+static void
 send_sys_pri_msg(int priority)
 {
     ML_event *event;
@@ -366,54 +430,6 @@ send_sys_pri_msg(int priority)
         ml_send_event(event);
     }
 } /* send_sys_pri_msg */
-
-static void
-send_sport_sys_pri_msg(int lag_id, int priority)
-{
-        ML_event *event;
-        struct MLt_lacp_api__sport_actorSysPriority *msg;
-        int msgSize;
-
-        VLOG_DBG("%s: lag=%d, priority=%d", __FUNCTION__, lag_id, priority);
-
-        msgSize = sizeof(ML_event)+sizeof(struct MLt_lacp_api__sport_actorSysPriority);
-        event = (ML_event*)alloc_msg(msgSize);
-
-        if (event != NULL) {
-            event->sender.peer = ml_cfgMgr_index;
-            event->msgnum = MLm_lacp_api__set_sport_ActorSysPriority;
-
-            msg = (struct MLt_lacp_api__sport_actorSysPriority *)(event+1);
-            msg->priority = priority;
-            msg->sport_handle = PM_LAG2HANDLE(lag_id);
-
-            ml_send_event(event);
-        }
-} /* send_sport_sys_pri_msg */
-
-static void
-clear_sport_sys_pri_msg(int lag_id)
-{
-        ML_event *event;
-        struct MLt_lacp_api__sport_actorSysPriority *msg;
-        int msgSize;
-
-        VLOG_DBG("%s: lag_id=%d", __FUNCTION__, lag_id);
-
-        msgSize = sizeof(ML_event)+sizeof(struct MLt_lacp_api__sport_actorSysPriority);
-        event = (ML_event*)alloc_msg(msgSize);
-
-        if (event != NULL) {
-            event->sender.peer = ml_cfgMgr_index;
-            event->msgnum = MLm_lacp_api__clear_sport_ActorSysPriority;
-
-            msg = (struct MLt_lacp_api__sport_actorSysPriority *)(event+1);
-            msg->priority = 0;
-            msg->sport_handle = PM_LAG2HANDLE(lag_id);
-
-            ml_send_event(event);
-        }
-} /* clear_sport_sys_pri_msg */
 
 static void
 send_sys_mac_msg(struct ether_addr *macAddr)
@@ -441,60 +457,6 @@ send_sys_mac_msg(struct ether_addr *macAddr)
         ml_send_event(event);
     }
 } /* send_sys_mac_msg */
-
-static void
-send_sport_sys_mac_msg(int lag_id, struct ether_addr *macAddr)
-{
-    ML_event *event;
-    struct MLt_lacp_api__sport_actorSysMac *macMsg;
-    int msgSize;
-
-    VLOG_DBG("%s: entry", __FUNCTION__);
-
-    msgSize = sizeof(ML_event) + sizeof(struct MLt_lacp_api__sport_actorSysMac);
-
-    event = (ML_event *)alloc_msg(msgSize);
-
-    if (event != NULL) {
-        /*** From CfgMgr peer. ***/
-        event->sender.peer = ml_cfgMgr_index;
-        event->msgnum = MLm_lacp_api__set_sport_ActorSysMac;
-
-        macMsg = (struct MLt_lacp_api__sport_actorSysMac *)(event+1);
-
-        /* Copy MAC address. */
-        memcpy(macMsg->actor_sys_mac, macAddr, ETH_ALEN);
-        macMsg->sport_handle = PM_LAG2HANDLE(lag_id);
-
-        ml_send_event(event);
-    }
-} /* send_sport_sys_mac_msg */
-
-static void
-clear_sport_sys_mac_msg(int lag_id)
-{
-    ML_event *event;
-    struct MLt_lacp_api__sport_actorSysMac *macMsg;
-    int msgSize;
-
-    VLOG_DBG("%s: entry", __FUNCTION__);
-
-    msgSize = sizeof(ML_event) + sizeof(struct MLt_lacp_api__sport_actorSysMac);
-
-    event = (ML_event *)alloc_msg(msgSize);
-
-    if (event != NULL) {
-        /*** From CfgMgr peer. ***/
-        event->sender.peer = ml_cfgMgr_index;
-        event->msgnum = MLm_lacp_api__clear_sport_ActorSysMac;
-
-        macMsg = (struct MLt_lacp_api__sport_actorSysMac *)(event+1);
-
-        macMsg->sport_handle = PM_LAG2HANDLE(lag_id);
-
-        ml_send_event(event);
-    }
-} /* clear_sport_sys_mac_msg */
 
 static void
 send_lag_create_msg(int lag_id)
@@ -1330,6 +1292,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                 db_clear_interface(idp);
                 set_interface_lag_eligibility(portp, idp, false);
                 idp->port_datap = NULL;
+                clear_port_overrides(portp, idp);
                 rc++;
             }
         }
@@ -1361,6 +1324,14 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
 
         if (!LACP_ENABLED_ON_PORT(portp->lacp_mode)) {
             /* LACP was not on (static LAG).  Need to turn on LACP. */
+
+            /* Set port override values in each configured member. */
+            SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+                struct iface_data *idp = shash_find_data(&all_interfaces, node->name);
+                if (idp) {
+                    set_port_overrides(portp, idp);
+                }
+            }
 
             /* Create super port in LACP state machine. */
             if (!portp->lag_id) {
@@ -1406,6 +1377,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                             shash_find_data(&all_interfaces, node->name);
                         if (idp) {
                             db_clear_interface(idp);
+                            clear_port_overrides(portp, idp);
                         }
                     }
                 }
@@ -1440,6 +1412,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
             }
             shash_add(&portp->cfg_member_ifs, node->name, (void *)idp);
             idp->port_datap = portp;
+            set_port_overrides(portp, idp);
         }
     }
 
@@ -1475,6 +1448,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
         int sys_prio;
         struct ether_addr *eth_addr_p;
         struct ether_addr eth_addr;
+        bool changed = false;
 
         sys_id = smap_get(&(row->other_config),
                       PORT_OTHER_CONFIG_MAP_LACP_SYSTEM_ID);
@@ -1484,11 +1458,8 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
 
         /* If there's a change in the system-priority, send the update. */
         if (sys_prio != portp->sys_prio) {
-            if (sys_prio == 0) {
-                clear_sport_sys_pri_msg(portp->lag_id);
-                portp->sys_prio = 0;
-            } else if (IS_VALID_SYS_PRIO(sys_prio)) {
-                send_sport_sys_pri_msg(portp->lag_id, sys_prio);
+            if (sys_prio == 0 || IS_VALID_SYS_PRIO(sys_prio)) {
+                changed = true;
                 portp->sys_prio = sys_prio;
             }
         }
@@ -1499,22 +1470,26 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
             (sys_id != NULL && portp->sys_id != NULL &&
                 strcmp(sys_id, portp->sys_id) != 0)) {
             if (sys_id == NULL) {
-                clear_sport_sys_mac_msg(portp->lag_id);
                 free(portp->sys_id);
                 portp->sys_id = NULL;
+                changed = true;
             } else {
                 /* Convert the string to a mac address. */
                 eth_addr_p = ether_aton_r(sys_id, &eth_addr);
                 if (eth_addr_p) {
-                    send_sport_sys_mac_msg(portp->lag_id, eth_addr_p);
-
                     /* Save the system-id *after* it's been validated. */
                     free(portp->sys_id);
-                    if (sys_id != NULL) {
-                        portp->sys_id = strdup(sys_id);
-                    } else {
-                        portp->sys_id = NULL;
-                    }
+                    portp->sys_id = strdup(sys_id);
+                    changed = true;
+                }
+            }
+        }
+        if (changed) {
+            SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+                struct iface_data *idp = shash_find_data(&all_interfaces,
+                                                         node->name);
+                if (idp) {
+                    set_port_overrides(portp, idp);
                 }
             }
         }
@@ -1684,11 +1659,7 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
                            OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_ID);
         /* If LACP system ID is not configured, then use system mac. */
         if (sys_mac == NULL || (strlen(sys_mac) != HC_MAC_STR_SIZE - 1)) {
-            if (lacpd_init) {
-                sys_mac = ovs_vsw->system_mac;
-            } else {
-                sys_mac = system_id;
-            }
+            sys_mac = ovs_vsw->system_mac;
         }
 
         if (sys_mac == NULL || (strlen(sys_mac) != HC_MAC_STR_SIZE - 1)) {
@@ -1714,7 +1685,8 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
 
         /* See if user set lacp-system-priority */
         sys_prio = smap_get_int(&(ovs_vsw->lacp_config),
-                                OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_PRIORITY, -1);
+                                OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_PRIORITY,
+                                DFLT_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY);
 
         if (IS_VALID_SYS_PRIO(sys_prio) || lacpd_init) {
 

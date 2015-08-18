@@ -180,24 +180,6 @@ mlacp_process_api_msg(ML_event *pevent)
         }
         break;
 
-        case MLm_lacp_api__set_sport_ActorSysPriority:
-        {
-            struct MLt_lacp_api__sport_actorSysPriority *pMsg = pevent->msg;
-
-            RDEBUG(DL_LACP_RCV, "Port %lld actor sys priority=%d\n", pMsg->sport_handle, pMsg->priority);
-            set_sport_system_priority(pMsg->sport_handle, pMsg->priority);
-        }
-        break;
-
-        case MLm_lacp_api__clear_sport_ActorSysPriority:
-        {
-            struct MLt_lacp_api__sport_actorSysPriority *pMsg = pevent->msg;
-
-            RDEBUG(DL_LACP_RCV, "Port %lld actor clear sys priority\n", pMsg->sport_handle);
-            clear_sport_system_priority(pMsg->sport_handle);
-        }
-        break;
-
         case MLm_lacp_api__setActorSysMac:
         {
             struct MLt_lacp_api__actorSysMac *pMsg = pevent->msg;
@@ -212,27 +194,21 @@ mlacp_process_api_msg(ML_event *pevent)
         }
         break;
 
-        case MLm_lacp_api__set_sport_ActorSysMac:
+        case MLm_lacp_api__set_lport_overrides:
         {
-            struct MLt_lacp_api__sport_actorSysMac *pMsg = pevent->msg;
-            unsigned char *mac_addr = pMsg->actor_sys_mac;
+            struct MLt_lacp_api__set_lport_overrides *pMsg = pevent->msg;
 
-            set_sport_system_mac_addr(pMsg->sport_handle, mac_addr);
+            set_lport_overrides(pMsg->lport_handle, pMsg->priority, pMsg->actor_sys_mac);
 
-            RDEBUG(DL_LACP_RCV, "Set port %lld sys mac addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
-                   pMsg->sport_handle,
-                   mac_addr[0], mac_addr[1], mac_addr[2],
-                   mac_addr[3], mac_addr[4], mac_addr[5]);
-        }
-        break;
-
-        case MLm_lacp_api__clear_sport_ActorSysMac:
-        {
-            struct MLt_lacp_api__sport_actorSysMac *pMsg = pevent->msg;
-
-            clear_sport_system_mac_addr(pMsg->sport_handle);
-
-            RDEBUG(DL_LACP_RCV, "Clear port %lld sys mac addr\n", pMsg->sport_handle);
+            RDEBUG(SL_LACP_RCV, "Set interface %lld port overrides: %d, %02x:%02x:%02x:%02x:%02x:%02x\n",
+                    pMsg->lport_handle,
+                    pMsg->priority,
+                    pMsg->actor_sys_mac[0],
+                    pMsg->actor_sys_mac[1],
+                    pMsg->actor_sys_mac[2],
+                    pMsg->actor_sys_mac[3],
+                    pMsg->actor_sys_mac[4],
+                    pMsg->actor_sys_mac[5]);
         }
         break;
 
@@ -261,12 +237,6 @@ mlacp_process_api_msg(ML_event *pevent)
             status = mvlan_get_sport(pMsg->handle, &psport,
                                      MLm_vpm_api__get_sport);
             if (R_SUCCESS == status) {
-
-                /* Any lports attached to sport should be set back to
-                 * defaults for system priority and system mac.
-                 */
-                clear_sport_system_priority(pMsg->handle);
-                clear_sport_system_mac_addr(pMsg->handle);
 
                 status = mvlan_destroy_sport(psport);
 

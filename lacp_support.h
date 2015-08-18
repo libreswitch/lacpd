@@ -149,12 +149,8 @@ extern void LACP_poll_link_state(lacp_per_port_variables_t *);
 extern void display_marker_response_pdu(marker_pdu_payload_t *, char *, char *, int);
 extern void LACPPutPortUp(ulong);
 extern void set_all_port_system_priority(void);
-extern void set_sport_system_priority(port_handle_t, int);
-extern void clear_sport_system_priority(port_handle_t);
-
 extern void set_all_port_system_mac_addr(void);
-extern void set_sport_system_mac_addr(port_handle_t, unsigned char *);
-extern void clear_sport_system_mac_addr(port_handle_t);
+extern void set_lport_overrides(port_handle_t, int, unsigned char *);
 
 extern void lacp_support_diag_dump(int port);
 
