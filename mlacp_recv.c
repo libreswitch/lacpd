@@ -253,17 +253,18 @@ mlacp_process_api_msg(ML_event *pevent)
         break;
 
         case MLm_vpm_api__set_lacp_sport_params:
+        case MLm_vpm_api__unset_lacp_sport_params:
         {
             struct MLt_vpm_api__lacp_sport_params *pMsg = pevent->msg;
             int status;
 
-            RDEBUG(DL_LACP_RCV, "Set LAG Sport parameters.  handle=0x%llx\n",
+            RDEBUG(DL_LACP_RCV, "Set/Unset LAG Sport parameters.  handle=0x%llx\n",
                    pMsg->sport_handle);
 
             status = mvlan_api_modify_sport_params(pMsg, pevent->msgnum);
 
             if (status != R_SUCCESS) {
-                VLOG_ERR("Failed to set LAG Sport parms, status=%d", status);
+                VLOG_ERR("Failed to set/unset LAG Sport parms, status=%d", status);
             }
         }
         break;

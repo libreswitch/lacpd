@@ -541,6 +541,31 @@ send_config_lag_msg(int lag_id, int actor_key, int cycl_ptype)
 } /* send_config_lag_msg */
 
 static void
+send_unconfig_lag_msg(int lag_id)
+{
+    ML_event *event;
+    struct MLt_vpm_api__lacp_sport_params *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: lag_id=%d", __FUNCTION__, lag_id);
+
+    msgSize = sizeof(ML_event) + sizeof(struct MLt_vpm_api__lacp_sport_params);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. (This is for the VPM side) ***/
+        event->sender.peer = ml_cfgMgr_index;
+        event->msgnum = MLm_vpm_api__unset_lacp_sport_params;
+
+        msg = (struct MLt_vpm_api__lacp_sport_params *)(event+1);
+        msg->sport_handle = PM_LAG2HANDLE(lag_id);
+
+        ml_send_event(event);
+    }
+} /* send_unconfig_lag_msg */
+
+static void
 send_config_lport_msg(struct iface_data *info_ptr)
 {
     ML_event *event;
@@ -878,11 +903,7 @@ add_new_interface(const struct ovsrec_interface *ifrow)
         /* If not supplied by user, default is set 1 */
         idp->actor_priority = IS_VALID_ACTOR_PRI(val) ? val : 1;
 
-        /* Set actor_key */
-        val = smap_get_int(&(ifrow->other_config),
-                           INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY, -1);
-        /* If not supplied by user, default is set by update_interface_lag_eligibility() */
-        idp->actor_key = IS_VALID_AGGR_KEY(val) ? val : -1;
+        idp->actor_key = -1;
 
         VLOG_DBG("Created local data for interface %s", ifrow->name);
     }
@@ -954,14 +975,6 @@ update_interface_cache(void)
             if (IS_VALID_ACTOR_PRI(val) && (val != idp->actor_priority)) {
                 idp->actor_priority = val;
                 flags |= LACP_LPORT_PORT_PRIORITY_PRESENT;
-            }
-
-            /* Update actor_key */
-            val = smap_get_int(&(ifrow->other_config),
-                               INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY, -1);
-            if (IS_VALID_AGGR_KEY(val) && (val != idp->actor_key)) {
-                idp->actor_key = val;
-                flags |= LACP_LPORT_PORT_KEY_PRESENT;
             }
 
             new_link_state = INTERFACE_LINK_STATE_DOWN;
@@ -1185,10 +1198,7 @@ update_interface_lag_eligibility(struct iface_data *idp)
     }
     portp = idp->port_datap;
 
-    /* If actor_key not set, set to lag_id */
-    if (!IS_VALID_AGGR_KEY(idp->actor_key)) {
-        idp->actor_key = portp->lag_id;
-    }
+    idp->actor_key = portp->lag_id;
 
     /* Check if the interface is currently eligible. */
     if (shash_find_data(&portp->eligible_member_ifs, idp->name)) {
@@ -1384,6 +1394,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
 
                 /* Delete super port in LACP state machine. */
                 if (portp->lag_id) {
+                    send_unconfig_lag_msg(portp->lag_id);
                     send_lag_delete_msg(portp->lag_id);
                     free_lag_id(portp->lag_id);
                     portp->lag_id = 0;
@@ -1523,7 +1534,11 @@ del_old_port(struct shash_node *sh_node)
                 rc++;
             }
         }
-        send_lag_delete_msg(portp->lag_id);
+        if (portp->lag_id) {
+            send_unconfig_lag_msg(portp->lag_id);
+            send_lag_delete_msg(portp->lag_id);
+            free_lag_id(portp->lag_id);
+        }
         free(portp->name);
         free(portp);
         shash_delete(&all_ports, sh_node);
@@ -2393,7 +2408,7 @@ db_add_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo)
 
     shash_add_once(&portp->participant_ifs, idp->name, idp);
 
-    VLOG_DBG("Adding interface (%d) to lag (%d): %d participants", port, lag_id, (int)shash_count(&portp->participant_ifs));
+    VLOG_DBG("Added interface (%d) to lag (%d): %d participants", port, lag_id, (int)shash_count(&portp->participant_ifs));
 
     if (plpinfo->lag != NULL) {
         portp->lag_member_speed = lport_type_to_speed(ntohs(plpinfo->lag->port_type));
@@ -2443,6 +2458,9 @@ db_delete_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo
 
     node = shash_find(&portp->participant_ifs, idp->name);
     shash_delete(&portp->participant_ifs, node);
+
+    VLOG_DBG("Removed interface (%d) from lag (%d): %d participants",
+             port, lag_id, (int)shash_count(&portp->participant_ifs));
 
     if (plpinfo->lag != NULL) {
         portp->lag_member_speed = lport_type_to_speed(plpinfo->lag->port_type);

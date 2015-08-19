@@ -423,11 +423,7 @@ collecting_state_action(lacp_per_port_variables_t *plpinfo)
 
     enable_collecting(plpinfo);
 
-    if (plpinfo->hw_collecting) {
-        plpinfo->actor_oper_port_state.collecting = TRUE;
-    } else {
-        plpinfo->actor_oper_port_state.collecting = FALSE;
-    }
+    plpinfo->actor_oper_port_state.collecting = TRUE;
 
     plpinfo->lacp_control.ntt = TRUE;
 
