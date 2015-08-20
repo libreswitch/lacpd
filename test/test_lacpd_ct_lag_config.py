@@ -91,6 +91,12 @@ def set_open_vsw_lacp_config(sw, config):
     debug(c)
     return sw.cmd(c)
 
+def sys_open_vsw_lacp_config_clear(sw):
+    c = OVS_VSCTL + "remove open_vswitch . lacp_config lacp-system-id " + \
+        "lacp_config lacp-system-priority"
+    debug(c)
+    sw.cmd(c)
+
 # Set open_vsw_lacp_config parameter(s)
 def set_port_parameter(sw, port, config):
     c = OVS_VSCTL + "set port " + str(port)
@@ -375,6 +381,7 @@ class lacpdTest(HalonTest):
         info("\n============= lacpd user config (static LAG) tests =============\n")
         s1 = self.net.switches[0]
         s2 = self.net.switches[1]
+        #CLI(Test_lacpd.test.net)
 
 
         # Setup valid pluggable modules.
@@ -516,6 +523,13 @@ class lacpdTest(HalonTest):
         s1 = self.net.switches[0]
         s2 = self.net.switches[1]
 
+        system_mac = {}
+        system_mac[1] = s1.cmd("ovs-vsctl get open_vswitch . system_mac").strip('"').rstrip('"\r\n')
+        system_mac[2] = s2.cmd("ovs-vsctl get open_vswitch . system_mac").strip('"').rstrip('"\r\n')
+        system_prio = {}
+        system_prio[1] = "65534"
+        system_prio[2] = "65534"
+
         base_mac = {}
         base_mac[1] = "70:72:11:11:11:d4"
         base_mac[2] = "70:72:22:22:22:d4"
@@ -535,16 +549,134 @@ class lacpdTest(HalonTest):
         # Enable all the interfaces under test.
         self.test_pre_setup()
 
+        info("Test base mac address\n")
+        for intf in sw_1G_intf[0:2]:
+            sw_set_intf_user_config(s1, intf, ['admin=up'])
+            sw_set_intf_user_config(s2, intf, ['admin=up'])
+
+        sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
+        sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
+
+        short_sleep(8)
+
+        for intf in sw_1G_intf[0:2]:
+            verify_intf_lacp_status(s1,
+                    intf,
+                    {
+                      "actor_system_id" : system_prio[1] + "," + system_mac[1],
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : system_prio[2] + "," + system_mac[2]
+                      },
+                    "s1:" + intf)
+
+            verify_intf_lacp_status(s2,
+                    intf,
+                    {
+                      "actor_system_id" : system_prio[2] + "," + system_mac[2],
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : system_prio[1] + "," + system_mac[1]
+                      },
+                    "s1:" + intf)
+
+
+        info("Override system parameters\n")
         # Change the LACP system ID on the switches.
-        # In VSI environment both the switches start with the same system ID.
         s1.cmd("ovs-vsctl set open_vswitch . lacp_config:lacp-system-id='" + base_mac[1] + "' lacp_config:lacp-system-priority=" + base_prio)
         s2.cmd("ovs-vsctl set open_vswitch . lacp_config:lacp-system-id='" + base_mac[2] + "' lacp_config:lacp-system-priority=" + base_prio)
+
+        short_sleep(6)
+
+        for intf in sw_1G_intf[0:2]:
+            verify_intf_lacp_status(s1,
+                    intf,
+                    {
+                      "actor_system_id" : base_prio + "," + base_mac[1],
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : base_prio + "," + base_mac[2]
+                      },
+                    "s1:" + intf)
+
+            verify_intf_lacp_status(s2,
+                    intf,
+                    {
+                      "actor_system_id" : base_prio + "," + base_mac[2],
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : base_prio + "," + base_mac[1]
+                      },
+                    "s1:" + intf)
+
+        info("Override port parameters\n")
+        s1.cmd("ovs-vsctl set port lag0 other_config:lacp-system-id='" + port_mac + "' other_config:lacp-system-priority=" + port_prio)
+
+        short_sleep(6)
+
+        for intf in sw_1G_intf[0:2]:
+            verify_intf_lacp_status(s1,
+                    intf,
+                    {
+                      "actor_system_id" : port_prio + "," + port_mac,
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : base_prio + "," + base_mac[2]
+                      },
+                    "s1:" + intf)
+
+            verify_intf_lacp_status(s2,
+                    intf,
+                    {
+                      "actor_system_id" : base_prio + "," + base_mac[2],
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : port_prio + "," + port_mac
+                      },
+                    "s1:" + intf)
+
+        info("Delete and recreate lag\n")
+        # delete and recreate lag
+        s1.cmd("ovs-vsctl del-port lag0")
+        s2.cmd("ovs-vsctl del-port lag0")
+
+        sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
+        sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
+
+        short_sleep(4)
+
+        info("Verify system override still in effect\n")
+        for intf in sw_1G_intf[0:2]:
+            verify_intf_lacp_status(s1,
+                    intf,
+                    {
+                      "actor_system_id" : base_prio + "," + base_mac[1],
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : base_prio + "," + base_mac[2]
+                      },
+                    "s1:" + intf)
+
+            verify_intf_lacp_status(s2,
+                    intf,
+                    {
+                      "actor_system_id" : base_prio + "," + base_mac[2],
+                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                        "Dist:1,Def:0,Exp:0",
+                      "partner_system_id" : base_prio + "," + base_mac[1]
+                      },
+                    "s1:" + intf)
+
+        # finish testing
+        s1.cmd("ovs-vsctl del-port lag0")
+        s2.cmd("ovs-vsctl del-port lag0")
+
+
 
         # Create two dynamic LAG with two ports each.
         # the current schema doesn't allow creating a bond
         # with less than two ports. Once that is changed
         # we should modify the test case.
-        s1.cmd("ovs-appctl -t lacpd vlog/set DBG")
         sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
         sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
         short_sleep()
@@ -589,15 +721,28 @@ class lacpdTest(HalonTest):
         info("Verify open_vswitch:lacp_config:lacp-system-priority.\n")
         assert sys[0] == change_prio, "actor_system_priority should be %s, is %s".format(change_prio, sys[0])
 
+        # Clear sys_id and sys_pri, verify that values go back to default
+        sys_open_vsw_lacp_config_clear(s1)
+
+        short_sleep(4)
+        verify_intf_lacp_status(s1,
+                intf,
+                {
+                  "actor_system_id" : system_prio[1] + "," + system_mac[1],
+                  "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                    "Dist:1,Def:0,Exp:0",
+                  "partner_system_id" : base_prio + "," + base_mac[2]
+                  },
+                "s1:" + intf)
+
         # Attempt to set invalid sys_id and invalid sys_pri
         set_open_vsw_lacp_config(s1, ['lacp-system-id=' + invalid_mac])
-        # HALON_TODO: smap_get_int returns 55 for "55a", so this test fails. Commenting out for now.
-        #set_open_vsw_lacp_config(s1, ['lacp-system-priority=55a'])
-        short_sleep(2)
+        set_open_vsw_lacp_config(s1, ['lacp-system-priority=99999'])
+        short_sleep(4)
         sys = sw_get_intf_state(s1, intf, ['lacp_status:actor_system_id']).split(',')
-        assert sys[1] == change_mac, \
-                         "actor_system_id should be %s, is %s".format(change_mac, sys[1])
-        #assert sys[0] == change_prio, "actor_system_priority should be %s, is %s".format(change_prio, sys[0])
+        assert sys[1] == system_mac[1], \
+                         "actor_system_id should be %s, is %s".format(system_mac[1], sys[1])
+        assert sys[0] == system_prio[1], "actor_system_priority should be %s, is %s".format(system_prio[1], sys[0])
 
 
         # Test port:lacp
@@ -670,6 +815,8 @@ class lacpdTest(HalonTest):
         # implementation has been removed from lacpd.
         # Test interface:other_config:{lacp-port-id,lacp-port-priority}
 
+        # save original values
+        original_pri_info = sw_get_intf_state(s1, intf, ['lacp_status:actor_port_id']).split(',')
         # Set port_id, port_priority, and aggregation-key
         set_intf_other_config(s1, intf, ['lacp-port-id=222', 'lacp-port-priority=123'])
         short_sleep()
@@ -691,10 +838,10 @@ class lacpdTest(HalonTest):
         pri_info = sw_get_intf_state(s1, intf, ['lacp_status:actor_port_id']).split(',')
 
         info("Verify port-priority.\n")
-        assert pri_info[0] == '123', "Port priority should be 123, is %s" % pri_info[0]
+        assert pri_info[0] == original_pri_info[0], "Port priority should be %s, is %s".format(original_pri_info[0], pri_info[0])
 
         info("Verify port-id.\n")
-        assert pri_info[1] == '222', "Port id should be 222, is %s" % pri_info[1]
+        assert pri_info[1] == original_pri_info[1], "Port id should be %s, is %s".format(original_pri_info[1], pri_info[1])
 
         set_intf_other_config(s1, intf, ['lacp-port-id=65536', 'lacp-port-priority=65536'])
         short_sleep(2)
@@ -703,11 +850,24 @@ class lacpdTest(HalonTest):
         pri_info = sw_get_intf_state(s1, intf, ['lacp_status:actor_port_id']).split(',')
 
         info("Verify port-priority.\n")
-        assert pri_info[0] == '123', "Port priority should be 123, is %s" % pri_info[0]
+        assert pri_info[0] == original_pri_info[0], "Port priority should be %s, is %s".format(original_pri_info[0], pri_info[0])
 
         info("Verify port-id.\n")
-        assert pri_info[1] == '222', "Port id should be 222, is %s" % pri_info[1]
+        assert pri_info[1] == original_pri_info[1], "Port id should be %s, is %s".format(original_pri_info[1], pri_info[1])
 
+        info("Clear lacp-port-id and lacp-port-priority\n")
+        s1.cmd("ovs-vsctl remove interface " + intf + " other_config lacp-port-id")
+        s1.cmd("ovs-vsctl remove interface " + intf + " other_config lacp-port-priority")
+
+        short_sleep(2)
+
+        pri_info = sw_get_intf_state(s1, intf, ['lacp_status:actor_port_id']).split(',')
+
+        info("Verify port-priority.\n")
+        assert pri_info[0] == original_pri_info[0], "Port priority should be %s, is %s".format(original_pri_info[0], pri_info[0])
+
+        info("Verify port-id.\n")
+        assert pri_info[1] == original_pri_info[1], "Port id should be %s, is %s".format(original_pri_info[1], pri_info[1])
 
         info("Verify port lacp_status\n")
         # verify lag status
@@ -728,7 +888,7 @@ class lacpdTest(HalonTest):
                     intf,
                     { "actor_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
                                       "Dist:1,Def:0,Exp:0",
-                      "actor_system_id" : change_prio + "," + change_mac,
+                      "actor_system_id" : system_prio[1] + "," + system_mac[1],
                       "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
                                         "Dist:1,Def:0,Exp:0",
                       "partner_system_id" : base_prio + "," + base_mac[2]
@@ -741,7 +901,7 @@ class lacpdTest(HalonTest):
                       "actor_system_id" : base_prio + "," + base_mac[2],
                       "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
                                         "Dist:1,Def:0,Exp:0",
-                      "partner_system_id" : change_prio + "," + change_mac
+                      "partner_system_id" : system_prio[1] + "," + system_mac[1]
                       },
                     "s2:" + intf)
 
@@ -827,7 +987,7 @@ class lacpdTest(HalonTest):
         s2.cmd("ovs-vsctl remove port lag0 other_config lacp-system-id "
                "other_config lacp-system-priority")
 
-        short_sleep()
+        short_sleep(2)
 
         # verify that lag0 changed back to system values
         for intf in sw_1G_intf[0:3]:
@@ -872,11 +1032,11 @@ class Test_lacpd:
         del self.test
 
     # Link aggregation(lacp) daemon tests.
-    def test_lacpd_static_lag_config(self):
-        self.test.static_lag_config()
+    #def test_lacpd_static_lag_config(self):
+    #    self.test.static_lag_config()
 
-    def test_lacpd_static_lag_negative_tests(self):
-        self.test.static_lag_negative_tests()
+    #def test_lacpd_static_lag_negative_tests(self):
+    #    self.test.static_lag_negative_tests()
 
     def test_lacpd_dynamic_lag_config(self):
         self.test.dynamic_lag_config()

@@ -958,7 +958,7 @@ update_interface_cache(void)
         struct iface_data *idp = sh_node->data;
         const struct ovsrec_interface *ifrow =
             shash_find_data(&sh_idl_interfaces, sh_node->name);
-        unsigned int flags = 0;
+        unsigned int flag = 0;
 
         /* Check for changes to row. */
         if (OVSREC_IDL_IS_ROW_INSERTED(ifrow, idl_seqno) ||
@@ -971,10 +971,14 @@ update_interface_cache(void)
 
             /* Update actor_priority */
             val = smap_get_int(&(ifrow->other_config),
-                               INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_PRIORITY, -1);
-            if (IS_VALID_ACTOR_PRI(val) && (val != idp->actor_priority)) {
+                               INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_PRIORITY, 1);
+            if (!IS_VALID_ACTOR_PRI(val)) {
+                val = 1;
+            }
+
+            if (val != idp->actor_priority) {
                 idp->actor_priority = val;
-                flags |= LACP_LPORT_PORT_PRIORITY_PRESENT;
+                flag = 1;
             }
 
             new_link_state = INTERFACE_LINK_STATE_DOWN;
@@ -1003,16 +1007,19 @@ update_interface_cache(void)
                                         INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_ID,
                                         0);
 
-            if ((IS_VALID_PORT_ID(new_port_id) || new_port_id == 0) &&
-                new_port_id != idp->port_id) {
+            if (!IS_VALID_PORT_ID(new_port_id)) {
+                new_port_id = 0;
+            }
+
+            if (new_port_id != idp->port_id) {
                 VLOG_DBG("Interface %s port_id changed in DB: "
                          "new port_id=%d",
                          ifrow->name, new_port_id);
                 idp->port_id = new_port_id;
-                send_config_lport_msg(idp);
+                flag = 1;
             }
 
-            if (flags) {
+            if (flag) {
                 send_config_lport_msg(idp);
             }
 
