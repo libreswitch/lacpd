@@ -30,8 +30,8 @@ configure_file ("${PROJECT_SOURCE_DIR}/lacp.h.in"
 
 # Rules to locate needed libraries
 include(FindPkgConfig)
-pkg_check_modules(OVSCOMMON libovscommon)
-pkg_check_modules(OVSDB libovsdb)
+pkg_check_modules(OVSCOMMON REQUIRED libovscommon)
+pkg_check_modules(OVSDB REQUIRED libovsdb)
 
 include_directories (include ${LIB_VPM_DIR} ${LIB_CYCLONE_DIR}/include
                      ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}
