@@ -1232,7 +1232,7 @@ update_interface_lag_eligibility(struct iface_data *idp)
             new_eligible = false;
         }
 
-        if ((portp->lag_member_speed == 0) && new_eligible) {
+        if (shash_count(&portp->eligible_member_ifs) == 0 && new_eligible) {
             /* First member to join the LAG decides LAG member speed. */
             portp->lag_member_speed = idp->link_speed;
         }
