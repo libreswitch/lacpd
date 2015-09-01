@@ -48,7 +48,7 @@
 #include <nemo/lacp/lacp_fsm.h>
 #include <nemo/protocol/lacp/api.h>
 
-#include <hc-utils.h>
+#include <ops-utils.h>
 
 #include "lacp_halon_if.h"
 #include "lacp.h"
@@ -115,7 +115,7 @@ POOL(port_index, 256);
 struct ovsdb_idl *idl;           /*!< Session handle for OVSDB IDL session. */
 static unsigned int idl_seqno;
 static int system_configured = false;
-static char system_id[HC_MAC_STR_SIZE] = {0};
+static char system_id[OPS_MAC_STR_SIZE] = {0};
 static int system_priority = DFLT_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY;
 
 /**
@@ -1680,11 +1680,11 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
         sys_mac = smap_get(&(ovs_vsw->lacp_config),
                            OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_ID);
         /* If LACP system ID is not configured, then use system mac. */
-        if (sys_mac == NULL || (strlen(sys_mac) != HC_MAC_STR_SIZE - 1)) {
+        if (sys_mac == NULL || (strlen(sys_mac) != OPS_MAC_STR_SIZE - 1)) {
             sys_mac = ovs_vsw->system_mac;
         }
 
-        if (sys_mac == NULL || (strlen(sys_mac) != HC_MAC_STR_SIZE - 1)) {
+        if (sys_mac == NULL || (strlen(sys_mac) != OPS_MAC_STR_SIZE - 1)) {
             VLOG_FATAL("LACP System ID is not available.");
         }
 
@@ -1699,7 +1699,7 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
                 send_sys_mac_msg(eth_addr_p);
 
                 /* Only save after we know it is a valid MAC addr */
-                strncpy(system_id, sys_mac, HC_MAC_STR_SIZE);
+                strncpy(system_id, sys_mac, OPS_MAC_STR_SIZE);
             }
         }
 
