@@ -131,6 +131,7 @@ struct lacp_status_values {
  ****************************************************************************/
 struct iface_data {
     char                *name;              /*!< Name of the interface */
+    enum ovsrec_interface_type_e intf_type; /*!< Interface type */
     struct port_data    *port_datap;        /*!< Pointer to associated port's port_data */
     unsigned int        link_speed;         /*!< Operarational link speed of the interface */
     bool                lag_eligible;       /*!< indicates whether this interface is eligible

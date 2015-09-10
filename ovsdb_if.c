@@ -76,7 +76,8 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
  * Pool definitions
  *
  *********************************/
-#define BITS_PER_BYTE   8
+#define BITS_PER_BYTE           8
+#define MAX_ENTRIES_IN_POOL     256
 
 #define IS_AVAILABLE(a, idx)  ((a[idx/BITS_PER_BYTE] & (1 << (idx % BITS_PER_BYTE))) == 0)
 
@@ -88,7 +89,7 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
 int allocate_next(unsigned char *pool, int size);
 static void free_index(unsigned char *pool, int idx);
 
-POOL(port_index, 256);
+POOL(port_index, MAX_ENTRIES_IN_POOL);
 
 /*********************************************************/
 
@@ -782,6 +783,7 @@ lacpd_ovsdb_if_init(const char *db_path)
     /* Cache Inteface table and columns. */
     ovsdb_idl_add_table(idl, &ovsrec_table_interface);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_name);
+    ovsdb_idl_add_column(idl, &ovsrec_interface_col_type);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_duplex);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_link_state);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_link_speed);
@@ -842,48 +844,77 @@ add_new_interface(const struct ovsrec_interface *ifrow)
         VLOG_WARN("Interface %s specified twice", ifrow->name);
         free(idp);
     } else {
-        int val;
-        const char *hw_id = smap_get(&(ifrow->hw_intf_info),
-                                     INTERFACE_HW_INTF_INFO_MAP_SWITCH_INTF_ID);
+        int port_priority = 0;
 
+        /* Save the interface name. */
         idp->name = xstrdup(ifrow->name);
 
         /* Allocate interface index. */
         /* -- use hw_intf_info:switch_intf_id for now.
          * -- may be overridden with OVS's other_config:lacp-port-id. */
-        idp->index = allocate_next(port_index, 256);
+        idp->index = allocate_next(port_index, MAX_ENTRIES_IN_POOL);
         if (idp->index < 0) {
             VLOG_ERR("Invalid interface index=%d", idp->index);
         }
-        idp->hw_port_number = hw_id ? atoi(hw_id) : -1;
-        if (idp->hw_port_number <= 0) {
-            VLOG_ERR("Invalid interface id, hw_id=%p, id=%d", hw_id, idp->hw_port_number);
-        }
 
-        idp->link_state = INTERFACE_LINK_STATE_DOWN;
-        if (ifrow->link_state) {
-            if (!strcmp(ifrow->link_state, OVSREC_INTERFACE_LINK_STATE_UP)) {
-                idp->link_state = INTERFACE_LINK_STATE_UP;
-            }
-        }
-
-        idp->duplex = INTERFACE_DUPLEX_HALF;
-        if (ifrow->duplex) {
-            if (!strcmp(ifrow->duplex, OVSREC_INTERFACE_DUPLEX_FULL)) {
-                idp->duplex = INTERFACE_DUPLEX_FULL;
-            }
-        }
-
-        idp->link_speed = 0;
-        if (ifrow->n_link_speed > 0) {
-            /* There should only be one speed. */
-            idp->link_speed = INTF_TO_LACP_LINK_SPEED(ifrow->link_speed[0]);
-        }
-
-        idp->lag_eligible = false;
+        /* Save the reference to IDL row. */
         idp->cfg = ifrow;
 
-        /* Intialize the interface to be not part of any LAG.
+        idp->lag_eligible = false;
+        idp->lacp_current = false;
+        idp->lacp_current_set = false;
+        idp->actor_key = -1;
+
+
+        /* Get the interface type. The default interface type is system. */
+        if ((ifrow->type == NULL) ||
+            (ifrow->type[0] == '\0') ||
+            (strcmp(ifrow->type, OVSREC_INTERFACE_TYPE_SYSTEM) == 0)) {
+
+            idp->intf_type = INTERFACE_TYPE_SYSTEM;
+
+        } else if (strcmp(ifrow->type, OVSREC_INTERFACE_TYPE_INTERNAL) == 0) {
+
+            idp->intf_type = INTERFACE_TYPE_INTERNAL;
+        }
+
+        /* The following variables are applicable only for System interfaces. */
+        if (idp->intf_type == INTERFACE_TYPE_SYSTEM) {
+
+            idp->hw_port_number = smap_get_int(&(ifrow->hw_intf_info),
+                                               INTERFACE_HW_INTF_INFO_MAP_SWITCH_INTF_ID, -1);
+            if (idp->hw_port_number <= 0) {
+                VLOG_ERR("Invalid switch interface ID. Name=%s, ID=%d", ifrow->name, idp->hw_port_number);
+            }
+
+            idp->link_state = INTERFACE_LINK_STATE_DOWN;
+            if (ifrow->link_state) {
+                if (!strcmp(ifrow->link_state, OVSREC_INTERFACE_LINK_STATE_UP)) {
+                    idp->link_state = INTERFACE_LINK_STATE_UP;
+                }
+            }
+
+            idp->duplex = INTERFACE_DUPLEX_HALF;
+            if (ifrow->duplex) {
+                if (!strcmp(ifrow->duplex, OVSREC_INTERFACE_DUPLEX_FULL)) {
+                    idp->duplex = INTERFACE_DUPLEX_FULL;
+                }
+            }
+
+            idp->link_speed = 0;
+            if (ifrow->n_link_speed > 0) {
+                /* There should only be one speed. */
+                idp->link_speed = INTF_TO_LACP_LINK_SPEED(ifrow->link_speed[0]);
+            }
+
+            /* Set actor_priority */
+            port_priority = smap_get_int(&(ifrow->other_config),
+                                         INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_PRIORITY, -1);
+            /* If not supplied by user, default is set 1 */
+            idp->actor_priority = IS_VALID_ACTOR_PRI(port_priority) ? port_priority : 1;
+        }
+
+        /* Initialize the interface to be not part of any LAG.
            This column gets updated later. */
         update_interface_hw_bond_config_map_entry(
             idp,
@@ -894,16 +925,6 @@ add_new_interface(const struct ovsrec_interface *ifrow)
             INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED,
             INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE);
 
-        idp->lacp_current = false;
-        idp->lacp_current_set = false;
-
-        /* Set actor_priority */
-        val = smap_get_int(&(ifrow->other_config),
-                           INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_PRIORITY, -1);
-        /* If not supplied by user, default is set 1 */
-        idp->actor_priority = IS_VALID_ACTOR_PRI(val) ? val : 1;
-
-        idp->actor_key = -1;
 
         VLOG_DBG("Created local data for interface %s", ifrow->name);
     }
@@ -960,9 +981,16 @@ update_interface_cache(void)
             shash_find_data(&sh_idl_interfaces, sh_node->name);
         unsigned int flag = 0;
 
+        /* Internal interfaces doesn't participate in LAGs. */
+        if (idp->intf_type == INTERFACE_TYPE_INTERNAL) {
+            VLOG_INFO("Skipping the interface %s ", ifrow->name);
+            continue;
+        }
+
         /* Check for changes to row. */
         if (OVSREC_IDL_IS_ROW_INSERTED(ifrow, idl_seqno) ||
             OVSREC_IDL_IS_ROW_MODIFIED(ifrow, idl_seqno)) {
+
             int val;
             unsigned int new_speed;
             enum ovsrec_interface_duplex_e new_duplex;
@@ -1279,8 +1307,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
              __FUNCTION__, row->name, (int)row->n_interfaces);
 
     /* Set timeout-mode */
-    cp = smap_get(&(row->other_config),
-                  PORT_OTHER_CONFIG_MAP_LACP_TIME);
+    cp = smap_get(&(row->other_config), PORT_OTHER_CONFIG_MAP_LACP_TIME);
     timeout = valid_lacp_timeout(cp);
     if ((timeout != -1) && (timeout != portp->timeout_mode)) {
         portp->timeout_mode = timeout;
@@ -2076,11 +2103,11 @@ allocate_next(unsigned char *pool, int size)
 {
     int idx = 0;
 
-    while (pool[idx] == 0xff && idx * BITS_PER_BYTE < size) {
+    while (pool[idx] == 0xff && (idx * BITS_PER_BYTE) < size) {
         idx++;
     }
 
-    if (idx * BITS_PER_BYTE < size) {
+    if ((idx * BITS_PER_BYTE) < size) {
         idx *= BITS_PER_BYTE;
 
         while (idx < size && !IS_AVAILABLE(pool, idx)) {
