@@ -37,12 +37,12 @@
 #include <openvswitch/vlog.h>
 
 #include <nemo/mqueue.h>
-#include <nemo/protocol/drivers/mlacp.h>
 #include <nemo/pm/pm_cmn.h>
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
 #include <vpm/mvlan_sport.h>
 #include "lacp.h"
+#include "mlacp_recv.h"
 #include "mlacp_fproto.h"
 #include "lacp_support.h"
 #include "lacp_halon_if.h"

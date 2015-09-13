@@ -15,8 +15,8 @@
  *   under the License.
  */
 
-#ifndef __MLACP_H__
-#define __MLACP_H__
+#ifndef __MLACP_RECV_H__
+#define __MLACP_RECV_H__
 
 #define MAX_LACPDU_PKT_SIZE  124
 
@@ -30,4 +30,4 @@ struct MLt_drivers_mlacp__rxPdu {
     char data[MAX_LACPDU_PKT_SIZE];
 };
 
-#endif  /* __MLACP_H__ */
+#endif  /* __MLACP_RECV_H__ */

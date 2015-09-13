@@ -25,7 +25,34 @@
 #ifndef __h_NEMO_PROTOCOL_LACP_API_H__
 #define __h_NEMO_PROTOCOL_LACP_API_H__
 
-#include <nemo/protocol/include/lacp.h>
+struct MLt_include_lacp__debug {
+    unsigned long long lport_handle;
+    int debug_level;
+};
+
+struct MLt_include_lacp__lag_tuple {
+    unsigned long long sport_handle;
+    int local_system_priority;
+    char local_system_mac_addr[6];
+    int local_port_key;
+    int local_port_priority;
+    int local_port_number;
+
+    int remote_system_priority;
+    char remote_system_mac_addr[6];
+    int remote_port_key;
+    int remote_port_priority;
+    int remote_port_number;
+
+    int numPorts;
+    unsigned long long *lport_handles;
+};
+
+struct MLt_include_lacp__key_group {
+    int key_val;
+    int numPorts;
+    unsigned long long *lport_handles;
+};
 
 enum MLm_lacp_api {
     MLm_lacp_api__getLportParams = 0,         //% MLt_lacp_api__lport_params

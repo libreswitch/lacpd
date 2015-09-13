@@ -31,12 +31,12 @@
 #include <nemo/nemo_types.h>
 #include <nemo/avl.h>
 #include <nemo/protocol/lacp/api.h>
-#include <nemo/protocol/drivers/mlacp.h>
 #include <nemo/pm/pm_cmn.h>
 #include <nemo/lacp/lacp_cmn.h>
 #include <nemo/lacp/mlacp_debug.h>
 
 #include "lacp.h"
+#include "mlacp_recv.h"
 #include "mlacp_fproto.h"
 #include "vpm/mvlan_lacp.h"
 
