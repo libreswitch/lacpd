@@ -22,8 +22,8 @@ import time
 import subprocess
 import pytest
 
-from halonvsi.docker import *
-from halonvsi.halon import *
+from opsvsi.docker import *
+from opsvsi.opsvsitest import *
 
 OVS_VSCTL = "/usr/bin/ovs-vsctl "
 
@@ -378,18 +378,18 @@ class myDualSwitchTopo( Topo ):
             self.addLink('s1', 's2', port1=forty_g_intf, port2=forty_g_intf)
 
 
-class lacpdTest(HalonTest):
+class lacpdTest(OpsVsiTest):
 
     def setupNet(self):
 
-        # Create a topology with two Halon switches,
+        # Create a topology with two VsiOpenSwitch switches,
         # and a host connected to each switch.
         host_opts = self.getHostOpts()
         switch_opts = self.getSwitchOpts()
         lacpd_topo = myDualSwitchTopo(sws=2, hopts=host_opts, sopts=switch_opts)
 
-        self.net = Mininet(lacpd_topo, switch=HalonSwitch,
-                           host=Host, link=HalonLink,
+        self.net = Mininet(lacpd_topo, switch=VsiOpenSwitch,
+                           host=Host, link=OpsVsiLink,
                            controller=None, build=True)
 
 
@@ -496,8 +496,8 @@ class lacpdTest(HalonTest):
         for intf in sw_1G_intf[2:8]:
             verify_intf_not_in_bond(s1, intf, "Expected interfaces to be removed from the LAG.")
 
-        # HALON_TODO: If we remove one more Interface,
-        #             how will we know if the LAG has suddenly become PORT
+        # OPS_TODO: If we remove one more Interface,
+        # how will we know if the LAG has suddenly become PORT
 
         # Disable one of the Interfaces, then it should be removed from the LAG.
         info("Verify that a interface is removed from LAG when it is disabled.\n")
@@ -511,16 +511,16 @@ class lacpdTest(HalonTest):
         verify_intf_in_bond(s1, sw_10G_intf[0], \
                             "Re-enabled interface is not added back to the trunk.")
 
-       # HALON_TODO: Enhance VSI to simulate link up/down.
+       # OPS_TODO: Enhance VSI to simulate link up/down.
        # Looks like we need ovs-appctl mechanism to simulate link down,
        # otherwise switchd is always re-setting the link.
-       #  simulate_link_state(s1, sw_10G_intf[0], 'down')
-       #  verify_intf_not_in_bond(s1, sw_10G_intf[0], \
+       # simulate_link_state(s1, sw_10G_intf[0], 'down')
+       # verify_intf_not_in_bond(s1, sw_10G_intf[0], \
        #                          "Link down interface is not removed from the trunk.")
 
-       #  simulate_link_state(s1, sw_10G_intf[0], 'up')
-       #  verify_intf_in_bond(s1, sw_10G_intf[0], \
-       #                          "Interface is not added back when it is linked up")
+       # simulate_link_state(s1, sw_10G_intf[0], 'up')
+       # verify_intf_in_bond(s1, sw_10G_intf[0], \
+       #                     "Interface is not added back when it is linked up")
 
         sw_delete_bond(s1, "lag0")
         sw_delete_bond(s1, "lag1")

@@ -29,8 +29,8 @@
 #define _MVLAN_SPORT_H
 
 #include "lacp_halon.h"
-#include <nemo/nemo_types.h>
-#include <nemo/pm/pm_cmn.h>
+#include <nemo_types.h>
+#include <pm_cmn.h>
 
 #define MVLAN_SPORT_NO_MEM                 -2
 #define MVLAN_SPORT_EXISTS                 -3

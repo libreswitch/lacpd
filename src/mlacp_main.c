@@ -36,11 +36,11 @@
 #include <util.h>
 #include <openvswitch/vlog.h>
 
-#include <nemo/mqueue.h>
-#include <nemo/pm/pm_cmn.h>
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/lacp/mlacp_debug.h>
-#include <vpm/mvlan_sport.h>
+#include <mqueue.h>
+#include <pm_cmn.h>
+#include <lacp_cmn.h>
+#include <mlacp_debug.h>
+#include <mvlan_sport.h>
 #include "lacp.h"
 #include "mlacp_recv.h"
 #include "mlacp_fproto.h"
@@ -209,7 +209,7 @@ mlacp_rx_pdu_thread(void *data)
             }
 
             /* Cyclone LACPDU size hard-coded to 124 max.
-             * See MLt_drivers_mlacp__rxPdu in include/nemo/protocol/drivers/mlacp.h
+             * See MLt_drivers_mlacp__rxPdu in mlacp_recv.h
              */
             total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
 

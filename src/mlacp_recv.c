@@ -28,23 +28,23 @@
 #include <assert.h>
 #include <sys/types.h>
 
-#include <nemo/nemo_types.h>
-#include <nemo/avl.h>
-#include <nemo/protocol/lacp/api.h>
-#include <nemo/pm/pm_cmn.h>
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/lacp/mlacp_debug.h>
+#include <nemo_types.h>
+#include <avl.h>
+#include <api.h>
+#include <pm_cmn.h>
+#include <lacp_cmn.h>
+#include <mlacp_debug.h>
 
 #include "lacp.h"
 #include "mlacp_recv.h"
 #include "mlacp_fproto.h"
-#include "vpm/mvlan_lacp.h"
+#include "mvlan_lacp.h"
 
 //Halon
 #include "lacp_halon.h"
 #include "lacp_support.h"
 #include "lacp_halon_if.h"
-#include "vpm/mvlan_sport.h"
+#include "mvlan_sport.h"
 
 VLOG_DEFINE_THIS_MODULE(mlacp_recv);
 

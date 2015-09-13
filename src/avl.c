@@ -15,10 +15,11 @@
  *   under the License.
  */
 
-#include <nemo/nemo_os.h>
-#include <nemo/avl.h>
-#include <nemo/pm/pm_cmn.h>
 #include <sys/socket.h>
+
+#include <nemo_os.h>
+#include <avl.h>
+#include <pm_cmn.h>
 
 #ifndef MIN
 #define MIN(X, Y)   (((X)<(Y)) ? (X) : (Y))

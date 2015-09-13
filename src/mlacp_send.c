@@ -27,11 +27,11 @@
 #include <sys/types.h>
 #include <strings.h>
 
-#include <nemo/nemo_types.h>
-#include <nemo/avl.h>
-#include <nemo/pm/pm_cmn.h>
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/lacp/mlacp_debug.h>
+#include <nemo_types.h>
+#include <avl.h>
+#include <pm_cmn.h>
+#include <lacp_cmn.h>
+#include <mlacp_debug.h>
 
 #include "lacp.h"
 #include "lacp_support.h"
@@ -40,7 +40,7 @@
 #include "lacp_halon_if.h"
 
 // Halon: in lieu of sending events to VPM
-#include "vpm/mvlan_lacp.h"
+#include "mvlan_lacp.h"
 
 VLOG_DEFINE_THIS_MODULE(mlacp_send);
 

@@ -24,7 +24,7 @@
 #ifndef _MVLAN_LACP_H_
 #define _MVLAN_LACP_H_
 
-#include <nemo/nemo_types.h>
+#include <nemo_types.h>
 #include "lacp_halon.h"
 
 /*********************************************************************

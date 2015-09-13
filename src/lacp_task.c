@@ -44,17 +44,17 @@
 #include <sys/time.h>
 #include <string.h>
 #include <strings.h>
-#include <nemo/nemo_types.h>
+#include <nemo_types.h>
 
-#include <nemo/avl.h>
-#include <nemo/nlib.h>
+#include <avl.h>
+#include <nlib.h>
 
-#include <nemo/pm/pm_cmn.h>
+#include <pm_cmn.h>
 
 #include "lacp_stubs.h"
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/lacp/mlacp_debug.h>
-#include <nemo/lacp/lacp_fsm.h>
+#include <lacp_cmn.h>
+#include <mlacp_debug.h>
+#include <lacp_fsm.h>
 
 #include "lacp.h"
 #include "lacp_halon.h"
@@ -292,7 +292,7 @@ LACP_current_while_expiry(void)
     while (lacp_port) {
         if (lacp_port->lacp_up == TRUE) { /* LACP port is initialized */
 
-            RDEBUG(DL_TIMERS, "invoke current_while_timer_expiry.  lport=0x%llx\n", 
+            RDEBUG(DL_TIMERS, "invoke current_while_timer_expiry.  lport=0x%llx\n",
                    lacp_port->lport_handle);
 
             current_while_timer_expiry(lacp_port);

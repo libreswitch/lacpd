@@ -639,7 +639,7 @@ extern int n_log_force_print;
  * unless the special value 0 is passed in.  If the rate value passed
  * in is 0, messages will will be emitted as fast as the 'hz' times
  * per second.  The variable 'hz' is typically set to the value
- * 100 (unless overriden by the config file).  
+ * 100 (unless overriden by the config file).
  */
 
 #define N_LOG_RATE_1_MPS     10         /* 1 message per second */

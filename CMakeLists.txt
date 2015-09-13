@@ -18,44 +18,40 @@ cmake_minimum_required (VERSION 2.8)
 set (LACPD lacpd)
 project (${LACPD})
 
-set (LIB_CYCLONE cyclone)
-set (LIB_CYCLONE_DIR ${LIB_CYCLONE})
-set (LIB_VPM vpm)
-set (LIB_VPM_DIR ${LIB_VPM})
+set (SRC_DIR src)
+set (INCL_DIR include)
 
-# This option is specified in Yocto -- halon.bbclass.
+# This option is specified in Yocto -- openswitch.bbclass.
 OPTION( CPU_LITTLE_ENDIAN "Specifies CPU architecture is Little-Endian" OFF )
-configure_file ("${PROJECT_SOURCE_DIR}/lacp.h.in"
-                "${PROJECT_BINARY_DIR}/lacp.h")
+configure_file ("${PROJECT_SOURCE_DIR}/${INCL_DIR}/lacp.h.in"
+	        "${PROJECT_BINARY_DIR}/${INCL_DIR}/lacp.h")
+
+# Define compile flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Werror -ggdb -g3 -O0")
 
 # Rules to locate needed libraries
 include(FindPkgConfig)
 pkg_check_modules(OVSCOMMON REQUIRED libovscommon)
 pkg_check_modules(OVSDB REQUIRED libovsdb)
 
-include_directories (include ${LIB_VPM_DIR} ${LIB_CYCLONE_DIR}/include
-                     ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}
-                     ${OVSCOMMON_INCLUDE_DIRS}
-)
-
-# Define compile flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Werror")
+include_directories (${PROJECT_BINARY_DIR}/${INCL_DIR}
+                     ${PROJECT_SOURCE_DIR}/${INCL_DIR}
+                     ${PROJECT_SOURCE_DIR}
+                     ${OVSCOMMON_INCLUDE_DIRS})
 
 # Source files to build lacpd
-set (SOURCES lacpd.c mlacp_main.c mlacp_recv.c mlacp_send.c lacp_task.c
-     lacp_support.c periodic_tx_fsm.c receive_fsm.c mux_fsm.c
-     selection.c stubs.c ovsdb_if.c)
+set (SOURCES ${SRC_DIR}/avl.c ${SRC_DIR}/dlist.c ${SRC_DIR}/lacpd.c
+             ${SRC_DIR}/lacp_support.c ${SRC_DIR}/lacp_task.c ${SRC_DIR}/mlacp_main.c
+             ${SRC_DIR}/mlacp_recv.c ${SRC_DIR}/mlacp_send.c ${SRC_DIR}/mqueue.c
+             ${SRC_DIR}/mux_fsm.c ${SRC_DIR}/mvlan_lacp.c ${SRC_DIR}/mvlan_sport.c
+             ${SRC_DIR}/ovsdb_if.c ${SRC_DIR}/periodic_tx_fsm.c ${SRC_DIR}/receive_fsm.c
+             ${SRC_DIR}/selection.c ${SRC_DIR}/stubs.c ${SRC_DIR}/utils.c)
 
 # Rules to build lacpd
 add_executable (${LACPD} ${SOURCES})
-add_subdirectory (${LIB_CYCLONE_DIR})
-add_subdirectory (${LIB_VPM_DIR})
 
 target_link_libraries (${LACPD} ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
-                       ${LIB_CYCLONE} ${LIB_VPM} -lpthread -lrt)
-
-# Add dependencies otherwise parallell building breaks
-add_dependencies(${LACPD} ${LIB_CYCLONE} ${LIB_VPM})
+	               -lpthread -lrt)
 
 # Rules to install lacpd binary in rootfs
 install(TARGETS ${LACPD}

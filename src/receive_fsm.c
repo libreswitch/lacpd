@@ -42,12 +42,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <nemo/nemo_types.h>
-#include <nemo/avl.h>
-#include <nemo/pm/pm_cmn.h>
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/lacp/mlacp_debug.h>
-#include <nemo/lacp/lacp_fsm.h>
+
+#include <nemo_types.h>
+#include <avl.h>
+#include <pm_cmn.h>
+#include <lacp_cmn.h>
+#include <mlacp_debug.h>
+#include <lacp_fsm.h>
 
 #include "lacp.h"
 #include "lacp_stubs.h"

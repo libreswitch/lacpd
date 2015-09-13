@@ -27,8 +27,8 @@
 
 #include <semaphore.h>
 
-#include "nemo/pm/pm_cmn.h"
-#include "nemo/halon_cmn.h"
+#include "pm_cmn.h"
+#include "halon_cmn.h"
 
 
 /******************************************************************************************/

@@ -51,9 +51,9 @@
 #include <vswitch-idl.h>
 #include <openvswitch/vlog.h>
 
-#include <nemo/pm/pm_cmn.h>
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/lacp/mlacp_debug.h>
+#include <pm_cmn.h>
+#include <lacp_cmn.h>
+#include <mlacp_debug.h>
 
 #include "lacp.h"
 #include "mlacp_fproto.h"

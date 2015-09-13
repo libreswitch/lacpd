@@ -24,7 +24,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <nemo/halon_cmn.h>
+
+#include <halon_cmn.h>
 
 int
 speed_str_to_speed(char *cfg_speed)

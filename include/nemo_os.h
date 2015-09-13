@@ -36,7 +36,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <nemo/nemo_types.h>
+#include <nemo_types.h>
 
 /* the n_assert() on the malloc return value will probably be removed in
    production code */

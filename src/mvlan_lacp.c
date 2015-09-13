@@ -25,14 +25,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netinet/in.h>
-#include <nemo/nemo_types.h>
-#include <nemo/lacp/mlacp_debug.h>
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/pm/pm_cmn.h>
-#include <nemo/nlib.h>
-#include "../lacp_support.h"
-#include "../mlacp_fproto.h"
-#include "../lacp_halon_if.h"
+
+#include <nemo_types.h>
+#include <mlacp_debug.h>
+#include <lacp_cmn.h>
+#include <pm_cmn.h>
+#include <nlib.h>
+#include "lacp_support.h"
+#include "mlacp_fproto.h"
+#include "lacp_halon_if.h"
 #include "mvlan_sport.h"
 #include "mvlan_lacp.h"
 

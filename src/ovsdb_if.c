@@ -43,17 +43,17 @@
 #include <semaphore.h>
 #include <netinet/ether.h>
 
-#include <nemo/lacp/lacp_cmn.h>
-#include <nemo/lacp/mlacp_debug.h>
-#include <nemo/lacp/lacp_fsm.h>
-#include <nemo/protocol/lacp/api.h>
+#include <lacp_cmn.h>
+#include <mlacp_debug.h>
+#include <lacp_fsm.h>
+#include <api.h>
 
 #include <ops-utils.h>
 
 #include "lacp_halon_if.h"
 #include "lacp.h"
 #include "mlacp_fproto.h"
-#include "vpm/mvlan_sport.h"
+#include "mvlan_sport.h"
 
 #include <unixctl.h>
 #include <dynamic-string.h>

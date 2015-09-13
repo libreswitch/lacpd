@@ -112,10 +112,12 @@
 #ifndef __LACP_HALON_IF__H__
 #define __LACP_HALON_IF__H__
 
-#include <nemo/pm/pm_cmn.h>
 #include <dynamic-string.h>
 #include <vswitch-idl.h>
-#include "vpm/mvlan_lacp.h"
+
+#include <pm_cmn.h>
+
+#include "mvlan_lacp.h"
 #include "lacp.h"
 
 struct lacp_status_values {

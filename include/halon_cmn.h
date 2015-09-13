@@ -24,7 +24,7 @@
 #ifndef __HALON_CMN_H__
 #define __HALON_CMN_H__
 
-#include <nemo/pm/pm_cmn.h>
+#include <pm_cmn.h>
 
 #ifndef ulong
 #define ulong unsigned long

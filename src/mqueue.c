@@ -25,7 +25,8 @@
 
 #include <stdlib.h>
 #include <errno.h>
-#include "nemo/mqueue.h"
+
+#include "mqueue.h"
 
 int
 mqueue_init(mqueue_t *queue)

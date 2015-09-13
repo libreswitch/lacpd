@@ -26,9 +26,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <nemo/avl.h>
-#include <nemo/lacp/mlacp_debug.h>
-#include <nemo/nemo_types.h>
+
+#include <avl.h>
+#include <mlacp_debug.h>
+#include <nemo_types.h>
 #include "mvlan_sport.h"
 
 VLOG_DEFINE_THIS_MODULE(mvlan_sport);

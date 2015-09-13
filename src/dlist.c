@@ -20,8 +20,8 @@
  *
  */
 
-#include <nemo/nemo_os.h>
-#include <nemo/nlib.h>
+#include <nemo_os.h>
+#include <nlib.h>
 
 typedef struct NList NList;
 
