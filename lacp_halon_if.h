@@ -85,7 +85,7 @@
  *
  *  The following columns are READ by lacpd:
  *
- *      Open_vSwitch:cur_cfg
+ *      System:cur_cfg
  *      Port:name
  *      Port:lacp
  *      Port:interfaces

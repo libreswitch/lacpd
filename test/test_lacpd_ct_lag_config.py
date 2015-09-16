@@ -94,14 +94,14 @@ def sw_set_intf_pm_info(sw, interface, config):
 
 # Set open_vsw_lacp_config parameter(s)
 def set_open_vsw_lacp_config(sw, config):
-    c = OVS_VSCTL + "set open_vswitch ."
+    c = OVS_VSCTL + "set system ."
     for s in config:
         c += " lacp_config:" + s
     debug(c)
     return sw.cmd(c)
 
 def sys_open_vsw_lacp_config_clear(sw):
-    c = OVS_VSCTL + "remove open_vswitch . lacp_config lacp-system-id " + \
+    c = OVS_VSCTL + "remove system . lacp_config lacp-system-id " + \
         "lacp_config lacp-system-priority"
     debug(c)
     sw.cmd(c)
@@ -583,8 +583,8 @@ class lacpdTest(HalonTest):
         s2 = self.net.switches[1]
 
         system_mac = {}
-        system_mac[1] = s1.cmd("ovs-vsctl get open_vswitch . system_mac").strip('"').rstrip('"\r\n')
-        system_mac[2] = s2.cmd("ovs-vsctl get open_vswitch . system_mac").strip('"').rstrip('"\r\n')
+        system_mac[1] = s1.cmd("ovs-vsctl get system . system_mac").strip('"').rstrip('"\r\n')
+        system_mac[2] = s2.cmd("ovs-vsctl get system . system_mac").strip('"').rstrip('"\r\n')
         system_prio = {}
         system_prio[1] = "65534"
         system_prio[2] = "65534"
@@ -639,8 +639,8 @@ class lacpdTest(HalonTest):
 
         info("Override system parameters\n")
         # Change the LACP system ID on the switches.
-        s1.cmd("ovs-vsctl set open_vswitch . lacp_config:lacp-system-id='" + base_mac[1] + "' lacp_config:lacp-system-priority=" + base_prio)
-        s2.cmd("ovs-vsctl set open_vswitch . lacp_config:lacp-system-id='" + base_mac[2] + "' lacp_config:lacp-system-priority=" + base_prio)
+        s1.cmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[1] + "' lacp_config:lacp-system-priority=" + base_prio)
+        s2.cmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[2] + "' lacp_config:lacp-system-priority=" + base_prio)
 
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,
@@ -746,14 +746,14 @@ class lacpdTest(HalonTest):
             verify_intf_in_bond(s2, intf, "Interfaces are expected to be part of dynamic LAG when "
                                           "both the switches are in active mode on switch1")
 
-        # Test open_vswitch:lacp_config:{lacp-system-id,lacp-system-priority}
+        # Test system:lacp_config:{lacp-system-id,lacp-system-priority}
 
         intf = sw_1G_intf[0]
 
         # Set sys_id and sys_pri
         set_open_vsw_lacp_config(s1, ['lacp-system-id=' + change_mac, 'lacp-system-priority=' + change_prio])
 
-        info("Verify open_vswitch:lacp_config:lacp-system-id and lacp-system-priority.\n")
+        info("Verify system:lacp_config:lacp-system-id and lacp-system-priority.\n")
         verify_intf_lacp_status(s1,
                 intf,
                 {
@@ -950,7 +950,7 @@ class lacpdTest(HalonTest):
                     "s2:" + intf)
 
         info("Verify dynamic update of system-level override\n")
-        s1.cmd("ovs-vsctl set open_vswitch . lacp_config:lacp-system-id='" + alt_mac + "' lacp_config:lacp-system-priority=" + alt_prio)
+        s1.cmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + alt_mac + "' lacp_config:lacp-system-priority=" + alt_prio)
 
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,

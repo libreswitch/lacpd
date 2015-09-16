@@ -105,8 +105,8 @@ POOL(port_index, MAX_ENTRIES_IN_POOL);
 #define IS_VALID_AGGR_KEY(p)       (((p) >= MIN_INTERFACE_OTHER_CONFIG_LACP_AGGREGATION_KEY) && \
                                     ((p) <= MAX_INTERFACE_OTHER_CONFIG_LACP_AGGREGATION_KEY))
 
-#define IS_VALID_SYS_PRIO(p)       (((p) >= MIN_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY) && \
-                                    ((p) <= MAX_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY))
+#define IS_VALID_SYS_PRIO(p)       (((p) >= MIN_SYSTEM_LACP_CONFIG_SYSTEM_PRIORITY) && \
+                                    ((p) <= MAX_SYSTEM_LACP_CONFIG_SYSTEM_PRIORITY))
 
 /* Scale OVS interface speed number (bps) down to
  * that used by LACP state machine (Mbps). */
@@ -117,7 +117,7 @@ struct ovsdb_idl *idl;           /*!< Session handle for OVSDB IDL session. */
 static unsigned int idl_seqno;
 static int system_configured = false;
 static char system_id[OPS_MAC_STR_SIZE] = {0};
-static int system_priority = DFLT_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY;
+static int system_priority = DFLT_SYSTEM_LACP_CONFIG_SYSTEM_PRIORITY;
 
 /**
  * A hash map of daemon's internal data for all the interfaces maintained by
@@ -748,7 +748,7 @@ configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
  * Establishes an IDL session with OVSDB server. Registers the following
  * tables/columns for caching and change notification:
  *
- *     Open_vSwitch:cur_cfg
+ *     System:cur_cfg
  *     Port:name, lacp, and interfaces columns.
  *     Interface:name, link_state, link_speed, hw_bond_config columns.
  */
@@ -761,11 +761,11 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_set_lock(idl, "halon_lacpd");
     ovsdb_idl_verify_write_only(idl);
 
-    /* Cache Open_vSwitch table. */
-    ovsdb_idl_add_table(idl, &ovsrec_table_open_vswitch);
-    ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_cur_cfg);
-    ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_system_mac);
-    ovsdb_idl_add_column(idl, &ovsrec_open_vswitch_col_lacp_config);
+    /* Cache System table. */
+    ovsdb_idl_add_table(idl, &ovsrec_table_system);
+    ovsdb_idl_add_column(idl, &ovsrec_system_col_cur_cfg);
+    ovsdb_idl_add_column(idl, &ovsrec_system_col_system_mac);
+    ovsdb_idl_add_column(idl, &ovsrec_system_col_lacp_config);
 
     /* Cache Subsystem table. */
     ovsdb_idl_add_table(idl, &ovsrec_table_subsystem);
@@ -1693,7 +1693,7 @@ update_port_cache(void)
 } /* update_port_cache */
 
 static void
-update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_init)
+update_system_prio_n_id(const struct ovsrec_system *sys, bool lacpd_init)
 {
     bool sys_mac_changed = false;
     const char *sys_mac = NULL;
@@ -1701,14 +1701,14 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
     struct ether_addr *eth_addr_p;
     struct ether_addr eth_addr;
 
-    if (ovs_vsw) {
+    if (sys) {
 
         /* See if user set lacp-system-id */
-        sys_mac = smap_get(&(ovs_vsw->lacp_config),
-                           OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_ID);
+        sys_mac = smap_get(&(sys->lacp_config),
+                           SYSTEM_LACP_CONFIG_MAP_LACP_SYSTEM_ID);
         /* If LACP system ID is not configured, then use system mac. */
         if (sys_mac == NULL || (strlen(sys_mac) != OPS_MAC_STR_SIZE - 1)) {
-            sys_mac = ovs_vsw->system_mac;
+            sys_mac = sys->system_mac;
         }
 
         if (sys_mac == NULL || (strlen(sys_mac) != OPS_MAC_STR_SIZE - 1)) {
@@ -1733,9 +1733,9 @@ update_system_prio_n_id(const struct ovsrec_open_vswitch *ovs_vsw, bool lacpd_in
         /* Send system priority */
 
         /* See if user set lacp-system-priority */
-        sys_prio = smap_get_int(&(ovs_vsw->lacp_config),
-                                OPEN_VSWITCH_LACP_CONFIG_MAP_LACP_SYSTEM_PRIORITY,
-                                DFLT_OPEN_VSWITCH_LACP_CONFIG_SYSTEM_PRIORITY);
+        sys_prio = smap_get_int(&(sys->lacp_config),
+                                SYSTEM_LACP_CONFIG_MAP_LACP_SYSTEM_PRIORITY,
+                                DFLT_SYSTEM_LACP_CONFIG_SYSTEM_PRIORITY);
 
         if (IS_VALID_SYS_PRIO(sys_prio) || lacpd_init) {
 
@@ -1754,7 +1754,7 @@ lacpd_reconfigure(void)
 {
     int rc = 0;
     unsigned int new_idl_seqno = ovsdb_idl_get_seqno(idl);
-    const struct ovsrec_open_vswitch *ovs_vsw = NULL;
+    const struct ovsrec_system *sys = NULL;
 
     if (new_idl_seqno == idl_seqno) {
         /* There was no change in the DB. */
@@ -1762,8 +1762,8 @@ lacpd_reconfigure(void)
     }
 
     /* Update system priority and system id */
-    ovs_vsw = ovsrec_open_vswitch_first(idl);
-    update_system_prio_n_id(ovs_vsw, false);
+    sys = ovsrec_system_first(idl);
+    update_system_prio_n_id(sys, false);
 
     /* Update lacpd's Interfaces table cache. */
     if (update_interface_cache()) {
@@ -1784,18 +1784,18 @@ lacpd_reconfigure(void)
 static inline void
 lacpd_chk_for_system_configured(void)
 {
-    const struct ovsrec_open_vswitch *ovs_vsw = NULL;
+    const struct ovsrec_system *sys = NULL;
 
     if (system_configured) {
         /* Nothing to do if we're already configured. */
         return;
     }
 
-    ovs_vsw = ovsrec_open_vswitch_first(idl);
-    if (ovs_vsw && ovs_vsw->cur_cfg > (int64_t)0) {
+    sys = ovsrec_system_first(idl);
+    if (sys && sys->cur_cfg > (int64_t)0) {
 
         /* Send system id (MAC) and system priority */
-        update_system_prio_n_id(ovs_vsw, true);
+        update_system_prio_n_id(sys, true);
 
         system_configured = true;
     }
