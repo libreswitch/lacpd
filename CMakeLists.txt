@@ -1,22 +1,21 @@
-# Copyright (C) 2015 Hewlett-Packard Development Company, L.P.
-# All Rights Reserved.
+# (C) Copyright 2015 Hewlett Packard Enterprise Development LP
 #
-#    Licensed under the Apache License, Version 2.0 (the "License"); you may
-#    not use this file except in compliance with the License. You may obtain
-#    a copy of the License at
+#  Licensed under the Apache License, Version 2.0 (the "License"); you may
+#  not use this file except in compliance with the License. You may obtain
+#  a copy of the License at
 #
-#         http://www.apache.org/licenses/LICENSE-2.0
+#       http://www.apache.org/licenses/LICENSE-2.0
 #
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-#    License for the specific language governing permissions and limitations
-#    under the License.
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#  License for the specific language governing permissions and limitations
+#  under the License.
 
 cmake_minimum_required (VERSION 2.8)
 
-set (LACPD lacpd)
-project (${LACPD})
+set (OPSLACPD ops-lacpd)
+project (${OPSLACPD})
 
 set (SRC_DIR src)
 set (INCL_DIR include)
@@ -39,7 +38,7 @@ include_directories (${PROJECT_BINARY_DIR}/${INCL_DIR}
                      ${PROJECT_SOURCE_DIR}
                      ${OVSCOMMON_INCLUDE_DIRS})
 
-# Source files to build lacpd
+# Source files to build ops-lacpd
 set (SOURCES ${SRC_DIR}/avl.c ${SRC_DIR}/dlist.c ${SRC_DIR}/lacpd.c
              ${SRC_DIR}/lacp_support.c ${SRC_DIR}/lacp_task.c ${SRC_DIR}/mlacp_main.c
              ${SRC_DIR}/mlacp_recv.c ${SRC_DIR}/mlacp_send.c ${SRC_DIR}/mqueue.c
@@ -47,12 +46,12 @@ set (SOURCES ${SRC_DIR}/avl.c ${SRC_DIR}/dlist.c ${SRC_DIR}/lacpd.c
              ${SRC_DIR}/ovsdb_if.c ${SRC_DIR}/periodic_tx_fsm.c ${SRC_DIR}/receive_fsm.c
              ${SRC_DIR}/selection.c ${SRC_DIR}/stubs.c ${SRC_DIR}/utils.c)
 
-# Rules to build lacpd
-add_executable (${LACPD} ${SOURCES})
+# Rules to build ops-lacpd
+add_executable (${OPSLACPD} ${SOURCES})
 
-target_link_libraries (${LACPD} ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
+target_link_libraries (${OPSLACPD} ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
 	               -lpthread -lrt)
 
-# Rules to install lacpd binary in rootfs
-install(TARGETS ${LACPD}
+# Rules to install ops-lacpd binary in rootfs
+install(TARGETS ${OPSLACPD}
         RUNTIME DESTINATION bin)
