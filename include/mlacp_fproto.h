@@ -74,8 +74,6 @@ extern void LACP_process_input_pkt(port_handle_t lport_handle, unsigned char * d
 extern void mlacp_process_rx_pdu(struct ML_event *);
 extern void mlacp_process_vlan_msg(struct ML_event *);
 extern void mlacp_process_api_msg(struct ML_event *);
-extern void mlacp_process_showmgr_msg(struct ML_event *);
-extern void mlacp_process_diagmgr_msg(struct ML_event *);
 extern void mlacp_process_timer(void);
 extern void mlacpVapiLportEvent(struct ML_event *pevent);
 

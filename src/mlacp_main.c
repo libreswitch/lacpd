@@ -451,19 +451,6 @@ lacpd_protocol_thread(void *arg)
              ***********************************************************/
             mlacp_process_vlan_msg(pevent);
 
-        } else if (pevent->sender.peer == ml_showMgr_index) {
-            /***********************************************************
-             * Msg from Show Manager.
-             ***********************************************************/
-            /* mlacp_process_showmgr_msg(pevent); */
-            lacp_support_diag_dump(pevent->msgnum);
-
-        } else if (pevent->sender.peer == ml_diagMgr_index) {
-            /***********************************************************
-             * Msg from Diag Manager.
-             ***********************************************************/
-            mlacp_process_diagmgr_msg(pevent);
-
         } else if (pevent->sender.peer == ml_cfgMgr_index) {
             /***********************************************************
              * Msg from Cfg Manager.

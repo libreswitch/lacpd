@@ -42,7 +42,7 @@ n_list_alloc(void)
 void
 n_list_free(NList *element)
 {
-    NEMO_FREE(element);
+    free(element);
 
 } // n_list_free
 

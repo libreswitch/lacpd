@@ -1239,7 +1239,7 @@ nemo_compare_str(void *aa, void *bb)
 {
     int ret_val;
 
-    ret_val = NEMO_STRCMP((char *)aa, (char *)bb);
+    ret_val = strcmp((char *)aa, (char *)bb);
     return (ret_val);
 
 } /* nemo_compare_str */
@@ -1275,7 +1275,7 @@ nemo_compare_case_str(void *aa, void *bb)
         return 1;
     }
 
-    ret_val = NEMO_STRCASECMP((char *)aa, (char *)bb);
+    ret_val = strcasecmp((char *)aa, (char *)bb);
     return (ret_val);
 
 } /* nemo_compare_case_str */
