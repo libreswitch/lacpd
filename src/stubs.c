@@ -22,8 +22,8 @@
 
 #include <openvswitch/vlog.h>
 
-#include <nemo_types.h>
-#include <avl.h>
+#include "lacp_cmn.h"
+#include "avl.h"
 
 #include "lacp_stubs.h"
 

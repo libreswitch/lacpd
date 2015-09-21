@@ -27,9 +27,7 @@
 #include <assert.h>
 #include <sys/types.h>
 
-#include <nemo_types.h>
 #include <avl.h>
-#include <api.h>
 #include <pm_cmn.h>
 #include <lacp_cmn.h>
 #include <mlacp_debug.h>
@@ -39,10 +37,8 @@
 #include "mlacp_fproto.h"
 #include "mvlan_lacp.h"
 
-//Halon
-#include "lacp_halon.h"
 #include "lacp_support.h"
-#include "lacp_halon_if.h"
+#include "lacp_ops_if.h"
 #include "mvlan_sport.h"
 
 VLOG_DEFINE_THIS_MODULE(mlacp_recv);
@@ -50,7 +46,7 @@ VLOG_DEFINE_THIS_MODULE(mlacp_recv);
 //***********************************************************************
 // (local) Function prototypes
 //***********************************************************************
-// Halon
+// OpenSwitch
 //void cli_set_debug_level(int level);
 //void cli_unset_debug_level(int level);
 //int  cli_get_debug_level(void);
@@ -99,7 +95,7 @@ mlacp_process_vlan_msg(ML_event *pevent)
 
     //***************************************************************
     // The card is known to be up & running when VLAN mgr gives us
-    // any LACP related message. XXX
+    // any LACP related message.
     //***************************************************************
 
     switch (pevent->msgnum) {
@@ -133,17 +129,13 @@ mlacp_process_vlan_msg(ML_event *pevent)
         case MLm_vpm_api__set_lacp_sport_params:
         case MLm_vpm_api__unset_lacp_sport_params:
         {
-            // Halon
+            // OpenSwitch
             // This is just a notification that something changed.
             // If partner SYSPRI or partner SYSID fields changed,
             // it will become UNSELECTED and trigger FSM state change.
             struct  MLt_vpm_api__lacp_sport_params *pmsg = pevent->msg;
             mlacpVapiSportParamsChange(pevent->msgnum, pmsg);
         }
-        break;
-
-        case MLm_vpm_api__lacp_attach_reply:
-        // not used now
         break;
 
         default:
@@ -159,7 +151,7 @@ mlacp_process_vlan_msg(ML_event *pevent)
 
 //*****************************************************************
 // Function : mlacp_process_api_msg
-// These messages could be either from configd or from nemosh.
+// These messages could be either from configd or from lacpsh.
 //*****************************************************************
 void
 mlacp_process_api_msg(ML_event *pevent)

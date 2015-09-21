@@ -26,7 +26,6 @@
 #include <sys/types.h>
 #include <strings.h>
 
-#include <nemo_types.h>
 #include <avl.h>
 #include <pm_cmn.h>
 #include <lacp_cmn.h>
@@ -35,10 +34,10 @@
 #include "lacp.h"
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
-#include "lacp_halon.h"
-#include "lacp_halon_if.h"
+#include "mvlan_lacp.h"
+#include "lacp_ops_if.h"
 
-// Halon: in lieu of sending events to VPM
+// OpenSwitch: in lieu of sending events to VPM
 #include "mvlan_lacp.h"
 
 VLOG_DEFINE_THIS_MODULE(mlacp_send);
@@ -106,7 +105,7 @@ mlacp_blocking_send_select_aggregator(LAG_t *const lag,
            match_params.partner_system_id[5],
            match_params.local_port_number);
 
-    // Halon: Change to direct function call.  Also sport_handle
+    // OpenSwitch: Change to direct function call.  Also sport_handle
     //        is written directly into match_params struct.
     status = mvlan_api_select_aggregator(&match_params);
 
@@ -144,7 +143,7 @@ mlacp_blocking_send_attach_aggregator(lacp_per_port_variables_t *lacp_port)
           attach.partner_mac_addr,
           sizeof(macaddr_3_t));
 
-    // Halon: Change to direct function call.
+    // OpenSwitch: Change to direct function call.
     status = mvlan_api_attach_lport_to_aggregator(&attach);
 
     if (R_SUCCESS == status) {
@@ -174,7 +173,7 @@ mlacp_blocking_send_detach_aggregator(lacp_per_port_variables_t *lacp_port)
     detach.lport_handle   = lacp_port->lport_handle;
     detach.sport_handle   = lacp_port->sport_handle;
 
-    // Halon: Change to direct function call.
+    // OpenSwitch: Change to direct function call.
     status = mvlan_api_detach_lport_from_aggregator(&detach);
 
     if (R_SUCCESS == status) {
@@ -201,7 +200,7 @@ mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port)
     int lag_id;
     int status = R_SUCCESS;
 
-    // Halon: Add the port to trunk in hardware only
+    // OpenSwitch: Add the port to trunk in hardware only
     //        if it wasn't already done.
     if (FALSE == lacp_port->hw_attached_to_mux) {
 
@@ -209,7 +208,7 @@ mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port)
         port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
 #if 1
-        //--- HALON_TODO: enable attach for now since STP is not running... ---
+        //--- OPS_TODO: enable attach for now since STP is not running... ---
         //---------------------------------------------------------------
         // NOTE: lacpd is no longer responsible for attaching/detaching
         // ports to LAGs in h/w.  stpd is now doing that in order to
@@ -218,7 +217,7 @@ mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port)
         //---------------------------------------------------------------
 
         // Add the port to a trunk in hardware
-        halon_attach_port_in_hw(lag_id, port);
+        ops_attach_port_in_hw(lag_id, port);
 #endif
 
         // Update DB with new info.
@@ -240,11 +239,11 @@ mlacp_blocking_send_enable_distributing(lacp_per_port_variables_t *lacp_port)
 
     if (TRUE == lacp_port->hw_attached_to_mux) {
 
-        // Halon: Take out egress disable flag from trunk member port flags.
+        // OpenSwitch: Take out egress disable flag from trunk member port flags.
         lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
         port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
-        halon_trunk_port_egr_enable(lag_id, port);
+        ops_trunk_port_egr_enable(lag_id, port);
     }
 
     return status;
@@ -257,7 +256,7 @@ mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
     int lag_id;
     int status = R_SUCCESS;
 
-    // Halon: Remove the port from trunk in hardware
+    // OpenSwitch: Remove the port from trunk in hardware
     //          only if it wasn't already done.
     if (TRUE == lacp_port->hw_attached_to_mux) {
 
@@ -265,7 +264,7 @@ mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
         port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
 #if 1
-        //--- HALON_TODO: enable attach for now since STP is not running... ---
+        //--- OPS_TODO: enable attach for now since STP is not running... ---
         //---------------------------------------------------------------
         // NOTE: lacpd is no longer responsible for attaching/detaching
         // ports to LAGs in h/w.  stpd is now doing that in order to
@@ -274,7 +273,7 @@ mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
         //---------------------------------------------------------------
 
         // Detach the port from LAG in h/w
-        halon_detach_port_in_hw(lag_id, port);
+        ops_detach_port_in_hw(lag_id, port);
 #endif
 
         // Update DB with new info.
@@ -288,7 +287,7 @@ mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
     return status;
 } // mlacp_blocking_send_disable_collect_dist
 
-// Halon: New function to clear super port.
+// OpenSwitch: New function to clear super port.
 int
 mlacp_blocking_send_clear_aggregator(unsigned long long sport_handle)
 {

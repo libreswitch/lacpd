@@ -45,11 +45,10 @@
 #include <lacp_cmn.h>
 #include <mlacp_debug.h>
 #include <lacp_fsm.h>
-#include <api.h>
 
 #include <ops-utils.h>
 
-#include "lacp_halon_if.h"
+#include "lacp_ops_if.h"
 #include "lacp.h"
 #include "mlacp_fproto.h"
 #include "mvlan_sport.h"
@@ -166,7 +165,7 @@ const uint16_t min_lag_id = 1;
 uint16_t max_lag_id = 0;
 uint16_t *lag_id_pool = NULL;
 
-/* To serialize updates to OVSDB.  Both LACP Cyclone and OVS
+/* To serialize updates to OVSDB.  Both LACP and OVS
  * interface threads calls to update OVSDB states. */
 pthread_mutex_t ovsdb_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -723,7 +722,7 @@ configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
 #if 0
     idp->cycl_port_type = speed_to_lport_type(portp->port_max_speed);
 #else
-    /* HALON_TODO: temporary hard-code. */
+    /* OPS_TODO: temporary hard-code. */
     idp->cycl_port_type = PM_LPORT_10GIGE;
     idp->aggregateable = AGGREGATABLE;
     idp->collecting_ready = 1;
@@ -757,7 +756,7 @@ lacpd_ovsdb_if_init(const char *db_path)
     /* Initialize IDL through a new connection to the DB. */
     idl = ovsdb_idl_create(db_path, &ovsrec_idl_class, false, true);
     idl_seqno = ovsdb_idl_get_seqno(idl);
-    ovsdb_idl_set_lock(idl, "halon_lacpd");
+    ovsdb_idl_set_lock(idl, "ops_lacpd");
     ovsdb_idl_verify_write_only(idl);
 
     /* Cache System table. */
@@ -796,7 +795,7 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_other_config);
 
     /* Initialize LAG ID pool. */
-    /* HALON_TODO: read # of LAGs from somewhere? */
+    /* OPS_TODO: read # of LAGs from somewhere? */
     init_lag_id_pool(128);
 
 } /* lacpd_ovsdb_if_init */
@@ -1075,10 +1074,10 @@ update_interface_cache(void)
 
                         send_link_state_change_msg(idp);
 
-                        /* HALON_TODO: need to trigger the LACP state machine
+                        /* OPS_TODO: need to trigger the LACP state machine
                          * to advance to collecting/distributing state.  In the
                          * past, this was triggered by stpd when it set the port
-                         * to forwarding.  In Halon environment, this really
+                         * to forwarding.  In OpenSwitch environment, this really
                          * needs to be done only after the interface has been
                          * attached to the h/w LAG, thus collecting-ready.
                          * For now, force this trigger here. */
@@ -2210,10 +2209,10 @@ lacpd_thread_intf_update_hw_bond_config(struct iface_data *idp,
     ovsdb_idl_txn_destroy(txn);
     OVSDB_UNLOCK;
 
-} /* halon_intf_update_hw_bond_config */
+} /* ops_intf_update_hw_bond_config */
 
 void
-halon_attach_port_in_hw(uint16_t lag_id, int port)
+ops_attach_port_in_hw(uint16_t lag_id, int port)
 {
     struct iface_data *idp = NULL;
 
@@ -2236,10 +2235,10 @@ halon_attach_port_in_hw(uint16_t lag_id, int port)
         VLOG_ERR("Failed to find interface data for attaching port in hw. "
                  "port index=%d", port);
     }
-} /* halon_attach_port_in_hw */
+} /* ops_attach_port_in_hw */
 
 void
-halon_detach_port_in_hw(uint16_t lag_id, int port)
+ops_detach_port_in_hw(uint16_t lag_id, int port)
 {
     struct iface_data *idp = NULL;
 
@@ -2265,10 +2264,10 @@ halon_detach_port_in_hw(uint16_t lag_id, int port)
                  "port index=%d", port);
     }
 
-} /* halon_detach_port_in_hw */
+} /* ops_detach_port_in_hw */
 
 void
-halon_trunk_port_egr_enable(uint16_t lag_id, int port)
+ops_trunk_port_egr_enable(uint16_t lag_id, int port)
 {
     struct iface_data *idp = NULL;
 
@@ -2291,7 +2290,7 @@ halon_trunk_port_egr_enable(uint16_t lag_id, int port)
         VLOG_ERR("Failed to find interface data for egress enable. "
                  "port index=%d", port);
     }
-} /* halon_trunk_port_egr_enable */
+} /* ops_trunk_port_egr_enable */
 
 static void
 db_update_port_status(struct port_data *portp)
@@ -2793,7 +2792,7 @@ lacpd_ovs_main_thread(void *arg)
     lacpd_exit();
     unixctl_server_destroy(appctl);
 
-    /* HALON_TODO -- need to tell main loop to exit... */
+    /* OPS_TODO -- need to tell main loop to exit... */
 
     return NULL;
 

@@ -14,123 +14,127 @@
  * under the License.
  */
 
-//*********************************************************************
-// File : lacp_cmn.h
-// This file has the structures and #defines accessed by various modules.
-//*********************************************************************
 #ifndef __LACP_CMN_H__
 #define __LACP_CMN_H__
 
-#define    LACP_MIN_KEY_VAL        (1)
-#define    LACP_MAX_KEY_VAL        (65535)
+#define FALSE         (0)
+#define TRUE          (1)
+#define R_SUCCESS     (0)
 
-// Halon - default actor key for all intra-closet LAGs
-#define    ICL_ACTOR_PRIORITY      1
-#define    ICL_ACTOR_KEY           1
-#define    ICL_ACTOR_PRIORITY_STR  "1"
-#define    ICL_ACTOR_KEY_STR       "1"
+/* MAC Address length in bytes */
+#define MAC_BYTEADDR_SIZE  (6)
 
-//*****************************************************************
-// These are flags that indicate whether the user specified these
-// or not. If the user did not specify one of these in a particular
-// command, we should not overwrite the previously existing  values.
-//*****************************************************************
-#define     LACP_LPORT_ACTIVITY_FIELD_PRESENT      (0x01)
-#define     LACP_LPORT_TIMEOUT_FIELD_PRESENT       (0x02)
-#define     LACP_LPORT_AGGREGATION_FIELD_PRESENT   (0x04)
+/* MAC Address length in short int */
+#define MAC_SHORTADDR_SIZE (3)
 
-#define     LACP_LPORT_SYS_PRIORITY_FIELD_PRESENT  (0x10)
-#define     LACP_LPORT_SYS_ID_FIELD_PRESENT        (0x20)
+/* MAC address in 3 elements (ushort) */
+typedef unsigned short        macaddr_3_t[MAC_SHORTADDR_SIZE];
 
-#define     LACP_LPORT_PORT_KEY_PRESENT            (0x100)
-#define     LACP_LPORT_PORT_PRIORITY_PRESENT       (0x200)
-#define     LACP_LPORT_LACP_ENABLE_FIELD_PRESENT   (0x400)
-#define     LACP_LPORT_HW_COLL_STATUS_PRESENT      (0x800)
+/* MAC address in 6 elements (bytes)  */
+typedef unsigned char         macaddr_6_t[MAC_BYTEADDR_SIZE];
 
-#define     LACP_LPORT_DYNAMIC_FIELDS_PRESENT      (0x1000)
+typedef union macaddr_u {
+    unsigned char  c_mac[MAC_BYTEADDR_SIZE];
+    unsigned short s_mac[MAC_SHORTADDR_SIZE];
+    struct {
+        unsigned long  uu_mac;
+        unsigned short ss_mac;
+    } aa_mac;
+#define u_mac aa_mac.uu_mac
+} macaddr_t;
 
-//*****************************************************************
-// These are the actual values for these parameters.
-//*****************************************************************
-// activity bit
-#define LACP_PASSIVE_MODE 0
-#define LACP_ACTIVE_MODE 1
+/******************************************************************************************/
+/**                             MsgLib related                                           **/
+/******************************************************************************************/
 
-// timeout bit
-#define LONG_TIMEOUT  0
-#define SHORT_TIMEOUT 1
+/* Msg Sender ID */
+#define ml_timer_index   0x11
+#define ml_lport_index   0x22
+#define ml_rx_pdu_index  0x33
+#define ml_cfgMgr_index  0x44
 
-// Aggregation state/bit
-#define INDIVIDUAL 0
-#define AGGREGATABLE 1
-#define UNKNOWN 2
+#define MSGLIB_INVALID_INDEX (-1)
 
-// Enable bit
-#define LACP_STATE_DISABLED 0
-#define LACP_STATE_ENABLED  1
+/******************************************************************************************/
+/**                             ML_event & related                                       **/
+/******************************************************************************************/
+#define ML_MAX_MSG_SIZE  4096
 
-#define DEFAULT_PORT_KEY_GIGE    (1) // from lacp_support.h
-#define DEFAULT_PORT_PRIORITY    (1) // from lacp_support.h
-#define DEFAULT_SYSTEM_PRIORITY  (1) // from lacp_support.h
+struct ML_event;         /* Forward declaration. */
 
-//*****************************************************************
-// Default States.
-//*****************************************************************
-#define LACP_PORT_STATE_DEFAULT       (LACP_PORT_STATE_DISABLED)
-#define LACP_PORT_KEY_DEFAULT         (DEFAULT_PORT_KEY_GIGE)
-#define LACP_PORT_PRIORITY_DEFAULT    (DEFAULT_PORT_PRIORITY)
-#define LACP_PORT_ACTIVITY_DEFAULT    (LACP_ACTIVE_MODE)
-#define LACP_PORT_TIMEOUT_DEFAULT     (SHORT_TIMEOUT)
-#define LACP_PORT_AGGREGATION_DEFAULT (AGGREGATABLE)
+typedef void (*ML_peer_callback_func_t)(struct ML_event *event, void *data);
 
-//*****************************************************************
-// These are the flags used while setting the sport_parameters,
-// i.e. LAG/aggregator/"smarttrunk" parameters.
-//*****************************************************************
-#define LACP_LAG_PORT_TYPE_FIELD_PRESENT      (0x01)
-#define LACP_LAG_ACTOR_KEY_FIELD_PRESENT      (0x02)
-#define LACP_LAG_PARTNER_KEY_FIELD_PRESENT    (0x04)
-#define LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT (0x08)
-#define LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  (0x10)
-#define LACP_LAG_AGGRTYPE_FIELD_PRESENT       (0x20)
-
-//*****************************************************************
-// These are the values for these LAG parameters.
-//*****************************************************************
-#define LACP_LAG_AGGRTYPE_INDIVIDUAL   0
-#define LACP_LAG_AGGRTYPE_AGGREGATABLE 1
-
-#define LACP_LAG_PORTTYPE_FASTETHER   (1)
-#define LACP_LAG_PORTTYPE_GIGAETHER   (2)
-#define LACP_LAG_PORTTYPE_10GIGAETHER (3)
-
-//*****************************************************************
-// These are the defaults for these LAG parameters.
-//*****************************************************************
-#define LACP_LAG_DEFAULT_PORT_TYPE      (LACP_LAG_PORTTYPE_GIGAETHER)
-#define LACP_LAG_DEFAULT_ACTOR_KEY      (1)
-#define LACP_LAG_DEFAULT_PARTNER_KEY    (1)
-#define LACP_LAG_DEFAULT_PARTNER_SYSPRI (1)
-#define LACP_LAG_DEFAULT_AGGR_TYPE      (LACP_LAG_AGGRTYPE_AGGREGATABLE)
-#define LACP_LAG_INVALID_ACTOR_KEY      (0)
-
-#define LACP_PKT_SIZE (124) // Excluding CRC
-#define LACP_HEADROOM_SIZE (14)  // 6 + 6 + 2
-
-// The following enum must be same with one in mlacp_debug.h
-enum {
-    CLI_CAT_RESOURCE = 1,
-    CLI_CAT_CRITICAL,
-    CLI_CAT_SERIOUS,
-    CLI_CAT_ABNORMAL,
-    CLI_CAT_INFO,
-    CLI_CAT_RX_FSM,
-    CLI_CAT_TX_FSM,
-    CLI_CAT_MUX_FSM,
-    CLI_CAT_LAG_SELECT,
-    CLI_CAT_TX_BPDU,
-    CLI_CAT_RX_BPDU,
-    CLI_CAT_ENTRY_EXIT_TIMERS,
+struct ML_version {
+    short major;
+    short minor;
 };
+
+struct ML_protocol_version {
+    struct ML_version version;
+    struct ML_protocol *p;
+    int num_elements; struct ML_element *elements;
+    int num_types; struct ML_type *types;
+    int num_messages; struct ML_message *messages;
+    int num_enum_types; struct ML_enum_type *enum_types;
+};
+
+struct ML_protocol {
+    char *name; char *md5;
+    int num_versions; struct ML_version *versions;  // pointer to version table
+    struct ML_protocol_version *protocol_versions;  // versions supported for this protocol.
+};
+
+struct ML_event_info {
+    int dummy;    // zero-length structs make me nervous
+};
+
+/* For msglib internals only. Pay no attention to the code inside that curtain. */
+struct ML_event_internal {
+    int do_free;
+    struct ML_protocol *protocol;
+    struct ML_protocol_version *protocol_version;
+    struct ML_peer *peer;
+    ML_peer_callback_func_t callback; // per-message callback, not per-peer
+    void *callback_data;
+};
+
+struct ML_peer_instance {
+    int peer;
+    int instance;
+    int lifetime;
+    struct ML_version version; // Version of message by the sender
+};
+
+enum {
+    ML_event_flags_donot_free = (1 << 0),
+};
+
+/* The event structure handed to the application in ml_get_next_event. */
+typedef struct ML_event {
+    int flags;
+    struct ML_event_info info;
+    struct ML_event_internal internal;
+    struct ML_peer_instance sender;
+    int serial;
+    int replyto;
+    int msgnum;         // enum MLm_$protocol
+    void *msg;          // struct MLt_$protocol__$type
+} ML_event;
+
+
+/******************************************************************************************/
+/**                             Timer stuff...                                           **/
+/******************************************************************************************/
+struct MLt_msglib__timer {
+    int timer_index;
+    int data;
+};
+
+/******************************************************************************************/
+/**                             Misc Utilities...                                        **/
+/******************************************************************************************/
+extern int speed_str_to_speed(char *cfg_speed);
+extern enum PM_lport_type speed_to_lport_type(int speed);
+extern int lport_type_to_speed(enum PM_lport_type ptype);
 
 #endif  // __LACP_CMN_H__

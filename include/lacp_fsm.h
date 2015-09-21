@@ -14,26 +14,6 @@
  * under the License.
  */
 
-/*----------------------------------------------------------------------
- *  MODULE:
- *
- *     lacp_fsm.h
- *
- *  SUB-SYSTEM:
- *
- *  ABSTRACT
- *     The file contains the required MACROS for the LACP fsm table.
- *
- *  AUTHOR:
- *
- *    Gowrishankar, Riverstone Networks
- *
- *  CREATION DATE:
- *
- *    March 5, 2000
- *
- *----------------------------------------------------------------------*/
-
 #ifndef __LACP_FSM_H__
 #define __LACP_FSM_H__
 
@@ -118,8 +98,8 @@
                                     STATE = FSM[INPUT][STATE].next_state;
 
 typedef struct fsm_entry {
-  unsigned int next_state;
-  unsigned int action;
+    unsigned int next_state;
+    unsigned int action;
 } FSM_ENTRY;
 
 #endif /* __LACP_FSM_H__ */

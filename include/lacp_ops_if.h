@@ -17,7 +17,7 @@
 /************************************************************************//**
  * @defgroup lacpd LACP Daemon
  * The lacpd platform daemon manages Link Aggregation Groups (LAGs) on
- * Open Halon platform.
+ * OpenSwitch platform.
  *
  * The lacpd daemon is responsible for handling user level LAG (bond)
  * configuration and managing the LAG membership. This deamon manages two
@@ -43,7 +43,7 @@
  *
  * Command line options:
  *
- *     lacpd: Halon LACP Daemon
+ *     lacpd: OpenSwitch LACP Daemon
  *     usage: lacpd [OPTIONS] [DATABASE]
  *     where DATABASE is a socket on which ovsdb-server is listening
  *           (default: "unix:/var/run/openvswitch/db.sock").
@@ -108,8 +108,8 @@
 
 /** @} end of group lacpd_public */
 
-#ifndef __LACP_HALON_IF__H__
-#define __LACP_HALON_IF__H__
+#ifndef __LACP_OPS_IF__H__
+#define __LACP_OPS_IF__H__
 
 #include <dynamic-string.h>
 #include <vswitch-idl.h>
@@ -145,7 +145,7 @@ struct iface_data {
 
     int                 index;              /*!< Allocated index for interface */
     int                 hw_port_number;     /*!< Hardware port number */
-    enum PM_lport_type  cycl_port_type;     /*!< Cyclone port type */
+    enum PM_lport_type  cycl_port_type;     /*!< port type */
 
     /* Configuration information from LACP element. */
     uint16_t            cfg_lag_id;         /*!< Configured LAG_ID */
@@ -176,10 +176,10 @@ struct iface_data {
  * @{
  */
 // H/W Configuration function
-extern void halon_trunk_port_egr_enable(uint16_t lag_id, int port);
-extern void halon_attach_port_in_hw(uint16_t lag_id, int port);
-extern void halon_detach_port_in_hw(uint16_t lag_id, int port);
-extern void halon_send_lacpdu(unsigned char* data, int len, int port);
+extern void ops_trunk_port_egr_enable(uint16_t lag_id, int port);
+extern void ops_attach_port_in_hw(uint16_t lag_id, int port);
+extern void ops_detach_port_in_hw(uint16_t lag_id, int port);
+extern void ops_send_lacpdu(unsigned char* data, int len, int port);
 
 // LAG status update functions
 extern void db_update_lag_partner_info(uint16_t lag_id, lacp_sport_params_t *param);
@@ -247,6 +247,6 @@ extern void *lacpd_ovs_main_thread(void *arg);
 
 /** @} end of group lacpd_ovsdb_if */
 
-#endif /* __LACP_HALON_IF__H__ */
+#endif /* __LACP_OPS_IF__H__ */
 
 /** @} end of group lacpd */

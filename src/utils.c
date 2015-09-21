@@ -14,17 +14,10 @@
  * under the License.
  */
 
-//**************************************************************************
-//    File               : utils.c
-//
-//    Description        : This file provides common utility functions for
-//                         Halon Cyclone adaptations.
-//**************************************************************************
-
 #include <stdlib.h>
 #include <string.h>
 
-#include <halon_cmn.h>
+#include <pm_cmn.h>
 
 int
 speed_str_to_speed(char *cfg_speed)

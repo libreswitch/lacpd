@@ -25,14 +25,13 @@
 #include <string.h>
 #include <netinet/in.h>
 
-#include <nemo_types.h>
 #include <mlacp_debug.h>
 #include <lacp_cmn.h>
 #include <pm_cmn.h>
 #include <nlib.h>
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
-#include "lacp_halon_if.h"
+#include "lacp_ops_if.h"
 #include "mvlan_sport.h"
 #include "mvlan_lacp.h"
 
@@ -45,7 +44,7 @@ typedef enum match_type {
 
 static struct NList *placp_params_list;
 
-/* Halon: matches port type, actor key, partner sys prio, partner sys id */
+/* OpenSwitch: matches port type, actor key, partner sys prio, partner sys id */
 static int mvlan_match_aggregator(lacp_sport_params_t *psport_param,
                                   struct MLt_vpm_api__lacp_match_params *plag_param,
                                   match_type_t match);
@@ -150,10 +149,10 @@ mvlan_api_validate_unset_sport_params(struct MLt_vpm_api__lacp_sport_params *pla
     }
 
     //******************************************************************
-    // XXX If the user has set partner sys id/pri or aggr_type (i.e. the 3
+    // If the user has set partner sys id/pri or aggr_type (i.e. the 3
     // params other than the "required tuple") and not yet negated them,
     // we need to fail it, so that those cmds don't hang around in the
-    // CLI config - this could be polished as required, later XXX
+    // CLI config - this could be polished as required, later.
     //******************************************************************
     placp_sport_params = psport->placp_params;
 
@@ -256,10 +255,10 @@ mvlan_api_validate_set_sport_params(struct MLt_vpm_api__lacp_sport_params *placp
             goto end;
         }
 
-        // Halon NOTE:
-        // HALON_TODO: Update this comment to reflect lacpd implementation.
-        // Cyclone requires each LAG to have unique port type, actor key,
-        // and partner key.  For Halon, we're allowing multiple LAGs to
+        // OpenSwitch NOTE:
+        // OPS_TODO: Update this comment to reflect lacpd implementation.
+        // LACPd requires each LAG to have unique port type, actor key,
+        // and partner key.  For OpenSwitch, we're allowing multiple LAGs to
         // have the same actor key in order to automate grouping of as
         // many ports as we can.  This is the recommended selection logic
         // in 802.3ad spec (section 43.4.14.2).
@@ -399,7 +398,7 @@ mvlan_set_sport_params(struct MLt_vpm_api__lacp_sport_params *pin_lacp_params)
     }
 
     if (partner_param_changed) {
-        // Halon: Inform LACP that aggregator's data has been changed.
+        // OpenSwitch: Inform LACP that aggregator's data has been changed.
         mlacpVapiSportParamsChange(MLm_vpm_api__set_lacp_sport_params,
                                    pin_lacp_params);
     }
@@ -449,7 +448,7 @@ mvlan_unset_sport_params(struct MLt_vpm_api__lacp_sport_params *in_lacp_params)
 
     free(placp_sport_params);
 
-    // Halon: Inform LACP that aggregator's data has been changed.
+    // OpenSwitch: Inform LACP that aggregator's data has been changed.
     mlacpVapiSportParamsChange(MLm_vpm_api__unset_lacp_sport_params, in_lacp_params);
 
 end:
@@ -590,7 +589,7 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
                                                                LACP_LAG_PARTNER_KEY_FIELD_PRESENT );
 
                 // Also update port_type and actor_key now that
-                // Halon's managing these parameters.
+                // OpenSwitch's managing these parameters.
                 ptemp_lacp_sport_params->lacp_params.port_type =
                     placp_match_params->port_type;
                 ptemp_lacp_sport_params->lacp_params.actor_key =
@@ -599,7 +598,7 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
                 RDEBUG(DL_VPM, "Updating DB with new LAG info: LAG.%d, port_type=%d",
                        (int)PM_HANDLE2LAG(psport->handle), placp_match_params->port_type);
 
-                // Halon: update database with new LAG information when first selected.
+                // OpenSwitch: update database with new LAG information when first selected.
                 db_update_lag_partner_info((int)PM_HANDLE2LAG(psport->handle),
                                            &(ptemp_lacp_sport_params->lacp_params));
             }
@@ -918,13 +917,13 @@ mvlan_api_clear_sport_params(unsigned long long sport_handle)
                                               LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  |
                                               LACP_LAG_PARTNER_KEY_FIELD_PRESENT );
 
-    // Halon: do not clear actor key & port type. For Halon,
+    // OpenSwitch: do not clear actor key & port type. For OpenSwitch,
     // LAGs & actor keys are specified and bound together until deleted.
     //  sport_lacp_params->lacp_params.port_type = PM_LPORT_INVALID;
     //
     //  sport_lacp_params->lacp_params.actor_key = LACP_LAG_INVALID_ACTOR_KEY;
 
-    // Halon: clear database with new information now that no port is attached.
+    // OpenSwitch: clear database with new information now that no port is attached.
     db_clear_lag_partner_info((int)PM_HANDLE2LAG(psport->handle));
 
 end:

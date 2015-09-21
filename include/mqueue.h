@@ -14,13 +14,6 @@
  * under the License.
  */
 
-/*
- * mqueue.h
- *
- *   This is the include file for Cyclone MsgLib Adaptation
- *   (for intra-process thread communication).
- *
- */
 #ifndef __MQUEUE_H__
 #define __MQUEUE_H__
 

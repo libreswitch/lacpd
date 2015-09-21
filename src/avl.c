@@ -14,9 +14,17 @@
  * under the License.
  */
 
+#include <assert.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <sys/socket.h>
 
-#include <nemo_os.h>
 #include <avl.h>
 #include <pm_cmn.h>
 
@@ -28,15 +36,15 @@
 #define MAX(X, Y)   (((X)>(Y)) ? (X) : (Y))
 #endif
 
-void nemo_avl_balance_tree(nemo_avl_tree_t *, nemo_avl_node_t *);
-void nemo_avl_rebalance(nemo_avl_node_t **);
-void nemo_avl_rotate_right(nemo_avl_node_t **);
-void nemo_avl_rotate_left(nemo_avl_node_t **);
-void nemo_avl_swap_right_most(nemo_avl_tree_t *, nemo_avl_node_t *, nemo_avl_node_t *);
-void nemo_avl_swap_left_most(nemo_avl_tree_t *, nemo_avl_node_t *, nemo_avl_node_t *);
+void lacp_avl_balance_tree(lacp_avl_tree_t *, lacp_avl_node_t *);
+void lacp_avl_rebalance(lacp_avl_node_t **);
+void lacp_avl_rotate_right(lacp_avl_node_t **);
+void lacp_avl_rotate_left(lacp_avl_node_t **);
+void lacp_avl_swap_right_most(lacp_avl_tree_t *, lacp_avl_node_t *, lacp_avl_node_t *);
+void lacp_avl_swap_left_most(lacp_avl_tree_t *, lacp_avl_node_t *, lacp_avl_node_t *);
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_insert_or_find                                       */
+/* Name:       lacp_avl_insert_or_find                                       */
 /*                                                                           */
 /* Purpose:   Insert the supplied node into the specified AVL tree if key    */
 /*            does not already exist, otherwise returning the existing node  */
@@ -56,16 +64,16 @@ void nemo_avl_swap_left_most(nemo_avl_tree_t *, nemo_avl_node_t *, nemo_avl_node
 /*                                                                           */
 /**PROC-**********************************************************************/
 void *
-nemo_avl_insert_or_find(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
+lacp_avl_insert_or_find(lacp_avl_tree_t *tree, lacp_avl_node_t *node)
 {
     /**************************************************************************/
     /* insert specified node into tree                                        */
     /**************************************************************************/
-    nemo_avl_node_t *parent_node;
+    lacp_avl_node_t *parent_node;
     int result;
     void *existing_entry = NULL;
 
-    assert(!NEMO_AVL_IN_TREE(*node));
+    assert(!LACP_AVL_IN_TREE(*node));
 
     node->r_height = 0;
     node->l_height = 0;
@@ -159,7 +167,7 @@ nemo_avl_insert_or_find(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
     /**************************************************************************/
     /* now rebalance the tree if necessary                                    */
     /**************************************************************************/
-    nemo_avl_balance_tree(tree, parent_node);
+    lacp_avl_balance_tree(tree, parent_node);
 
     /**************************************************************************/
     /* Update the number of nodes in the tree                                 */
@@ -169,10 +177,10 @@ nemo_avl_insert_or_find(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
 EXIT:
     return existing_entry;
 
-} /* nemo_avl_insert_or_find */
+} /* lacp_avl_insert_or_find */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_delete                                               */
+/* Name:       lacp_avl_delete                                               */
 /*                                                                           */
 /* Purpose:   Delete the specified node from the specified AVL tree          */
 /*                                                                           */
@@ -183,16 +191,16 @@ EXIT:
 /*                                                                           */
 /**PROC-**********************************************************************/
 void
-nemo_avl_delete(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
+lacp_avl_delete(lacp_avl_tree_t *tree, lacp_avl_node_t *node)
 {
     /**************************************************************************/
     /* delete specified node from tree                                        */
     /**************************************************************************/
-    nemo_avl_node_t *replace_node;
-    nemo_avl_node_t *parent_node;
+    lacp_avl_node_t *replace_node;
+    lacp_avl_node_t *parent_node;
     u_short new_height;
 
-    assert(NEMO_AVL_IN_TREE(*node));
+    assert(LACP_AVL_IN_TREE(*node));
 
     if ((node->left == NULL) &&
         (node->right == NULL)) {
@@ -261,7 +269,7 @@ nemo_avl_delete(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
                 /*********************************************************************/
                 /* swap with left-most descendent of right subtree                   */
                 /*********************************************************************/
-                nemo_avl_swap_left_most(tree, node->right, node);
+                lacp_avl_swap_left_most(tree, node->right, node);
                 replace_node = node->right;
             }
         } else {
@@ -280,7 +288,7 @@ nemo_avl_delete(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
                 /*********************************************************************/
                 /* swap with right-most descendent of left subtree                   */
                 /*********************************************************************/
-                nemo_avl_swap_right_most(tree, node->left, node);
+                lacp_avl_swap_right_most(tree, node->left, node);
                 replace_node = node->left;
             }
         }
@@ -336,7 +344,7 @@ nemo_avl_delete(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
         /*************************************************************************/
         /* now rebalance the tree (if necessary)                                 */
         /*************************************************************************/
-        nemo_avl_balance_tree(tree, parent_node);
+        lacp_avl_balance_tree(tree, parent_node);
 
     } else {
         /*************************************************************************/
@@ -352,10 +360,10 @@ nemo_avl_delete(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
 
     return;
 
-} /*  nemo_avl_delete */
+} /*  lacp_avl_delete */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_find                                                 */
+/* Name:       lacp_avl_find                                                 */
 /*                                                                           */
 /* Purpose:   Find the node in the AVL tree with the supplied key            */
 /*                                                                           */
@@ -372,12 +380,12 @@ nemo_avl_delete(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void *
-nemo_avl_find(nemo_avl_tree_t *tree, void *key)
+lacp_avl_find(lacp_avl_tree_t *tree, void *key)
 {
     /***************************************************************************/
     /* find node with specified key                                            */
     /***************************************************************************/
-    nemo_avl_node_t *node;
+    lacp_avl_node_t *node;
     int result;
 
     node = tree->root;
@@ -412,10 +420,10 @@ nemo_avl_find(nemo_avl_tree_t *tree, void *key)
 
     return ((node != NULL) ? node->self : NULL);
 
-} /*  nemo_avl_find */
+} /*  lacp_avl_find */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_next                                                 */
+/* Name:       lacp_avl_next                                                 */
 /*                                                                           */
 /* Purpose:   Find next node in the AVL tree                                 */
 /*                                                                           */
@@ -430,13 +438,13 @@ nemo_avl_find(nemo_avl_tree_t *tree, void *key)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void *
-nemo_avl_next(nemo_avl_node_t *node)
+lacp_avl_next(lacp_avl_node_t *node)
 {
     /***************************************************************************/
     /* find next node in tree                                                  */
     /***************************************************************************/
 
-    assert(NEMO_AVL_IN_TREE(*node));
+    assert(LACP_AVL_IN_TREE(*node));
 
     if (node->right != NULL) {
         /*************************************************************************/
@@ -463,10 +471,10 @@ nemo_avl_next(nemo_avl_node_t *node)
 
     return ((node != NULL) ? node->self : NULL);
 
-} /*  nemo_avl_next */
+} /*  lacp_avl_next */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_prev                                                 */
+/* Name:       lacp_avl_prev                                                 */
 /*                                                                           */
 /* Purpose:   Find previous node in the AVL tree                             */
 /*                                                                           */
@@ -481,13 +489,13 @@ nemo_avl_next(nemo_avl_node_t *node)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void *
-nemo_avl_prev(nemo_avl_node_t *node)
+lacp_avl_prev(lacp_avl_node_t *node)
 {
     /***************************************************************************/
     /* find previous node in tree                                              */
     /***************************************************************************/
 
-    assert(NEMO_AVL_IN_TREE(*node));
+    assert(LACP_AVL_IN_TREE(*node));
 
     if (node->left != NULL) {
         /*************************************************************************/
@@ -514,10 +522,10 @@ nemo_avl_prev(nemo_avl_node_t *node)
 
     return ((node != NULL) ? node->self : NULL);
 
-} /*  nemo_avl_prev */
+} /*  lacp_avl_prev */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_balance_tree                                         */
+/* Name:       lacp_avl_balance_tree                                         */
 /*                                                                           */
 /* Purpose:   Reblance the tree starting at the supplied node and ending at  */
 /*            the root of the tree                                           */
@@ -530,7 +538,7 @@ nemo_avl_prev(nemo_avl_node_t *node)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void
-nemo_avl_balance_tree(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
+lacp_avl_balance_tree(lacp_avl_tree_t *tree, lacp_avl_node_t *node)
 {
     /***************************************************************************/
     /* balance the tree starting at the supplied node, and ending at the root  */
@@ -546,7 +554,7 @@ nemo_avl_balance_tree(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
             /* node is right-son of its parent                                     */
             /***********************************************************************/
             node = node->parent;
-            nemo_avl_rebalance(&node->right);
+            lacp_avl_rebalance(&node->right);
 
             /***********************************************************************/
             /* now update the right height of the parent                           */
@@ -558,7 +566,7 @@ nemo_avl_balance_tree(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
             /* node is left-son of its parent                                      */
             /***********************************************************************/
             node = node->parent;
-            nemo_avl_rebalance(&node->left);
+            lacp_avl_rebalance(&node->left);
 
             /***********************************************************************/
             /* now update the left height of the parent                            */
@@ -572,15 +580,15 @@ nemo_avl_balance_tree(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
         /*************************************************************************/
         /* rebalance root node                                                   */
         /*************************************************************************/
-        nemo_avl_rebalance(&tree->root);
+        lacp_avl_rebalance(&tree->root);
     }
 
     return;
 
-} /*  nemo_avl_balance_tree */
+} /*  lacp_avl_balance_tree */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_rebalance                                            */
+/* Name:       lacp_avl_rebalance                                            */
 /*                                                                           */
 /* Purpose:   Reblance a subtree of the AVL tree (if necessary)              */
 /*                                                                           */
@@ -591,7 +599,7 @@ nemo_avl_balance_tree(nemo_avl_tree_t *tree, nemo_avl_node_t *node)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void
-nemo_avl_rebalance(nemo_avl_node_t **subtree)
+lacp_avl_rebalance(lacp_avl_node_t **subtree)
 {
     /***************************************************************************/
     /* Local data                                                              */
@@ -616,13 +624,13 @@ nemo_avl_rebalance(nemo_avl_node_t **subtree)
             /* right subtree is heavier on left side, so must perform right        */
             /* rotation on this subtree to make it heavier on the right side       */
             /***********************************************************************/
-            nemo_avl_rotate_right(&(*subtree)->right);
+            lacp_avl_rotate_right(&(*subtree)->right);
         }
 
         /*************************************************************************/
         /* now rotate the subtree left                                           */
         /*************************************************************************/
-        nemo_avl_rotate_left(subtree);
+        lacp_avl_rotate_left(subtree);
 
     } else if (moment < -1) {
         /*************************************************************************/
@@ -633,21 +641,21 @@ nemo_avl_rebalance(nemo_avl_node_t **subtree)
             /* left subtree is heavier on right side, so must perform left         */
             /* rotation on this subtree to make it heavier on the left side        */
             /***********************************************************************/
-            nemo_avl_rotate_left(&(*subtree)->left);
+            lacp_avl_rotate_left(&(*subtree)->left);
         }
 
         /*************************************************************************/
         /* now rotate the subtree right                                          */
         /*************************************************************************/
-        nemo_avl_rotate_right(subtree);
+        lacp_avl_rotate_right(subtree);
     }
 
     return;
 
-} /*  nemo_avl_rebalance */
+} /*  lacp_avl_rebalance */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_rotate_right                                         */
+/* Name:       lacp_avl_rotate_right                                         */
 /*                                                                           */
 /* Purpose:   Rotate a subtree of the AVL tree right                         */
 /*                                                                           */
@@ -657,12 +665,12 @@ nemo_avl_rebalance(nemo_avl_node_t **subtree)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void
-nemo_avl_rotate_right(nemo_avl_node_t **subtree)
+lacp_avl_rotate_right(lacp_avl_node_t **subtree)
 {
     /***************************************************************************/
     /* rotate subtree of AVL tree right                                        */
     /***************************************************************************/
-    nemo_avl_node_t *left_son;
+    lacp_avl_node_t *left_son;
 
     left_son = (*subtree)->left;
 
@@ -682,10 +690,10 @@ nemo_avl_rotate_right(nemo_avl_node_t **subtree)
 
     return;
 
-} /*  nemo_avl_rotate_right */
+} /*  lacp_avl_rotate_right */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_rotate_left                                          */
+/* Name:       lacp_avl_rotate_left                                          */
 /*                                                                           */
 /* Purpose:   Rotate a subtree of the AVL tree left                          */
 /*                                                                           */
@@ -695,12 +703,12 @@ nemo_avl_rotate_right(nemo_avl_node_t **subtree)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void
-nemo_avl_rotate_left(nemo_avl_node_t **subtree)
+lacp_avl_rotate_left(lacp_avl_node_t **subtree)
 {
     /***************************************************************************/
     /* rotate a subtree of the AVL tree left                                   */
     /***************************************************************************/
-    nemo_avl_node_t *right_son;
+    lacp_avl_node_t *right_son;
 
     right_son = (*subtree)->right;
 
@@ -720,10 +728,10 @@ nemo_avl_rotate_left(nemo_avl_node_t **subtree)
 
     return;
 
-} /*  nemo_avl_rotate_left */
+} /*  lacp_avl_rotate_left */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_swap_right_most                                      */
+/* Name:       lacp_avl_swap_right_most                                      */
 /*                                                                           */
 /* Purpose:   Swap node with right-most descendent of subtree                */
 /*                                                                           */
@@ -735,15 +743,15 @@ nemo_avl_rotate_left(nemo_avl_node_t **subtree)
 /*                                                                           */
 /**PROC-**********************************************************************/
 void
-nemo_avl_swap_right_most(nemo_avl_tree_t *tree, nemo_avl_node_t *subtree,
-                         nemo_avl_node_t *node)
+lacp_avl_swap_right_most(lacp_avl_tree_t *tree, lacp_avl_node_t *subtree,
+                         lacp_avl_node_t *node)
 {
     /***************************************************************************/
     /* swap node with right-most descendent of specified subtree               */
     /***************************************************************************/
-    nemo_avl_node_t *swap_node;
-    nemo_avl_node_t *swap_parent;
-    nemo_avl_node_t *swap_left;
+    lacp_avl_node_t *swap_node;
+    lacp_avl_node_t *swap_parent;
+    lacp_avl_node_t *swap_left;
 
     assert(node->right != NULL);
     assert(node->left != NULL);
@@ -812,10 +820,10 @@ nemo_avl_swap_right_most(nemo_avl_tree_t *tree, nemo_avl_node_t *subtree,
 
     return;
 
-} /*  nemo_avl_swap_right_most */
+} /*  lacp_avl_swap_right_most */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_swap_left_most                                       */
+/* Name:       lacp_avl_swap_left_most                                       */
 /*                                                                           */
 /* Purpose:   Swap node with left-most descendent of subtree                 */
 /*                                                                           */
@@ -827,15 +835,15 @@ nemo_avl_swap_right_most(nemo_avl_tree_t *tree, nemo_avl_node_t *subtree,
 /*                                                                           */
 /**PROC-**********************************************************************/
 void
-nemo_avl_swap_left_most(nemo_avl_tree_t *tree, nemo_avl_node_t *subtree,
-                        nemo_avl_node_t *node)
+lacp_avl_swap_left_most(lacp_avl_tree_t *tree, lacp_avl_node_t *subtree,
+                        lacp_avl_node_t *node)
 {
     /***************************************************************************/
     /* swap node with left-most descendent of specified subtree                */
     /***************************************************************************/
-    nemo_avl_node_t *swap_node;
-    nemo_avl_node_t *swap_parent;
-    nemo_avl_node_t *swap_right;
+    lacp_avl_node_t *swap_node;
+    lacp_avl_node_t *swap_parent;
+    lacp_avl_node_t *swap_right;
 
     assert(node->right != NULL);
     assert(node->left != NULL);
@@ -904,10 +912,10 @@ nemo_avl_swap_left_most(nemo_avl_tree_t *tree, nemo_avl_node_t *subtree,
 
     return;
 
-} /*  nemo_avl_swap_left_most */
+} /*  lacp_avl_swap_left_most */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_find_or_find_next                                    */
+/* Name:       lacp_avl_find_or_find_next                                    */
 /*                                                                           */
 /* Purpose:   Find the successor node to the supplied key in the AVL tree    */
 /*                                                                           */
@@ -921,9 +929,9 @@ nemo_avl_swap_left_most(nemo_avl_tree_t *tree, nemo_avl_node_t *subtree,
 /*                                                                           */
 /**PROC-**********************************************************************/
 void *
-nemo_avl_find_or_find_next(nemo_avl_tree_t *tree, void *key, int not_equal)
+lacp_avl_find_or_find_next(lacp_avl_tree_t *tree, void *key, int not_equal)
 {
-    nemo_avl_node_t *node;
+    lacp_avl_node_t *node;
     void *found_node = NULL;
     int result;
 
@@ -949,7 +957,7 @@ nemo_avl_find_or_find_next(nemo_avl_tree_t *tree, void *key, int not_equal)
                     /* We've found the previous node - so we now need to find the      */
                     /* successor to this one.                                          */
                     /*******************************************************************/
-                    found_node =  nemo_avl_next(node);
+                    found_node =  lacp_avl_next(node);
                     break;
                 }
                 node = node->right;
@@ -976,7 +984,7 @@ nemo_avl_find_or_find_next(nemo_avl_tree_t *tree, void *key, int not_equal)
                     /*******************************************************************/
                     /* need to find the successor node to this node                    */
                     /*******************************************************************/
-                    found_node =  nemo_avl_next(node);
+                    found_node =  lacp_avl_next(node);
 
                 } else {
                     found_node = node->self;
@@ -988,10 +996,10 @@ nemo_avl_find_or_find_next(nemo_avl_tree_t *tree, void *key, int not_equal)
 
     return (found_node);
 
-} /*  nemo_avl_find_or_find_next */
+} /*  lacp_avl_find_or_find_next */
 
 /**PROC+**********************************************************************/
-/* Name:       nemo_avl_get_num_nodes                                        */
+/* Name:       lacp_avl_get_num_nodes                                        */
 /*                                                                           */
 /* Purpose:   Get the count of the nodes in this tree.                       */
 /*                                                                           */
@@ -1001,7 +1009,7 @@ nemo_avl_find_or_find_next(nemo_avl_tree_t *tree, void *key, int not_equal)
 /*                                                                           */
 /**PROC-**********************************************************************/
 unsigned int
-nemo_avl_get_num_nodes(nemo_avl_tree_t *tree)
+lacp_avl_get_num_nodes(lacp_avl_tree_t *tree)
 {
     return (tree->num_nodes);
 }
@@ -1011,7 +1019,7 @@ nemo_avl_get_num_nodes(nemo_avl_tree_t *tree)
 /*****************************************************************************/
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_byte                                              */
+/* Name:      lacp_compare_byte                                              */
 /*                                                                           */
 /* Purpose:   Standard function for comparing u_chars                        */
 /*                                                                           */
@@ -1024,7 +1032,7 @@ nemo_avl_get_num_nodes(nemo_avl_tree_t *tree)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_byte(void *aa, void *bb)
+lacp_compare_byte(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1038,10 +1046,10 @@ nemo_compare_byte(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_byte */
+} /* lacp_compare_byte */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_short                                             */
+/* Name:      lacp_compare_short                                             */
 /*                                                                           */
 /* Purpose:   Standard function for comparing shorts                         */
 /*                                                                           */
@@ -1054,7 +1062,7 @@ nemo_compare_byte(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_short(void *aa, void *bb)
+lacp_compare_short(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1068,10 +1076,10 @@ nemo_compare_short(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_short */
+} /* lacp_compare_short */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_ushort                                            */
+/* Name:      lacp_compare_ushort                                            */
 /*                                                                           */
 /* Purpose:   Standard function for comparing u_shorts                       */
 /*                                                                           */
@@ -1084,7 +1092,7 @@ nemo_compare_short(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_ushort(void *aa, void *bb)
+lacp_compare_ushort(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1098,10 +1106,10 @@ nemo_compare_ushort(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_ushort */
+} /* lacp_compare_ushort */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_long                                              */
+/* Name:      lacp_compare_long                                              */
 /*                                                                           */
 /* Purpose:   Standard function for comparing longs                          */
 /*                                                                           */
@@ -1114,7 +1122,7 @@ nemo_compare_ushort(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_long(void *aa, void *bb)
+lacp_compare_long(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1128,10 +1136,10 @@ nemo_compare_long(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_long */
+} /* lacp_compare_long */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_ulong                                             */
+/* Name:      lacp_compare_ulong                                             */
 /*                                                                           */
 /* Purpose:   Standard function for comparing u_longs                        */
 /*                                                                           */
@@ -1144,7 +1152,7 @@ nemo_compare_long(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_ulong(void *aa, void *bb)
+lacp_compare_ulong(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1158,10 +1166,10 @@ nemo_compare_ulong(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_ulong */
+} /* lacp_compare_ulong */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_int                                               */
+/* Name:      lacp_compare_int                                               */
 /*                                                                           */
 /* Purpose:   Standard function for comparing ints                           */
 /*                                                                           */
@@ -1174,7 +1182,7 @@ nemo_compare_ulong(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_int(void *aa, void *bb)
+lacp_compare_int(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1188,10 +1196,10 @@ nemo_compare_int(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_int */
+} /* lacp_compare_int */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_uint                                              */
+/* Name:      lacp_compare_uint                                              */
 /*                                                                           */
 /* Purpose:   Standard function for comparing u_ints                         */
 /*                                                                           */
@@ -1204,7 +1212,7 @@ nemo_compare_int(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_uint(void *aa, void *bb)
+lacp_compare_uint(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1218,10 +1226,10 @@ nemo_compare_uint(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_uint */
+} /* lacp_compare_uint */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_str                                               */
+/* Name:      lacp_compare_str                                               */
 /*                                                                           */
 /* Purpose:   Standard function for comparing strings case   sensitive       */
 /*                                                                           */
@@ -1234,18 +1242,18 @@ nemo_compare_uint(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_str(void *aa, void *bb)
+lacp_compare_str(void *aa, void *bb)
 {
     int ret_val;
 
     ret_val = strcmp((char *)aa, (char *)bb);
     return (ret_val);
 
-} /* nemo_compare_str */
+} /* lacp_compare_str */
 
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_case_str                                          */
+/* Name:      lacp_compare_case_str                                          */
 /*                                                                           */
 /* Purpose:   Standard function for comparing strings case insensitive       */
 /*                                                                           */
@@ -1258,7 +1266,7 @@ nemo_compare_str(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_case_str(void *aa, void *bb)
+lacp_compare_case_str(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1277,11 +1285,11 @@ nemo_compare_case_str(void *aa, void *bb)
     ret_val = strcasecmp((char *)aa, (char *)bb);
     return (ret_val);
 
-} /* nemo_compare_case_str */
+} /* lacp_compare_case_str */
 
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_port_handle                                       */
+/* Name:      lacp_compare_port_handle                                       */
 /*                                                                           */
 /* Purpose:   Standard function for comparing port_handle_t                  */
 /*                                                                           */
@@ -1294,7 +1302,7 @@ nemo_compare_case_str(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_port_handle(void *aa, void *bb)
+lacp_compare_port_handle(void *aa, void *bb)
 {
     int ret_val;
 
@@ -1308,10 +1316,10 @@ nemo_compare_port_handle(void *aa, void *bb)
 
     return (ret_val);
 
-} /* nemo_compare_port_handle  */
+} /* lacp_compare_port_handle  */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_sockaddr                                          */
+/* Name:      lacp_compare_sockaddr                                          */
 /*                                                                           */
 /* Purpose:   Standard function for comparing sockaddr                       */
 /*                                                                           */
@@ -1324,19 +1332,19 @@ nemo_compare_port_handle(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_sockaddr(void *aa, void *bb)
+lacp_compare_sockaddr(void *aa, void *bb)
 {
     int ret_val;
     char *aad = ((struct sockaddr *)aa)->sa_data;
     char *bbd = ((struct sockaddr *)bb)->sa_data;
 
-    ret_val = nemo_compare_uint((void *)aad, (void *)bbd);
+    ret_val = lacp_compare_uint((void *)aad, (void *)bbd);
     return (ret_val);
 
-} /* nemo_compare_sockaddr  */
+} /* lacp_compare_sockaddr  */
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_macaddr                                           */
+/* Name:      lacp_compare_macaddr                                           */
 /*                                                                           */
 /* Purpose:   Standard function for comparing MAC-Addresses                  */
 /*                                                                           */
@@ -1349,20 +1357,20 @@ nemo_compare_sockaddr(void *aa, void *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_macaddr(void *aa, void  *bb)
+lacp_compare_macaddr(void *aa, void  *bb)
 {
     int ret_val;
 
     ret_val = memcmp(aa, bb, 6);
     return (ret_val);
 
-} /* nemo_compare_macaddr  */
+} /* lacp_compare_macaddr  */
 
 #ifndef _KERNEL
 #include <netinet/in.h>
 
 /**PROC+**********************************************************************/
-/* Name:      nemo_compare_inaddr                                            */
+/* Name:      lacp_compare_inaddr                                            */
 /*                                                                           */
 /* Purpose:   Standard function for comparing MAC-Addresses                  */
 /*                                                                           */
@@ -1375,7 +1383,7 @@ nemo_compare_macaddr(void *aa, void  *bb)
 /*                                                                           */
 /**PROC-**********************************************************************/
 int
-nemo_compare_inaddr(void *aa, void  *bb)
+lacp_compare_inaddr(void *aa, void  *bb)
 {
     struct in_addr *a1 = aa, *a2 = bb;
 
@@ -1387,5 +1395,5 @@ nemo_compare_inaddr(void *aa, void  *bb)
 
     return 0;
 
-} /* nemo_compare_inaddr */
+} /* lacp_compare_inaddr */
 #endif

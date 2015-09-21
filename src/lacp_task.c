@@ -14,37 +14,13 @@
  * under the License.
  */
 
-/*------------------------------------------------------------------------
- *  MODULE:
- *
- *     lacp_task.c
- *
- *  SUB-SYSTEM:
- *
- *  ABSTRACT
- *    This file contains the LACP task's main function and other
- *    supporting functions.
- *
- *  EXPORTED LOCAL ROUTINES:
- *
- *  STATIC LOCAL ROUTINES:
- *
- *  AUTHOR:
- *
- *    Gowrishankar, Riverstone Networks
- *
- *  CREATION DATE:
- *
- *    March 5, 2000
- *
- *----------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <string.h>
 #include <strings.h>
-#include <nemo_types.h>
 
+#include "lacp_cmn.h"
 #include <avl.h>
 #include <nlib.h>
 
@@ -56,7 +32,7 @@
 #include <lacp_fsm.h>
 
 #include "lacp.h"
-#include "lacp_halon.h"
+#include "mvlan_lacp.h"
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
 
@@ -103,7 +79,7 @@ LACP_periodic_tx(void)
 
     RENTRY();
 
-    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+    plpinfo = LACP_AVL_FIRST(lacp_per_port_vars_tree);
 
     while (plpinfo) {
         if (plpinfo->debug_level & DBG_TX_FSM) {
@@ -114,7 +90,7 @@ LACP_periodic_tx(void)
             periodic_tx_timer_expiry(plpinfo);
             mux_wait_while_timer_expiry(plpinfo);
         }
-        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+        plpinfo = LACP_AVL_NEXT(plpinfo->avlnode);
     }
 
     REXIT();
@@ -169,7 +145,7 @@ periodic_tx_timer_expiry(lacp_per_port_variables_t *plpinfo)
                                      plpinfo);
 
             } else if (TRUE == plpinfo->lacp_control.ntt) {
-                // Halon FIX: if "async_tx_count" reached the max while
+                // OpenSwitch FIX: if "async_tx_count" reached the max while
                 // NTT was true, then LACPDUs would not have been
                 // transmitted.  We need to transmit it now if NTT is
                 // still true and periodic_tx_timer didn't expire in this
@@ -234,9 +210,9 @@ mux_wait_while_timer_expiry(lacp_per_port_variables_t *lacp_port)
             lacp_port->lacp_control.ready_n = TRUE;
             lag->ready = TRUE;      /* assume */
 
-            for (plp = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+            for (plp = LACP_AVL_FIRST(lacp_per_port_vars_tree);
                  plp;
-                 plp = NEMO_AVL_NEXT(plp->avlnode)) {
+                 plp = LACP_AVL_NEXT(plp->avlnode)) {
 
                 if (n_list_find_data(lag->pplist,
                                      &lacp_lag_port_match,
@@ -287,7 +263,7 @@ LACP_current_while_expiry(void)
 
     RENTRY();
 
-    lacp_port = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+    lacp_port = LACP_AVL_FIRST(lacp_per_port_vars_tree);
     while (lacp_port) {
         if (lacp_port->lacp_up == TRUE) { /* LACP port is initialized */
 
@@ -297,7 +273,7 @@ LACP_current_while_expiry(void)
             current_while_timer_expiry(lacp_port);
         }
 
-        lacp_port = NEMO_AVL_NEXT(lacp_port->avlnode);
+        lacp_port = LACP_AVL_NEXT(lacp_port->avlnode);
     }
 
     REXIT();
@@ -362,7 +338,7 @@ LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *data, int len)
 
     RENTRY();
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL || plpinfo->lacp_up == FALSE) {
         VLOG_WARN("Got LACPDU, but LACP not enabled (port 0x%llx)",
                   lport_handle);
@@ -423,13 +399,13 @@ LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *data, int len)
     }
 
     /*
-     * Halon: discard LACPDU if it contains following invalid data:
+     * OpenSwitch: discard LACPDU if it contains following invalid data:
      *    actor port = 0
      *    actor key  = 0
      * (ANVL LACP Conformance Test numbers 4.5 and 4.11)
      */
     /*
-     * Halon NOTE: allowing actor key of 0 again.  This is to allow
+     * OpenSwitch NOTE: allowing actor key of 0 again.  This is to allow
      *    our box to work with Procurve 3400 box.
      */
     if (lacpdu_payload->actor_port == 0) {
@@ -551,8 +527,8 @@ LACP_build_marker_response_payload(port_handle_t lport_handle,
 
     /***************************************************************************
      * Fill in the other parameters in the marker_response_payload.
-     * XXX No ntoh changes here, as we're using the incoming data itself to
-     * form this PDU and turn it around XXX
+     * No ntoh changes here, as we're using the incoming data itself to
+     * form this PDU and turn it around.
      ***************************************************************************/
     marker_response_payload->tlv_type_marker = MARKER_TLV_TYPE;
     marker_response_payload->marker_info_length = MARKER_TLV_INFO_LENGTH;
@@ -589,8 +565,7 @@ LACP_transmit_marker_response(port_handle_t lport_handle, void *data)
     RDEBUG(DL_LACPDU, "%s: lport 0x%llx\n", __FUNCTION__, lport_handle);
 
     //********************************************************************
-    // XXX No ntoh conversions here, as we turn around the incoming packet
-    // itself XXX
+    // No ntoh conversions here, as we turn around the incoming packet itself.
     //********************************************************************/
     if (VLOG_IS_DBG_ENABLED()) {
         for (ii = 0; ii < sizeof(marker_pdu_payload_t); ii++) {
@@ -600,7 +575,7 @@ LACP_transmit_marker_response(port_handle_t lport_handle, void *data)
         RDBG("\n");
     }
 
-    // Halon
+    // OpenSwitch
     mlacp_tx_pdu((unsigned char *)data,
                  sizeof(marker_pdu_payload_t),
                  lport_handle);

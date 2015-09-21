@@ -14,15 +14,10 @@
  * under the License.
  */
 
-//**************************************************************************
-//    File               : mlacp_fproto.h
-//    Description        : mcpu LACP function prototypes
-//**************************************************************************
-
 #ifndef _MLACP_FPROTO_H
 #define _MLACP_FPROTO_H
 
-#include "lacp_halon.h"
+#include "mvlan_lacp.h"
 
 //***************************************************************
 // Variables in lacpd.c
@@ -50,7 +45,7 @@ extern  int mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lac
 extern  int mlacp_blocking_send_enable_distributing(lacp_per_port_variables_t *lacp_port);
 extern  int mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port);
 
-// Halon: New function to clear super port.
+// New function to clear super port.
 extern int mlacp_blocking_send_clear_aggregator(unsigned long long sport_handle);
 
 //***************************************************************

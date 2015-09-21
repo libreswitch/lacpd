@@ -35,21 +35,11 @@ enum PM_lport_type {
     PM_LPORT_ATM      = 0x4,
     PM_LPORT_CMTS     = 0x5,
     PM_LPORT_SERIAL   = 0x6,
-// Halon: turn on support for 10GbE type.  Not sure what else
-//          STARSHIP includes, but avoid it for now.  This type
-//          seems to be used only for constructing port handles.
-//#ifdef STARSHIP
     PM_LPORT_10GIGE   = 0x7,
-//#endif
-
-// Halon: turn on support for 10Mbps and 2.5Mbps ports.
     PM_LPORT_10E      = 0x8,
     PM_LPORT_2_5GIGE  = 0x9,
-
-// Halon: turn on support for 20GbE and 40GbE type.
     PM_LPORT_20GIGE   = 0xA,
     PM_LPORT_40GIGE   = 0xB,
-
     PM_LPORT_TYPE_MAX = 0xC
 };
 #define PM_LPORT_ANY   PM_LPORT_INVALID
@@ -76,8 +66,8 @@ typedef unsigned long long port_handle_t;
 
 #define PM_PORT_HANDLE_INVALID ((port_handle_t)0)
 
-#define PM_PORT_HANDLE_ntohl(h) NEMO_HTONL64(h)
-#define PM_PORT_HANDLE_htonl(h) NEMO_NTOHL64(h)
+#define PM_PORT_HANDLE_ntohl(h) LACP_HTONL64(h)
+#define PM_PORT_HANDLE_htonl(h) LACP_NTOHL64(h)
 
 /* P O R T - H A N D L E S                                                   */
 /*    bracket () indicates the value                                         */
@@ -285,7 +275,7 @@ enum PM_MEDIA_MODULE_TYPES {
 
 #define PM_IS_PHYSICAL(handle) (PM_IS_LPORT(handle) && !(PM_IS_SVLAN(handle)))
 
-#define PM_IS_IP_NEMO_CPU(ip)  (((ip>>16) & 0xffff) == 0x7f01)
+#define PM_IS_IP_LACP_CPU(ip)  (((ip>>16) & 0xffff) == 0x7f01)
 #define PM_INVALID_HW_NUM       (0xffff)
 
 // Starts with 1, minus 1 before program to hw

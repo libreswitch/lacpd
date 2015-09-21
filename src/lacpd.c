@@ -20,7 +20,7 @@
  * @file
  * Main source file for the LACP daemon.
  *
- *    The lacpd daemon operates as an overall Halon Link Aggregation (LAG)
+ *    The lacpd daemon operates as an overall OpenSwitch Link Aggregation (LAG)
  *    Daemon supporting both static LAGs and LACP based dynamic LAGs.
  *
  *    Its purpose in life is:
@@ -55,13 +55,15 @@
 
 #include "lacp.h"
 #include "mlacp_fproto.h"
-#include "lacp_halon_if.h"
+#include "lacp_ops_if.h"
 
 VLOG_DEFINE_THIS_MODULE(lacpd);
 
 bool exiting = false;
 static unixctl_cb_func lacpd_unixctl_dump;
-static unixctl_cb_func halon_lacpd_exit;
+static unixctl_cb_func ops_lacpd_exit;
+
+extern int lacpd_shutdown;
 
 /**
  * ovs-appctl interface callback function to dump internal debug information.
@@ -125,7 +127,7 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
     sigfillset(&sigset);
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-    /* Spawn off the main Cyclone LACP protocol thread. */
+    /* Spawn off the main LACP protocol thread. */
     rc = pthread_create(&lacpd_thread,
                         (pthread_attr_t *)NULL,
                         lacpd_protocol_thread,
@@ -170,7 +172,7 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
 static void
 usage(void)
 {
-    printf("%s: Halon LACP daemon\n"
+    printf("%s: OpenSwitch LACP daemon\n"
            "usage: %s [OPTIONS] [DATABASE]\n"
            "where DATABASE is a socket on which ovsdb-server is listening\n"
            "      (default: \"unix:%s/db.sock\").\n",
@@ -253,13 +255,13 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
  * @param exiting_ is pointer to a flag that reports exit status.
  */
 static void
-halon_lacpd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+ops_lacpd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
                  const char *argv[] OVS_UNUSED, void *exiting_)
 {
     bool *exiting = exiting_;
     *exiting = true;
     unixctl_command_reply(conn, NULL);
-} /* halon_lacpd_exit */
+} /* ops_lacpd_exit */
 
 /**
  * Main function for lacpd daemon.
@@ -302,7 +304,7 @@ main(int argc, char *argv[])
     }
 
     /* Register the ovs-appctl "exit" command for this daemon. */
-    unixctl_command_register("exit", "", 0, 0, halon_lacpd_exit, &exiting);
+    unixctl_command_register("exit", "", 0, 0, ops_lacpd_exit, &exiting);
 
     /* Main LACP protocol state machine related initialization. */
     retval = mlacp_init(TRUE);
@@ -321,7 +323,7 @@ main(int argc, char *argv[])
     /* Enable asynch log writes to disk. */
     vlog_enable_async();
 
-    VLOG_INFO_ONCE("%s (Halon Link Aggregation Daemon) started", program_name);
+    VLOG_INFO_ONCE("%s (OpenSwitch Link Aggregation Daemon) started", program_name);
 
     /* Set up timer to fire off every second. */
     timerVal.it_interval.tv_sec  = 1;
@@ -356,8 +358,8 @@ main(int argc, char *argv[])
         }
     }
 
-    /* HALON_TODO - clean up various threads. */
-    /* lacp_halon_cleanup(); */
+    /* OPS_TODO - clean up various threads. */
+    /* lacp_ops_cleanup(); */
 
     return 0;
 } /* main */

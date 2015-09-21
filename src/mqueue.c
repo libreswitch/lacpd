@@ -17,7 +17,7 @@
 /*
  * mqueue.c
  *
- *   This is the main file for Cyclone MsgLib Adaptation
+ *   This is the main file for MsgLib Adaptation
  *   (for intra-process thread communication).
  *
  */

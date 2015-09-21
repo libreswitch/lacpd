@@ -19,7 +19,16 @@
  *
  */
 
-#include <nemo_os.h>
+#include <assert.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include <nlib.h>
 
 typedef struct NList NList;
@@ -31,7 +40,7 @@ n_list_alloc(void)
 
     pval = (NList *)malloc(sizeof(NList));
     if (pval == NULL) {
-        fprintf(stderr, "Halon - n_list_alloc failed!\n");
+        fprintf(stderr, "LACPd dlist - n_list_alloc failed!\n");
     }
 
     return pval;
@@ -200,78 +209,6 @@ n_list_insert_sorted(NList *list, void *data, NCompareFunc func)
     return list;
 }
 
-#ifdef STARSHIP
-
-/*----------------------------------------------------------
- * Wrapper to traverse the list and delete elem by elem.
- * func is called for every element, until the end of the
- * list is reached.
- *
- *  +--------------------------------------------------+
- * !! Only those elements for which the 'func' returns !!
- * !! non-zero value are deleted from the list.        !!
- *  +--------------------------------------------------+
- *
- * Returns:
- * Pointer to the modified list.
- *
- *--------------------------------------------------------*/
-NList *
-n_list_traverse_delete(NList *list, NMatchFunc func, void *data)
-{
-    NList *elem, *elem_next;
-    elem = list;
-
-    while (list) {
-        elem_next = elem->next;
-        if ((*func)(elem->data,data)) {
-            // Actual delete happens here.
-            list = n_list_remove_node(list, elem);
-        }
-        if (elem_next == list) {
-            break;
-        }
-        elem = elem_next;
-    }
-
-    return list;
-
-} // n_list_traverse_delete
-
-/*--------------------------------------------------
- * Wrapper to traverse the list.
- * func is called for every element, until either
- * the end of list is reached OR func returns
- * non-zero value.
- *------------------------------------------------*/
-NList *
-n_list_traverse(NList *list, NMatchFunc func, void *data)
-{
-    NList *elem;
-    elem = list;
-    while (elem) {
-        if ((*func)(elem->data,data)) {
-            return elem;
-        }
-        elem = elem->next;
-        if (elem == list) {
-            break;
-        }
-    }
-
-    return NULL;
-
-} // n_list_traverse
-
-NList *
-n_list_find_data(NList *list, NMatchFunc func, void *data)
-{
-    return (n_list_traverse(list,func,data));
-
-} // n_list_find_data
-
-#else
-
 NList *
 n_list_find_data(NList *list, NMatchFunc func, void *data)
 {
@@ -288,11 +225,9 @@ n_list_find_data(NList *list, NMatchFunc func, void *data)
         }
     }
 
-    // Halon - bug?!  No match found if we get here.
-    //         Need to return NULL.
+    // No match found if we get here. Need to return NULL.
     return NULL;
 }
-#endif /* STARSHIP */
 
 NList *
 n_list_find_opaque_data(NList *list, void *data)
@@ -489,12 +424,3 @@ n_list_pop(NList *list, void **data)
     return new_list;
 
 } // n_list_pop
-
-#ifdef STARSHIP
-int
-n_list_isempty(NList *list)
-{
-    return (list) ? FALSE : TRUE;
-
-} // n_list_isempty
-#endif

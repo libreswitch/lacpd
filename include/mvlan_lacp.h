@@ -14,17 +14,177 @@
  * under the License.
  */
 
-/*****************************************************************************
-   File               : mvlan_lacp.h
-   Description        : The file defines the data structures needed by
-                        LACP config.
-*****************************************************************************/
-
 #ifndef _MVLAN_LACP_H_
 #define _MVLAN_LACP_H_
 
-#include <nemo_types.h>
-#include "lacp_halon.h"
+#include <pm_cmn.h>
+
+/******************************************************************************************/
+/**                             System stuff...                                          **/
+/******************************************************************************************/
+#define MLm_lacp_api__setActorSysPriority       1
+#define MLm_lacp_api__setActorSysMac            2
+#define MLm_lacp_api__set_lport_overrides       3
+
+struct MLt_lacp_api__actorSysPriority {
+    int actor_system_priority;
+};
+
+struct MLt_lacp_api__actorSysMac {
+    unsigned char actor_sys_mac[6];
+};
+
+struct MLt_lacp_api__set_lport_overrides {
+    int priority;
+    unsigned char actor_sys_mac[6];
+    unsigned long long lport_handle;    /* set port overrides on interface */
+};
+
+/******************************************************************************************/
+/**                              VPM API stuff..                                         **/
+/******************************************************************************************/
+
+// VPM message types
+#define MLm_vpm_api__create_sport                     11
+#define MLm_vpm_api__delete_sport                     12
+#define MLm_vpm_api__get_sport                        13
+#define MLm_vpm_api__lport_state_up                   14
+#define MLm_vpm_api__lport_state_down                 15
+#define MLm_vpm_api__set_lacp_sport_params            16
+#define MLm_vpm_api__unset_lacp_sport_params          17
+#define MLm_vpm_api__set_lacp_lport_params_event      18
+
+struct MLt_vpm_api__static_lag {
+    unsigned long long sport_handle;  // The handle of smart trunk super port
+    unsigned long long lport_handle;  // The handle of logical port to attach/detach
+    int cookie;                       // Used by the caller to store
+                                      // info and will be sent back
+                                      // to the caller un-modified
+    int error;                        // The error code of the operation
+};
+
+struct MLt_vpm_api__create_sport {
+    short type;                       //  The type of super port
+    unsigned long long handle;        // The handle of smart trunk super port
+                                      // if the create succeeds will
+                                      // be returned to the caller
+    int cookie;                       // Used by the caller to store
+                                      // info and will be sent back
+                                      // to the caller un-modified
+    int error;                        // The error code of the operation
+};
+
+struct MLt_vpm_api__delete_sport {
+    unsigned long long handle;        // The handle of smart trunk super port
+    int cookie;                       // Used by the caller to store
+                                      // info and will be sent back
+                                      // to the caller un-modified
+    int error;                        // The error code of the operation
+};
+
+// This structure is used to set the lacp parameters of a superport.
+struct MLt_vpm_api__lacp_sport_params {
+    unsigned long long sport_handle;
+    int  flags;                       // see lacp_cmn.h
+    int  port_type;                   // The type of ports i.e. 10/100, gig etc
+                                      // defined in pm_cmn.h
+    int  actor_key;                   // A value between 1- 65535
+    int  partner_key;                 // A value between 1- 65535
+    int  partner_system_priority;     // A value between 1- 65535
+    char partner_system_id[6];        // The mac addressS
+    int  aggr_type;                   // individual or aggregateable
+    int  negation;                    // whether it's negation : unset cmd is
+                                      // used only while negating
+    int  cookie;                      // Used by the caller to store
+                                      // info and will be sent back
+                                      // to the caller un-modified
+    int  error;                       // The error code of the operation
+};
+
+struct MLt_vpm_api__lport_lacp_change {
+    unsigned long long lport_handle;
+    int port_id;
+    int flags;
+    int lacp_state;
+    int port_key;
+    int port_priority;
+    int lacp_activity;
+    int lacp_timeout;
+    int lacp_aggregation;
+    int link_state;
+    int link_speed;
+    int collecting_ready;
+    int sys_priority;
+    char sys_id[6];
+};
+
+struct MLt_vpm_api__lport_state_change {
+    unsigned long long sport_handle;
+    unsigned long long lport_handle;
+    unsigned long      lport_flags;
+    int                link_speed;
+};
+
+// The message give by the LACP module to match the
+// given logical port to a corresponding aggregator.
+struct MLt_vpm_api__lacp_match_params {
+    unsigned long long lport_handle;   // The lport whose  parameters are to be
+                                       // matched of smart trunk
+    int  flags;                        // see lacp_cmn.h
+    int  port_type;                    // The type of ports i.e. 10/100, gig etc
+                                       // defined in pm_cmn.h
+    int  actor_key;                    // A value between 1- 65535
+    int  partner_key;                  // A value between 1- 65535
+    int  partner_system_priority;      // A value between 1- 65535
+    char partner_system_id[6];         // The mac addressS
+    int  local_port_number;            // LAG's local_port_number : should
+                                       // match aggr_type of aggregator
+    int  actor_aggr_type;              // Individual or aggregatable
+    int  partner_aggr_type;            // Individual or aggregatable
+    unsigned long long sport_handle;   // will be returned if match is successful,
+    int  cookie;                       // Used by the caller to store
+                                       // info and will be sent back
+                                       // to the caller un-modified
+    int  error;                        // The error code of the operation
+};
+
+// The message given by the LACP module to attach
+// a given logical port to an aggregator.
+struct  MLt_vpm_api__lacp_attach  {
+    unsigned long long lport_handle;   // The lport to be added
+    unsigned long long sport_handle;   // The sport to which to attach/detach
+    char partner_mac_addr[6];          // Partner mac address
+    int  partner_priority;             // The partner priority
+    int  cookie;                       // Used by the caller to store
+                                       // info and will be sent back
+                                       // to the caller un-modified
+    int  error;                        // The error code of the operation
+};
+
+// This structure is used to set the LACP parameters of a logical port.
+struct MLt_vpm_api__lacp_lport_params {
+    unsigned long long lport_handle;
+    int flags;                         // flags field to indicate subfields
+    int lacp_state;                    // Enabled or Disabled
+    int port_key;                      // The port key from 1-65535
+    int port_priority;                 // The port priority from 1- 65535
+    int lacp_activity;                 // activity : passive/active
+    int lacp_timeout;                  // timeout : long/short
+    int lacp_aggregation;              // aggregation : indiv/agg
+    int cookie;                        // Used by the caller to store
+                                       // info and will be sent back
+                                       // to the caller un-modified
+    int error;                         // The error code of the operation
+};
+
+struct MLt_vpm_api__lacp_sport_connections {
+    unsigned long long local_sport;
+    int num_lports;
+    unsigned long long *lport_array;
+    int num_lports2;
+    int *lport_oper_state_array;
+    int error;
+};
 
 /*********************************************************************
  * Structure defining the sport LACP information.
@@ -55,12 +215,19 @@ extern int mvlan_api_validate_set_sport_params(struct MLt_vpm_api__lacp_sport_pa
 extern int mvlan_set_sport_params(struct MLt_vpm_api__lacp_sport_params *pin_lacp_params);
 extern int mvlan_unset_sport_params(struct MLt_vpm_api__lacp_sport_params *pin_lacp_params);
 
-// Halon - called to clear out LAG information when all ports are really detached.
-//         This essentially clears the LAG and put it back to the "free" pool
+// Called to clear out LAG information when all ports are really detached.
+// This essentially clears the LAG and put it back to the "free" pool
 extern int mvlan_api_clear_sport_params(unsigned long long sport_handle);
 
 extern int mvlan_api_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_params);
 extern int mvlan_api_attach_lport_to_aggregator(struct MLt_vpm_api__lacp_attach *placp_attach_params);
 extern int mvlan_api_detach_lport_from_aggregator(struct MLt_vpm_api__lacp_attach *placp_detach_params);
+
+extern int ml_send_event(ML_event* event);
+extern ML_event* ml_wait_for_next_event(void);
+extern void ml_event_free(ML_event* event);
+
+// LACPDU send function
+extern int mlacp_send(unsigned char* data, int length, port_handle_t portHandle);
 
 #endif /* _MVLAN_LACP_H_ */

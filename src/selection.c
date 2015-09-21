@@ -14,36 +14,13 @@
  * under the License.
  */
 
-/*-----------------------------------------------------------------------------
- *  MODULE:
- *
- *     selection.c
- *
- *  SUB-SYSTEM:
- *
- *  ABSTRACT
- *    This file contains routines which implement the selection logic.
- *
- *  EXPORTED LOCAL ROUTINES:
- *
- *  STATIC LOCAL ROUTINES:
- *
- *  AUTHOR:
- *
- *    Gowrishankar, Riverstone Networks
- *
- *  CREATION DATE:
- *
- *    March 5, 2000
- *
- *---------------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/types.h>
 
-#include <nemo_types.h>
+#include "lacp_cmn.h"
 #include <avl.h>
 #include <nlib.h>
 
@@ -57,8 +34,8 @@
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
 
-// Halon
-#include "lacp_halon.h"
+// OpenSwitch
+#include "mvlan_lacp.h"
 
 VLOG_DEFINE_THIS_MODULE(selection);
 
@@ -204,9 +181,9 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
                  lacp_port->lport_handle);
         }
 
-        for (plp = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+        for (plp = LACP_AVL_FIRST(lacp_per_port_vars_tree);
              plp;
-             plp = NEMO_AVL_NEXT(plp->avlnode))
+             plp = LACP_AVL_NEXT(plp->avlnode))
         {
             if (!plp->lag) {
                 continue;
@@ -220,7 +197,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
                 print_lag_id(plp->lag->LAG_Id);
             }
 
-            // Halon: if partner info has not been received, treat it
+            // OpenSwitch: if partner info has not been received, treat it
             //        as no match.  We need this since we're automating
             //        LACP management.  We'll always try to LAG up if
             //        possible, but if far end doesn't run LACP, we
@@ -363,7 +340,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
     // from aggregatable to individual or visa versa.  Or disconnected from
     // the current partner port and connected to another port on another system.
     //
-    // Halon: LAG id also needs to change if speed (therefore, port_type) changes.
+    // OpenSwitch: LAG id also needs to change if speed (therefore, port_type) changes.
 
     pdummy = n_list_find_data(lag->pplist,
                               &lacp_lag_port_match,
@@ -429,7 +406,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
         if (lag->pplist == NULL) {
             // It was the last port in the LAG, remove the whole LAG.
 
-            // Halon: clear out sport params so it can be reused later.
+            // OpenSwitch: clear out sport params so it can be reused later.
             if (lag->sp_handle != 0) {
                 mlacp_blocking_send_clear_aggregator(lag->sp_handle);
             }
@@ -443,7 +420,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
             free(lag);
 
         } else if (lacp_port->debug_level & DBG_SELECT) {
-            // --- Halon: DEBUG ONLY ---
+            // --- OpenSwitch: DEBUG ONLY ---
             lacp_lag_ppstruct_t *ptmp;
             RDBG("LAG.%d not empty:  ", (int)PM_HANDLE2LAG(lag->sp_handle));
             N_LIST_FOREACH(lag->pplist, ptmp) {
@@ -504,7 +481,7 @@ LAG_select_aggregator(LAG_t *const lag, lacp_per_port_variables_t *lacp_port)
 
     if (mlacp_blocking_send_select_aggregator(lag,lacp_port) == R_SUCCESS) {
         lacp_port->lacp_control.selected = SELECTED;
-        // Halon: Save handle for clearing later.
+        // OpenSwitch: Save handle for clearing later.
         lag->sp_handle = lacp_port->sport_handle;
         LACP_mux_fsm(E1,
                      lacp_port->mux_fsm_state,
@@ -527,7 +504,7 @@ LAG_attached_to_aggregator(port_handle_t lport_handle,int result)
     RDEBUG(DL_SELECT, "%s : lport_handle 0x%llx\n", __FUNCTION__, lport_handle);
 
     printf ("==============ATTACHED =========================\n");
-    lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    lacp_port = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
         VLOG_ERR("%s : can't find lport 0x%llx", __FUNCTION__, lport_handle);
         return;
@@ -559,9 +536,9 @@ is_port_partner_port(port_handle_t lport_handle, LAG_t *const lag)
         return 0;
     }
 
-    for (plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+    for (plpinfo = LACP_AVL_FIRST(lacp_per_port_vars_tree);
          plpinfo;
-         plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode)) {
+         plpinfo = LACP_AVL_NEXT(plpinfo->avlnode)) {
         if (n_list_find_data(lag->pplist,
                              &lacp_lag_port_match,
                              &lport_handle) == NULL)

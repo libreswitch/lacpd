@@ -14,35 +14,11 @@
  * under the License.
  */
 
-/*-----------------------------------------------------------------------------
- *  MODULE:
- *
- *     receive_fsm.c
- *
- *  SUB-SYSTEM:
- *
- *  ABSTRACT
- *    This file contains the routines implementing the receive state machine.
- *
- *  EXPORTED LOCAL ROUTINES:
- *
- *  STATIC LOCAL ROUTINES:
- *
- *  AUTHOR:
- *
- *    Gowrishankar, Riverstone Networks
- *
- *  CREATION DATE:
- *
- *    March 5, 2000
- *
- *---------------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 
-#include <nemo_types.h>
 #include <avl.h>
 #include <pm_cmn.h>
 #include <lacp_cmn.h>
@@ -52,8 +28,8 @@
 #include "lacp.h"
 #include "lacp_stubs.h"
 #include "lacp_support.h"
-#include "lacp_halon.h"
-#include "lacp_halon_if.h"
+#include "mvlan_lacp.h"
+#include "lacp_ops_if.h"
 
 VLOG_DEFINE_THIS_MODULE(receive_fsm);
 
@@ -286,7 +262,7 @@ current_state_action(lacp_per_port_variables_t *plpinfo,
 
     update_Selected(recvd_lacpdu, plpinfo);
 
-    // Halon: This used to be after recordPDU() call below.
+    // OpenSwitch: This used to be after recordPDU() call below.
     //        Moved this up here to allow partner checks done
     //        earlier so our responses can be accurate ASAP.
     //        (ANVL LACP Conformance Test 7.3)
@@ -325,7 +301,7 @@ expired_state_action(lacp_per_port_variables_t *plpinfo)
     plpinfo->partner_oper_port_state.synchronization = FALSE;
     plpinfo->partner_oper_port_state.lacp_timeout = SHORT_TIMEOUT;
 
-    // Halon - we just forcefully changed the partner's oper timeout to
+    // OpenSwitch - we just forcefully changed the partner's oper timeout to
     // SHORT_TIMEOUT.  If it was previously LONG, then we need to let
     // the periodic TX machine know of the change.  If it was already
     // SHORT, then no changes to the TX state machine.
@@ -359,7 +335,7 @@ defaulted_state_action(lacp_per_port_variables_t *plpinfo)
     update_Default_Selected(plpinfo);
     recordDefault(plpinfo);
 
-    // Halon - We enter defaulted state when we time out waiting for LACPDU
+    // OpenSwitch - We enter defaulted state when we time out waiting for LACPDU
     // on this port.  This probably means far end does not support LACP.  We
     // need to default partner to be in-sync & collecting/distributing so that
     // we'll form a single LAG & pass traffic.  This could also be done by
@@ -373,9 +349,9 @@ defaulted_state_action(lacp_per_port_variables_t *plpinfo)
 
     plpinfo->actor_oper_port_state.expired = FALSE;
 
-    LAG_selection(plpinfo); // XXX check if this is ok
+    LAG_selection(plpinfo); // OPS_TODO: Check if this is ok
 
-    // Halon - If selected is SELECTED && partner.sync = TRUE
+    // OpenSwitch - If selected is SELECTED && partner.sync = TRUE
     // generate E5.  This will trigger a transition to coll/dist
     // state if we're still in ATTACHED state and there is no
     // change in selection status.  This is needed for cases
@@ -444,7 +420,7 @@ port_disabled_state_action(lacp_per_port_variables_t *plpinfo)
                  plpinfo->mux_fsm_state,
                  plpinfo);
 
-    LAG_selection(plpinfo); // XXX is it okay ??
+    LAG_selection(plpinfo); // OPS_TODO: is it okay?
 
     // Transition to the next state if approp. conditions prevail.
     if (plpinfo->lacp_control.port_moved == TRUE) {

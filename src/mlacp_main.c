@@ -44,7 +44,7 @@
 #include "mlacp_recv.h"
 #include "mlacp_fproto.h"
 #include "lacp_support.h"
-#include "lacp_halon_if.h"
+#include "lacp_ops_if.h"
 
 VLOG_DEFINE_THIS_MODULE(mlacp_main);
 
@@ -207,7 +207,7 @@ mlacp_rx_pdu_thread(void *data)
                 continue;
             }
 
-            /* Cyclone LACPDU size hard-coded to 124 max.
+            /* LACPDU size hard-coded to 124 max.
              * See MLt_drivers_mlacp__rxPdu in mlacp_recv.h
              */
             total_msg_size = sizeof(ML_event) + sizeof(struct MLt_drivers_mlacp__rxPdu);
@@ -317,7 +317,7 @@ register_mcast_addr(port_handle_t lport_handle)
 
     /* Add new FD to epoll.  Save interface data pointer.
      * NOTE: assumption is that interfaces are not deleted in h/w switch! */
-    /* HALON_TODO: OVSDB allows interface to be deleted.  Maybe it's better
+    /* OPS_TODO: OVSDB allows interface to be deleted.  Maybe it's better
      * to save port index & find data?  Or in OVSDB interface delete code,
      * modify the epoll event data to remove the pointer. */
     event.events = EPOLLIN;
@@ -510,7 +510,7 @@ mlacp_init(u_long  first_time)
     mvlan_sport_init(first_time);
 
     /* Initialize LACP data structures. */
-    NEMO_AVL_INIT_TREE(lacp_per_port_vars_tree, nemo_compare_port_handle);
+    LACP_AVL_INIT_TREE(lacp_per_port_vars_tree, lacp_compare_port_handle);
 
     /* Initialize LACP main task event receiver queue. */
     if (ml_init_event_rcvr()) {

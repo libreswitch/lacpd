@@ -14,11 +14,6 @@
  * under the License.
  */
 
-/*****************************************************************************
-   File               : mlacp_debug.h
-   Description        : The file contains all definitions necessary for
-                        debugging the mcpu LACP module.
-*****************************************************************************/
 #ifndef __MLACP_DEBUG_H__
 #define __MLACP_DEBUG_H__
 
@@ -38,7 +33,7 @@
 //      will translate to...
 //          syslog(LOG_DEBUG, "task info=%d", x);
 
-// HALON_TODO: temporary.  Convert to VLOG.
+// OPS_TODO: temporary.  Convert to VLOG.
 #define  SLOG_MAKE_SERVICEPRI(x)  ((0x00000001) << (x))
 
 // Port-based debug level
@@ -82,14 +77,8 @@
 #define  DL_HW            (DBG_HW)
 #define  DL_DAL           (DBG_DAL)
 
-// HALON_TODO: remove these defines & use VLOG directly in code.
-#if 0
-#define RDEBUG(category, m...)  SLOG(category, m)
-#define RDBG(m...)  SLOG(SLOG_NOTICE, m)
-#else
 #define RDEBUG(category, m...)  VLOG_DBG(m)
-#define RDBG(m...)  VLOG_DBG(m)
-#endif
+#define RDBG(m...)              VLOG_DBG(m)
 
 #if 0
 #define RENTRY()     RDEBUG(DBG_F_ENTRY, "Entry: %s", __FUNCTION__);

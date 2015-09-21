@@ -14,30 +14,6 @@
  * under the License.
  */
 
-/*-----------------------------------------------------------------------------
- *  MODULE:
- *
- *     lacp_support.c
- *
- *  SUB-SYSTEM:
- *
- *  ABSTRACT
- *    This file contains some misc. routines used by other LACP routines.
- *
- *  EXPORTED LOCAL ROUTINES:
- *
- *  STATIC LOCAL ROUTINES:
- *
- *  AUTHOR:
- *
- *    Gowrishankar, Riverstone Networks
- *
- *  CREATION DATE:
- *
- *    March 5, 2000
- *
- *
- *---------------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,10 +22,8 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
-#include <nemo_types.h>
-
+#include <lacp_cmn.h>
 #include <avl.h>
-#include <api.h>
 #include <nlib.h>
 
 #include "lacp_stubs.h"
@@ -71,7 +45,7 @@ unsigned char my_mac_addr[MAC_ADDR_LENGTH] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 uint actor_system_priority = DEFAULT_SYSTEM_PRIORITY;
 
 /* Global per port variables table */
-nemo_avl_tree_t lacp_per_port_vars_tree;
+lacp_avl_tree_t lacp_per_port_vars_tree;
 
 extern struct NList *mlacp_lag_tuple_list;
 
@@ -167,9 +141,9 @@ LACP_initialize_port(port_handle_t lport_handle,
 
     /* RDEBUG exists in the caller ... */
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
 
-    /* Halon: Should not happen, but if LACP is already running
+    /* Should not happen, but if LACP is already running
      * on this port, just kill it and restart with the latest
      * config info. */
     if (plpinfo != NULL) {
@@ -190,15 +164,15 @@ LACP_initialize_port(port_handle_t lport_handle,
     }
 
     plpinfo->lport_handle = lport_handle;
-    NEMO_AVL_INIT_NODE(plpinfo->avlnode, plpinfo, &(plpinfo->lport_handle));
+    LACP_AVL_INIT_NODE(plpinfo->avlnode, plpinfo, &(plpinfo->lport_handle));
 
-    if (NEMO_AVL_INSERT(lacp_per_port_vars_tree, plpinfo->avlnode) == FALSE) {
+    if (LACP_AVL_INSERT(lacp_per_port_vars_tree, plpinfo->avlnode) == FALSE) {
         VLOG_FATAL("avl_insert failed for handle 0x%llx", lport_handle);
         exit(-1);
     }
 
-    /* Halon -- start lacpd with "-l" option to set this dynamically */
-    /* HALON_TODO: convert to use VLOG. */
+    /* Start lacpd with "-l" option to set this dynamically */
+    /* OPS_TODO: convert to use VLOG. */
     plpinfo->debug_level = 0xFFFFFFFF;
     /* plpinfo->debug_level = (DBG_FATAL | DBG_WARNING | DBG_ERROR); */
 
@@ -269,8 +243,8 @@ LACP_initialize_port(port_handle_t lport_handle,
                          plpinfo);
     }
 
-    /* Halon: According to the spec, should only transition into expired state
-       if port is enabled!  Adding a check here... */
+    /* According to the spec, should only transition into expired state
+       if port is enabled!  Adding a check here. */
     /* Go to expired state. */
     if (plpinfo->lacp_control.port_enabled == TRUE) {
         LACP_receive_fsm(E6,
@@ -319,7 +293,7 @@ LACP_update_port_params(port_handle_t lport_handle,
 
     RENTRY();
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
 
     if (plpinfo != NULL) {
 
@@ -334,7 +308,7 @@ LACP_update_port_params(port_handle_t lport_handle,
             plpinfo->actor_oper_port_state.collecting = hw_collecting ? TRUE : FALSE;
 
             /**********************************************************************
-             * Halon: Check if the forward exit condition prevail.
+             * Check if the forward exit condition prevail.
              * If both actor & partner are in sync, and partner is collecting,
              * transition the MUX FSM to COLL_DIST state.
              **********************************************************************/
@@ -526,7 +500,7 @@ LACP_disable_lacp(port_handle_t lport_handle)
 
     RDEBUG(DL_INFO, "%s: lport_handle 0x%llx\n", __FUNCTION__, lport_handle);
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL) {
         VLOG_ERR("Disable LACP: lport_handle 0x%llx not found",
                  lport_handle);
@@ -549,7 +523,7 @@ LACP_disable_lacp(port_handle_t lport_handle)
 
     if (lag != NULL) {
         /*
-         * XXX PI Can be optimized by putting a pointer
+         * Can be optimized by putting a pointer
          * to plag_port_struct in the perport variables
          */
         pdummy = n_list_find_data(lag->pplist,
@@ -567,7 +541,7 @@ LACP_disable_lacp(port_handle_t lport_handle)
              * It was the last port in the LAG, remove the whole LAG.
              */
 
-            // Halon: clear out sport params so it can be reused later.
+            // clear out sport params so it can be reused later.
             if (lag->sp_handle != 0) {
                 mlacp_blocking_send_clear_aggregator(lag->sp_handle);
             }
@@ -584,7 +558,7 @@ LACP_disable_lacp(port_handle_t lport_handle)
             free(lag);
         }
     }
-    NEMO_AVL_DELETE(lacp_per_port_vars_tree,plpinfo->avlnode);
+    LACP_AVL_DELETE(lacp_per_port_vars_tree,plpinfo->avlnode);
 
     //****************************************************************
     // As LACP is per-port, go ahead & de-register for this port.
@@ -607,7 +581,7 @@ LACP_reset_port(port_handle_t lport_handle)
 
     RDEBUG(DL_INFO, "%s: lport_handle 0x%llx\n", __FUNCTION__, lport_handle);
 
-    lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    lacp_port = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
         VLOG_ERR("reset port - can't find lport 0x%llx", lport_handle);
         return;
@@ -830,7 +804,7 @@ print_lacp_fsm_state(port_handle_t lport_handle)
     char state_string[STATE_STRING_SIZE];
     lacp_per_port_variables_t *lacp_port;
 
-    lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    lacp_port = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
         VLOG_ERR(" fsm print - can't find lport 0x%llx", lport_handle);
         return;
@@ -1001,7 +975,7 @@ Lacp_Get_Remote_Port(port_handle_t lport_handle)
 {
     lacp_per_port_variables_t *plpinfo;
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     assert (plpinfo != NULL);
 
     return (plpinfo->partner_oper_port_number);
@@ -1016,7 +990,7 @@ Lacp_Get_Remote_Mac(port_handle_t lport_handle)
 {
     lacp_per_port_variables_t *plpinfo;
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     assert (plpinfo != NULL);
 
     return (&plpinfo->partner_oper_system_variables.system_mac_addr);
@@ -1088,7 +1062,7 @@ print_lacp_lags(port_handle_t lport_handle)
 
     lacp_lag_ppstruct_t *ptmp;
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (!plpinfo) {
         VLOG_ERR("lport_handle 0x%llx not found", lport_handle);
         return;
@@ -1128,14 +1102,14 @@ print_lacp_key_group(const int key)
 
     lock = lacp_lock();
 
-    // XXX Why double pass etc ?? no need ?? XXX
+    // Why double pass etc ?? no need ??
     printf("Ports with Actor Operational Key: %d\n", key);
-    for (plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+    for (plpinfo = LACP_AVL_FIRST(lacp_per_port_vars_tree);
          plpinfo;
-         plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode)) {
+         plpinfo = LACP_AVL_NEXT(plpinfo->avlnode)) {
 
         if (plpinfo->actor_oper_port_key == key) {
-            // XXX for now, just print the lport_handle here itself
+            // For now, just print the lport_handle here itself
             printf("\t0x%llx\n", plpinfo->lport_handle);
         }
     }
@@ -1155,7 +1129,7 @@ print_lacp_stats(port_handle_t lport_handle)
     int lock;
     lacp_per_port_variables_t *lacp_port;
 
-    lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    lacp_port = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
         VLOG_ERR("print stats - can't find lport 0x%llx", lport_handle);
         return;
@@ -1183,7 +1157,7 @@ print_lacp_params(port_handle_t lport_handle)
     char buffer[20];
     lacp_per_port_variables_t *lacp_port;
 
-    lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    lacp_port = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
         VLOG_ERR("print params - can't find lport 0x%llx", lport_handle);
         return;
@@ -1271,14 +1245,12 @@ print_lacp_params(port_handle_t lport_handle)
 inline int
 lacp_lock(void)
 {
-    // XXX return(NU_Change_Preemption(NU_NO_PREEMPT));
     return(0);
 }
 
 inline void
 lacp_unlock(int lock __attribute__ ((unused)))
 {
-    // XXX NU_Change_Preemption(lock);
 }
 
 //********************************************************************
@@ -1371,7 +1343,7 @@ is_lacp_enabled(port_handle_t lport_handle)
 {
     lacp_per_port_variables_t *plpinfo;
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL) {
         return (FALSE);
     }
@@ -1398,7 +1370,7 @@ LACP_waiting_link_up(port_handle_t lport_handle)
 
     RENTRY();
 
-    lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    lacp_port = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (lacp_port == NULL) {
         VLOG_ERR("waiting link up - can't find lport 0x%llx", lport_handle);
         return 0;
@@ -1418,7 +1390,7 @@ LACP_waiting_link_up(port_handle_t lport_handle)
 
 //*****************************************************************
 // Function : mlacpVapiLinkUp
-// XXX Note : the functionality in "port_link_state()" will be here XXX
+// Note : the functionality in "port_link_state()" will be here.
 //*****************************************************************
 void
 mlacpVapiLinkUp(port_handle_t lport_handle, int speed)
@@ -1429,7 +1401,7 @@ mlacpVapiLinkUp(port_handle_t lport_handle, int speed)
 
     RDEBUG(DL_INFO, "%s: lport_handle 0x%llx\n", __FUNCTION__, lport_handle);
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL) {
         VLOG_ERR("link up but can't find lport 0x%llx", lport_handle);
         return;
@@ -1442,7 +1414,7 @@ mlacpVapiLinkUp(port_handle_t lport_handle, int speed)
     new_lport_type = htons(speed_to_lport_type(speed));
 
     if (new_lport_type != plpinfo->port_type) {
-        // Halon: we support dynamic changes to link speed.
+        // We support dynamic changes to link speed.
         // If a port links up with a different speed, we need
         // to force a change into unselected state, which
         // will result in a reselect.
@@ -1467,9 +1439,9 @@ mlacpVapiLinkUp(port_handle_t lport_handle, int speed)
      */
 
     //********************************************************************
-    // XXX Assuming that lacp_enabled field is TRUE always and so removed
+    // Assuming that lacp_enabled field is TRUE always and so removed
     // the check below. Also, port_enabled was set right here (above) and
-    // so removed that too from below. XXX
+    // so removed that too from below.
     //********************************************************************
 
     if ((plpinfo->lacp_control.begin == FALSE) &&
@@ -1495,7 +1467,7 @@ mlacpVapiLinkDown(port_handle_t lport_handle)
 
     RDEBUG(DL_INFO, "%s: lport_handle 0x%llx\n", __FUNCTION__, lport_handle);
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
     if (plpinfo == NULL) {
         VLOG_ERR("link down, but can't find lport 0x%llx", lport_handle);
         return;
@@ -1533,7 +1505,7 @@ set_all_port_system_mac_addr(void)
 {
     lacp_per_port_variables_t *plpinfo;
 
-    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+    plpinfo = LACP_AVL_FIRST(lacp_per_port_vars_tree);
 
     while (plpinfo) {
         if (plpinfo->actor_sys_id_override == FALSE) {
@@ -1542,7 +1514,7 @@ set_all_port_system_mac_addr(void)
             memcpy(plpinfo->actor_oper_system_variables.system_mac_addr, my_mac_addr,
                    MAC_ADDR_LENGTH);
         }
-        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+        plpinfo = LACP_AVL_NEXT(plpinfo->avlnode);
     }
 
 } /* set_all_port_system_mac_addr */
@@ -1555,7 +1527,7 @@ set_all_port_system_priority(void)
 {
     lacp_per_port_variables_t *plpinfo;
 
-    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+    plpinfo = LACP_AVL_FIRST(lacp_per_port_vars_tree);
 
     while (plpinfo) {
         if (plpinfo->actor_prio_override == FALSE) {
@@ -1564,7 +1536,7 @@ set_all_port_system_priority(void)
             plpinfo->actor_oper_system_variables.system_priority =
                 plpinfo->actor_admin_system_variables.system_priority;
         }
-        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+        plpinfo = LACP_AVL_NEXT(plpinfo->avlnode);
     }
 
 } /* set_all_port_system_priority */
@@ -1577,7 +1549,7 @@ set_lport_overrides(port_handle_t lport_handle, int prio, unsigned char *mac)
 {
     lacp_per_port_variables_t *plpinfo;
 
-    plpinfo = NEMO_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
 
     if (plpinfo != NULL) {
         /* process priority */
@@ -1634,7 +1606,7 @@ mlacpVapiSportParamsChange(int msg __attribute__ ((unused)),
     RDEBUG(DL_INFO, "%s: sport_handle 0x%llx\n", __FUNCTION__,
            pin_lacp_params->sport_handle);
 
-    plpinfo = NEMO_AVL_FIRST(lacp_per_port_vars_tree);
+    plpinfo = LACP_AVL_FIRST(lacp_per_port_vars_tree);
 
     while (plpinfo) {
         if (plpinfo->sport_handle == pin_lacp_params->sport_handle) {
@@ -1652,40 +1624,7 @@ mlacpVapiSportParamsChange(int msg __attribute__ ((unused)),
                 lacp_port->lacp_control.ready_n = FALSE;
             }
         }
-        plpinfo = NEMO_AVL_NEXT(plpinfo->avlnode);
+        plpinfo = LACP_AVL_NEXT(plpinfo->avlnode);
     }
 
 } /* mlacpVapiSportParamsChange */
-
-//*****************************************************************
-// Halon Debug Function
-//*****************************************************************
-void
-lacp_support_diag_dump(int port __attribute__ ((unused)))
-{
-#if 0 // HALON_TODO
-    port_handle_t lport_handle;
-
-    // Debug only; should be enhanced to send in the port type.
-    extern enum PM_lport_type cycl_port_type[];
-    extern int lacp_port_is_valid(int);
-
-    if (lacp_port_is_valid(port)) {
-        lport_handle = PM_SMPT2HANDLE(0,0,port,cycl_port_type[port]);
-    } else {
-        printf("Invalid port %d\n", port);
-        return;
-    }
-
-    printf("Port #%d  handle:\t0x%llx\n", port, lport_handle);
-    print_lacp_fsm_state(lport_handle);
-    printf("\n");
-    print_lacp_lags(lport_handle);
-    printf("\n");
-    print_lacp_stats(lport_handle);
-    printf("\n");
-    print_lacp_params(lport_handle);
-    printf("\n\n");
-#endif // HALON_TODO
-
-} /* lacp_support_diag_dump */

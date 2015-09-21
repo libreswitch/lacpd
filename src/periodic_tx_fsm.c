@@ -14,30 +14,6 @@
  * under the License.
  */
 
-/*----------------------------------------------------------------------------
- *  MODULE:
- *
- *     periodic_tx_fsm.c
- *
- *  SUB-SYSTEM:
- *
- *  ABSTRACT
- *    This file contains the routines implementing the periodic tx state
- *    machine.
- *
- *  EXPORTED LOCAL ROUTINES:
- *
- *  STATIC LOCAL ROUTINES:
- *
- *  AUTHOR:
- *
- *    Gowrishankar, Riverstone Networks
- *
- *  CREATION DATE:
- *
- *    March 5, 2000
- *
- *---------------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,7 +21,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
-#include <nemo_types.h>
 #include <avl.h>
 #include <pm_cmn.h>
 #include <lacp_cmn.h>
@@ -56,8 +31,8 @@
 #include "lacp_stubs.h"
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
-#include "lacp_halon.h"
-#include "lacp_halon_if.h"
+#include "mvlan_lacp.h"
+#include "lacp_ops_if.h"
 
 VLOG_DEFINE_THIS_MODULE(periodic_tx_fsm);
 
@@ -423,7 +398,7 @@ LACP_transmit_lacpdu(lacp_per_port_variables_t *plpinfo)
         goto exit;
     }
 
-    // Halon
+    // OpenSwitch
     mlacp_tx_pdu((unsigned char *)lacpdu_payload,
                  datasize, plpinfo->lport_handle);
 

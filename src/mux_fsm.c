@@ -14,35 +14,10 @@
  * under the License.
  */
 
-/*------------------------------------------------------------------------------
- *  MODULE:
- *
- *     mux_fsm.c
- *
- *  SUB-SYSTEM:
- *
- *  ABSTRACT
- *    This file contains the routines implementing the mux state machine
- *
- *  EXPORTED LOCAL ROUTINES:
- *
- *  STATIC LOCAL ROUTINES:
- *
- *  AUTHOR:
- *
- *    Gowrishankar, Riverstone Networks
- *
- *  CREATION DATE:
- *
- *    March 5, 2000
- *
- *
- *----------------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 
-#include <nemo_types.h>
 #include <avl.h>
 #include <pm_cmn.h>
 #include <lacp_cmn.h>
@@ -53,7 +28,7 @@
 #include "lacp_stubs.h"
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
-#include "lacp_halon_if.h"
+#include "lacp_ops_if.h"
 
 VLOG_DEFINE_THIS_MODULE(mux_fsm);
 

@@ -19,17 +19,12 @@
    Description        : The file defines the data structures used by the
                         super port manager to create and maintain super
                         ports.
-
-                        Halon NOTE: This is simplified version for Halon to
-                                    support LAGs.
 *****************************************************************************/
 
 #ifndef _MVLAN_SPORT_H
 #define _MVLAN_SPORT_H
 
-#include "lacp_halon.h"
-#include <nemo_types.h>
-#include <pm_cmn.h>
+#include "mvlan_lacp.h"
 
 #define MVLAN_SPORT_NO_MEM                 -2
 #define MVLAN_SPORT_EXISTS                 -3
