@@ -49,8 +49,8 @@
 #include <nemo_types.h>
 
 #include <avl.h>
-#include <nlib.h>
 #include <api.h>
+#include <nlib.h>
 
 #include "lacp_stubs.h"
 #include <pm_cmn.h>
@@ -821,69 +821,6 @@ set_partner_admin_parms_2_oper(lacp_per_port_variables_t *plpinfo,
 } /* set_partner_admin_parms_2_oper */
 
 //**************************************************************
-// Function : get_lacp_fsm_state
-//**************************************************************
-void
-get_lacp_fsm_state(struct MLt_lacp_api__lport_protocol *pMsg, int getnext)
-{
-    lacp_per_port_variables_t *lacp_port;
-
-    if (getnext == 0) {
-        lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("fsm get: can't find lport 0x%llx", pMsg->lport_handle);
-            pMsg->error = -3;
-            return;
-        }
-    } else {
-        lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
-                                       &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("no more lports");
-            pMsg->error = -2;
-            return;
-        }
-    }
-
-    pMsg->lport_handle = lacp_port->lport_handle; // for getnext
-    pMsg->error = 0;
-    pMsg->recv_fsm_state = lacp_port->recv_fsm_state;
-    pMsg->mux_fsm_state = lacp_port->mux_fsm_state;
-    pMsg->periodic_tx_fsm_state = lacp_port->periodic_tx_fsm_state;
-
-    if ((lacp_port->mux_fsm_state == MUX_FSM_ATTACHED_STATE) ||
-        (lacp_port->mux_fsm_state == MUX_FSM_COLLECTING_DISTRIBUTING_STATE)) {
-        //*************************************************************
-        // Fill the handle of the LAG (super_port) to which we're attached !
-        //*************************************************************
-        pMsg->sport_handle = lacp_port->sport_handle;
-    } else {
-        pMsg->sport_handle = 0;
-    }
-
-    pMsg->control_begin   = lacp_port->lacp_control.begin;
-    pMsg->lacp_up = lacp_port->lacp_up;
-    pMsg->control_ready_n = lacp_port->lacp_control.ready_n;
-    pMsg->control_selected = lacp_port->lacp_control.selected;
-    pMsg->control_port_moved = lacp_port->lacp_control.port_moved;
-    pMsg->control_ntt = lacp_port->lacp_control.ntt;
-    pMsg->control_port_enabled = lacp_port->lacp_control.port_enabled;
-
-    pMsg->partner_sync = lacp_port->partner_oper_port_state.synchronization;
-    pMsg->partner_collecting = lacp_port->partner_oper_port_state.collecting;
-
-    pMsg->periodic_tx_timer_expiry_counter =
-        lacp_port->periodic_tx_timer_expiry_counter;
-
-    pMsg->current_while_timer_expiry_counter =
-        lacp_port->current_while_timer_expiry_counter;
-
-    pMsg->wait_while_timer_expiry_counter =
-        lacp_port->wait_while_timer_expiry_counter;
-
-} /* get_lacp_fsm_state */
-
-//**************************************************************
 // Function : print_lacp_fsm_state
 //**************************************************************
 void
@@ -1210,76 +1147,6 @@ print_lacp_key_group(const int key)
 } /* print_lacp_key_group */
 
 //************************************************************
-// Function : get_lacp_stats
-//************************************************************
-void
-get_lacp_stats(struct MLt_lacp_api__lport_stats *pMsg, int getnext)
-{
-    lacp_per_port_variables_t *lacp_port;
-
-    if (getnext == 0) {
-        lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("get stat - can't find lport 0x%llx",
-                     pMsg->lport_handle);
-            pMsg->error = -3;
-            return;
-        }
-    } else {
-        lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
-                                       &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("no more lports");
-            pMsg->error = -2;
-            return;
-        }
-    }
-    pMsg->lport_handle = lacp_port->lport_handle;
-    pMsg->error = 0;
-
-    pMsg->lacp_pdus_sent = lacp_port->lacp_pdus_sent;
-    pMsg->marker_response_pdus_sent = lacp_port->marker_response_pdus_sent;
-    pMsg->lacp_pdus_received = lacp_port->lacp_pdus_received;
-    pMsg->marker_pdus_received = lacp_port->marker_pdus_received;
-
-} /* get_lacp_stats */
-
-//************************************************************
-// Function : clear_lacp_stats
-//************************************************************
-void
-clear_lacp_stats(struct MLt_lacp_api__lport_stats *pMsg, int clearnext)
-{
-    lacp_per_port_variables_t *lacp_port;
-
-    if (clearnext == 0) {
-        lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("clear stats: can't find lport 0x%llx",
-                     pMsg->lport_handle);
-            pMsg->error = -3;
-            return;
-        }
-    } else {
-        lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
-                                       &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("no more lports");
-            pMsg->error = -2;
-            return;
-        }
-    }
-    pMsg->lport_handle = lacp_port->lport_handle;
-    pMsg->error = 0;
-
-    lacp_port->lacp_pdus_sent = pMsg->lacp_pdus_sent;
-    lacp_port->marker_response_pdus_sent = pMsg->marker_response_pdus_sent;
-    lacp_port->lacp_pdus_received = pMsg->lacp_pdus_received;
-    lacp_port->marker_pdus_received = pMsg->marker_pdus_received;
-
-} /* clear_lacp_stats */
-
-//************************************************************
 // Function : print_lacp_stats
 //************************************************************
 void
@@ -1305,88 +1172,6 @@ print_lacp_stats(port_handle_t lport_handle)
     lacp_unlock(lock);
 
 } /* print_lacp_stats */
-
-//************************************************************
-// Function : get_lacp_params
-//************************************************************
-void
-get_lacp_params(struct MLt_lacp_api__lport_params *pMsg, int getnext)
-{
-    lacp_per_port_variables_t *lacp_port;
-
-    if (getnext == 0) {
-        lacp_port = NEMO_AVL_FIND(lacp_per_port_vars_tree, &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("get params - can't find lport 0x%llx",
-                     pMsg->lport_handle);
-            pMsg->error = -3;
-            return;
-        }
-    } else {
-        lacp_port = NEMO_AVL_FIND_NEXT(lacp_per_port_vars_tree,
-                                       &(pMsg->lport_handle));
-        if (lacp_port == NULL) {
-            VLOG_ERR("no more lports");
-            pMsg->error = -2;
-            return;
-        }
-    }
-
-    pMsg->lport_handle = lacp_port->lport_handle; // for getnext
-
-    //**************************
-    // Actor info
-    //**************************
-    pMsg->actor_system_priority =
-        ntohs(lacp_port->actor_oper_system_variables.system_priority);
-
-    bcopy(lacp_port->actor_oper_system_variables.system_mac_addr,
-          pMsg->actor_system_mac,
-          MAC_ADDR_LENGTH);
-
-    pMsg->actor_admin_port_key = ntohs(lacp_port->actor_admin_port_key);
-    pMsg->actor_oper_port_key = ntohs(lacp_port->actor_oper_port_key);
-
-    pMsg->actor_admin_port_number = ntohs(lacp_port->actor_admin_port_number);
-    pMsg->actor_oper_port_number = ntohs(lacp_port->actor_oper_port_number);
-
-    pMsg->actor_admin_port_priority = ntohs(lacp_port->actor_admin_port_priority);
-    pMsg->actor_oper_port_priority = ntohs(lacp_port->actor_oper_port_priority);
-
-    pMsg->actor_activity = lacp_port->actor_oper_port_state.lacp_activity;
-    pMsg->actor_timeout = lacp_port->actor_oper_port_state.lacp_timeout;
-    pMsg->actor_aggregation = lacp_port->actor_oper_port_state.aggregation;
-    pMsg->actor_synchronization = lacp_port->actor_oper_port_state.synchronization;
-    pMsg->actor_collecting = lacp_port->actor_oper_port_state.collecting;
-    pMsg->actor_distributing = lacp_port->actor_oper_port_state.distributing;
-    pMsg->actor_defaulted = lacp_port->actor_oper_port_state.defaulted;
-    pMsg->actor_expired = lacp_port->actor_oper_port_state.expired;
-
-    //**************************
-    // Partner info
-    //**************************
-    pMsg->partner_system_priority =
-        ntohs(lacp_port->partner_oper_system_variables.system_priority);
-
-    bcopy(lacp_port->partner_oper_system_variables.system_mac_addr,
-          pMsg->partner_system_mac,
-          MAC_ADDR_LENGTH);
-
-    pMsg->partner_admin_key = ntohs(lacp_port->partner_admin_key);
-    pMsg->partner_oper_key = ntohs(lacp_port->partner_oper_key);
-    pMsg->partner_oper_port_number = ntohs(lacp_port->partner_oper_port_number);
-    pMsg->partner_oper_port_priority = ntohs(lacp_port->partner_oper_port_priority);
-
-    pMsg->partner_activity = lacp_port->partner_oper_port_state.lacp_activity;
-    pMsg->partner_timeout = lacp_port->partner_oper_port_state.lacp_timeout;
-    pMsg->partner_aggregation = lacp_port->partner_oper_port_state.aggregation;
-    pMsg->partner_synchronization = lacp_port->partner_oper_port_state.synchronization;
-    pMsg->partner_collecting = lacp_port->partner_oper_port_state.collecting;
-    pMsg->partner_distributing = lacp_port->partner_oper_port_state.distributing;
-    pMsg->partner_defaulted = lacp_port->partner_oper_port_state.defaulted;
-    pMsg->partner_expired = lacp_port->partner_oper_port_state.expired;
-
-} /* get_lacp_params */
 
 //************************************************************
 // Function : print_lacp_params

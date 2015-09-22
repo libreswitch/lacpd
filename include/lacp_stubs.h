@@ -17,19 +17,6 @@
 #ifndef __LACP_STUBS_H
 #define __LACP_STUBS_H
 
-//*******************************************************************
-// XXX Nemo Changes Start
-//*******************************************************************
-#define NBIW (sizeof(unsigned long) * 8) /* number of bits in integer word */
-#define NBIB 8                           /* Number of bits in byte */
-
-/* Manipulation Macros */
-#define MASK_ISSET(m, b) ((m)->mask[(b) / NBIW] & (1 << ((b) % NBIW)))
-#define MASK_ZERO(m) bzero((char *)(m), sizeof (*(m)))
-#define MASK_SET(m, b) ((m)->mask[(b)/NBIW] |= (1 << ((b) % NBIW)))
-#define MASK_CLR(m, b) ((m)->mask[(b)/NBIW] &= ~(1 << ((b) % NBIW)))
-// #define MASK_CPY(f, t) bcopy((char *)(f), (char *)(t), sizeof(*(t)))
-// #define MASK_CMP(m1, m2) ( bcmp((const void *)m1, (const void *)m2, sizeof(*m1)))
 
 typedef unsigned char u8_t;
 typedef unsigned short u16_t;

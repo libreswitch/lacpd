@@ -50,8 +50,6 @@
 #define ml_lport_index   0x22
 #define ml_rx_pdu_index  0x33
 #define ml_cfgMgr_index  0x44
-#define ml_showMgr_index 0x55
-#define ml_diagMgr_index 0x66
 
 #define MSGLIB_INVALID_INDEX (-1)
 
