@@ -55,8 +55,8 @@
 
 #include <unixctl.h>
 #include <dynamic-string.h>
-#include <openhalon-idl.h>
-#include <openhalon-dflt.h>
+#include <openswitch-idl.h>
+#include <openswitch-dflt.h>
 #include <openvswitch/vlog.h>
 #include <poll-loop.h>
 #include <hash.h>
