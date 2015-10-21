@@ -1,7 +1,7 @@
 High level design of ops-lacpd
 ==============================
 
-The ops-lacpd process manages link aggregation (see [link aggregation design](https://www.openswitch.net/documents/dev/link_aggregation_design) for feature design information).
+The ops-lacpd process manages link aggregation (see [link aggregation design](/documents/user/link_aggregation_design) for feature design information).
 
 Responsibilities
 ----------------
@@ -150,4 +150,4 @@ The ops-lacpd process can be logically divided into two parts:
 
 References
 ----------
-* [link aggregation design](https://www.openswitch.net/documents/dev/link_aggregation_design)
+* [link aggregation design](/documents/user/link_aggregation_design)
