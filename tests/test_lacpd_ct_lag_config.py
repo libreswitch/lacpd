@@ -71,14 +71,14 @@ def sw_set_intf_user_config(sw, interface, config):
     for s in config:
         c += " user_config:" + s
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 
 # Clear user_config for an Interface.
 def sw_clear_user_config(sw, interface):
     c = OVS_VSCTL + "clear interface " + str(interface) + " user_config"
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 # Parse the lacp_status:*_state string
 def parse_lacp_state(state):
@@ -90,7 +90,7 @@ def sw_set_intf_pm_info(sw, interface, config):
     for s in config:
         c += " pm_info:" + s
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 # Set open_vsw_lacp_config parameter(s)
 def set_open_vsw_lacp_config(sw, config):
@@ -98,13 +98,13 @@ def set_open_vsw_lacp_config(sw, config):
     for s in config:
         c += " lacp_config:" + s
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 def sys_open_vsw_lacp_config_clear(sw):
     c = OVS_VSCTL + "remove system . lacp_config lacp-system-id " + \
         "lacp_config lacp-system-priority"
     debug(c)
-    sw.cmd(c)
+    sw.ovscmd(c)
 
 # Set open_vsw_lacp_config parameter(s)
 def set_port_parameter(sw, port, config):
@@ -112,7 +112,7 @@ def set_port_parameter(sw, port, config):
     for s in config:
         c += ' %s' % s
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 # Set interface:other_config parameter(s)
 def set_intf_other_config(sw, intf, config):
@@ -120,14 +120,14 @@ def set_intf_other_config(sw, intf, config):
     for s in config:
         c += ' other_config:%s' % s
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 # Simulate the link state on an Interface
 def simulate_link_state(sw, interface, link_state="up"):
     info("Setting the link state of interface " + interface + " to " + link_state + "\n")
     c = OVS_VSCTL + "set interface " + str(interface) + " link_state=" + link_state
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 
 # Get the values of a set of columns from Interface table.
@@ -158,7 +158,7 @@ def sw_create_bond(s1, bond_name, intf_list, lacp_mode="off"):
     c = OVS_VSCTL + "add-bond bridge_normal " + bond_name + " " + " ".join(map(str, intf_list))
     c += " -- set port " + bond_name + " lacp=" + lacp_mode
     debug(c)
-    return s1.cmd(c)
+    return s1.ovscmd(c)
 
 
 # Delete a bond/lag/trunk from OVS-DB.
@@ -166,7 +166,7 @@ def sw_delete_bond(sw, bond_name):
     info("Deleting the bond " + bond_name + "\n")
     c = OVS_VSCTL + "del-port bridge_normal " + bond_name
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 
 # Add a new Interface to the existing bond.
@@ -177,12 +177,12 @@ def add_intf_to_bond(sw, bond_name, intf_name):
     # Get the UUID of the interface that has to be added.
     c = OVS_VSCTL + "get interface " + str(intf_name) + " _uuid"
     debug(c)
-    intf_uuid = sw.cmd(c).rstrip('\r\n')
+    intf_uuid = sw.ovscmd(c).rstrip('\r\n')
 
     # Get the current list of Interfaces in the bond.
     c = OVS_VSCTL + "get port " + bond_name + " interfaces"
     debug(c)
-    out = sw.cmd(c)
+    out = sw.ovscmd(c)
     intf_list = out.rstrip('\r\n').strip("[]").replace(" ", "").split(',')
 
     if intf_uuid in intf_list:
@@ -197,7 +197,7 @@ def add_intf_to_bond(sw, bond_name, intf_name):
 
     c = OVS_VSCTL + "set port " + bond_name + " interfaces=" + new_intf_str
     debug(c)
-    return sw.cmd(c)
+    return sw.ovscmd(c)
 
 
 # Add a list of Interfaces to the bond.
@@ -214,12 +214,12 @@ def remove_intf_from_bond(sw, bond_name, intf_name, fail=True):
     # Get the UUID of the Interface that has to be removed.
     c = OVS_VSCTL + "get interface " + str(intf_name) + " _uuid"
     debug(c)
-    intf_uuid = sw.cmd(c).rstrip('\r\n')
+    intf_uuid = sw.ovscmd(c).rstrip('\r\n')
 
     # Get the current list of Interfaces in the bond.
     c = OVS_VSCTL + "get port " + bond_name + " interfaces"
     debug(c)
-    out = sw.cmd(c)
+    out = sw.ovscmd(c)
     intf_list = out.rstrip('\r\n').strip("[]").replace(" ", "").split(',')
 
     if intf_uuid not in intf_list:
@@ -234,7 +234,7 @@ def remove_intf_from_bond(sw, bond_name, intf_name, fail=True):
 
     c = OVS_VSCTL + "set port " + bond_name + " interfaces=" + new_intf_str
     debug(c)
-    out = sw.cmd(c)
+    out = sw.ovscmd(c)
 
     return out
 
@@ -583,8 +583,8 @@ class lacpdTest(OpsVsiTest):
         s2 = self.net.switches[1]
 
         system_mac = {}
-        system_mac[1] = s1.cmd("ovs-vsctl get system . system_mac").strip('"').rstrip('"\r\n')
-        system_mac[2] = s2.cmd("ovs-vsctl get system . system_mac").strip('"').rstrip('"\r\n')
+        system_mac[1] = s1.ovscmd("ovs-vsctl get system . system_mac").rstrip('\r\n')
+        system_mac[2] = s2.ovscmd("ovs-vsctl get system . system_mac").rstrip('\r\n')
         system_prio = {}
         system_prio[1] = "65534"
         system_prio[2] = "65534"
@@ -639,8 +639,8 @@ class lacpdTest(OpsVsiTest):
 
         info("Override system parameters\n")
         # Change the LACP system ID on the switches.
-        s1.cmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[1] + "' lacp_config:lacp-system-priority=" + base_prio)
-        s2.cmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[2] + "' lacp_config:lacp-system-priority=" + base_prio)
+        s1.ovscmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[1] + "' lacp_config:lacp-system-priority=" + base_prio)
+        s2.ovscmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[2] + "' lacp_config:lacp-system-priority=" + base_prio)
 
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,
@@ -664,7 +664,7 @@ class lacpdTest(OpsVsiTest):
                     "s1:" + intf)
 
         info("Override port parameters\n")
-        s1.cmd("ovs-vsctl set port lag0 other_config:lacp-system-id='" + port_mac + "' other_config:lacp-system-priority=" + port_prio)
+        s1.ovscmd("ovs-vsctl set port lag0 other_config:lacp-system-id='" + port_mac + "' other_config:lacp-system-priority=" + port_prio)
 
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,
@@ -689,8 +689,8 @@ class lacpdTest(OpsVsiTest):
 
         info("Delete and recreate lag\n")
         # delete and recreate lag
-        s1.cmd("ovs-vsctl del-port lag0")
-        s2.cmd("ovs-vsctl del-port lag0")
+        s1.ovscmd("ovs-vsctl del-port lag0")
+        s2.ovscmd("ovs-vsctl del-port lag0")
 
         sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
         sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
@@ -718,8 +718,8 @@ class lacpdTest(OpsVsiTest):
                     "s1:" + intf)
 
         # finish testing
-        s1.cmd("ovs-vsctl del-port lag0")
-        s2.cmd("ovs-vsctl del-port lag0")
+        s1.ovscmd("ovs-vsctl del-port lag0")
+        s2.ovscmd("ovs-vsctl del-port lag0")
 
         # Create two dynamic LAG with two ports each.
         # the current schema doesn't allow creating a bond
@@ -903,8 +903,8 @@ class lacpdTest(OpsVsiTest):
                 "s1:" + intf)
 
         info("Clear lacp-port-id and lacp-port-priority\n")
-        s1.cmd("ovs-vsctl remove interface " + intf + " other_config lacp-port-id")
-        s1.cmd("ovs-vsctl remove interface " + intf + " other_config lacp-port-priority")
+        s1.ovscmd("ovs-vsctl remove interface " + intf + " other_config lacp-port-id")
+        s1.ovscmd("ovs-vsctl remove interface " + intf + " other_config lacp-port-priority")
 
         verify_intf_lacp_status(s1,
                 intf,
@@ -950,7 +950,7 @@ class lacpdTest(OpsVsiTest):
                     "s2:" + intf)
 
         info("Verify dynamic update of system-level override\n")
-        s1.cmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + alt_mac + "' lacp_config:lacp-system-priority=" + alt_prio)
+        s1.ovscmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + alt_mac + "' lacp_config:lacp-system-priority=" + alt_prio)
 
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,
@@ -989,7 +989,7 @@ class lacpdTest(OpsVsiTest):
 
         info("Verify isolation of port-level override\n")
         # change just lag0
-        s2.cmd("ovs-vsctl set port lag0 other_config:lacp-system-id='" + port_mac + "' other_config:lacp-system-priority=" + port_prio)
+        s2.ovscmd("ovs-vsctl set port lag0 other_config:lacp-system-id='" + port_mac + "' other_config:lacp-system-priority=" + port_prio)
 
         # verify that lag0 changed
         for intf in sw_1G_intf[0:2]:
@@ -1018,7 +1018,7 @@ class lacpdTest(OpsVsiTest):
 
         info("Verify clearing port-level override\n")
         # clear port-level settings
-        s2.cmd("ovs-vsctl remove port lag0 other_config lacp-system-id "
+        s2.ovscmd("ovs-vsctl remove port lag0 other_config lacp-system-id "
                "other_config lacp-system-priority")
 
         # verify that lag0 changed back to system values
