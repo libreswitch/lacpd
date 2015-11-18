@@ -297,32 +297,6 @@ find_iface_data_by_index(int index)
     return NULL;
 } /* find_iface_data_by_index */
 
-const char *
-find_ifname_by_index(int index)
-{
-    struct iface_data *idp;
-
-    idp = find_iface_data_by_index(index);
-    if (idp) {
-        return idp->name;
-    } else {
-        return "";
-    }
-
-} /* find_ifname_by_index */
-
-int
-find_hw_port_number_by_index(int index)
-{
-    struct iface_data *idp;
-
-    idp = find_iface_data_by_index(index);
-    if (idp) {
-        return idp->hw_port_number;
-    } else {
-        return -1;
-    }
-}
 
 /**********************************************************************/
 /*              Configuration Message Sending Utilities               */

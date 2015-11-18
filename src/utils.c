@@ -19,33 +19,6 @@
 
 #include <pm_cmn.h>
 
-int
-speed_str_to_speed(char *cfg_speed)
-{
-    int speed = 0;
-
-    if (cfg_speed != NULL) {
-        if (strcmp(cfg_speed, "40000") == 0) {
-            speed = 40000;
-        } else if (strcmp(cfg_speed, "20000") == 0) {
-            speed = 20000;
-        } else if (strcmp(cfg_speed, "10000") == 0) {
-            speed = 10000;
-        } else if (strcmp(cfg_speed, "1000") == 0) {
-            speed = 1000;
-        } else if (strcmp(cfg_speed, "2500") == 0) {
-            speed = 2500;
-        } else if (strcmp(cfg_speed, "100") == 0) {
-            speed = 100;
-        } else if (strcmp(cfg_speed, "10") == 0) {
-            speed = 10;
-        }
-    }
-
-    return speed;
-
-} // speed_str_to_speed
-
 enum PM_lport_type
 speed_to_lport_type(int speed)
 {

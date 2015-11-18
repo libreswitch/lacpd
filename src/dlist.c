@@ -80,56 +80,6 @@ n_list_append(NList *list, void *data)
 
 } // n_list_append
 
-int
-n_list_insert_list_after(NList *prevelem, NList *list_to_insert)
-{
-    NList *nextelem = NULL;
-    NList *head = NULL, *tail = NULL;
-
-    if (prevelem == NULL) {
-        return 0;
-    }
-
-    if (list_to_insert == NULL) {
-        return 1;
-    }
-
-    // Both the list being inserted into and the list being
-    // inserted contain at least one node.
-
-    // Obtain some handles.
-    nextelem = prevelem->next;
-    head = list_to_insert; // head of list_to_insert
-    tail = list_to_insert->prev; // last element in list_to_insert
-
-    // Manipulate the links.
-    prevelem->next = head;
-    head->prev = prevelem;
-    tail->next = nextelem;
-    nextelem->prev = tail;
-
-    return 1;
-
-} // n_list_insert_list_after
-
-int
-n_list_insert_after(NList *prevelem, void *data)
-{
-    NList *elem = n_list_alloc();
-
-    if (!elem) {
-        return 0;
-    }
-
-    elem->data = data;
-    elem->next = prevelem->next;
-    elem->prev = prevelem;
-    prevelem->next = elem;
-    elem->next->prev = elem;
-
-    return 1;
-
-} // n_list_insert_after
 
 NList *
 n_list_prepend(NList *list, void *data)
@@ -229,26 +179,6 @@ n_list_find_data(NList *list, NMatchFunc func, void *data)
     return NULL;
 }
 
-NList *
-n_list_find_opaque_data(NList *list, void *data)
-{
-    NList *elem;
-
-    elem = list;
-    while (elem) {
-        if (elem->data == data) {
-            return elem;
-        }
-        elem = elem->next;
-        if (elem == list) {
-            break;
-        }
-    }
-
-    return NULL;
-
-} // n_list_find_opaque_data
-
 static void
 n_list_remove(NList *elem)
 {
@@ -258,27 +188,6 @@ n_list_remove(NList *elem)
 
 } // n_list_remove
 
-NList *
-n_list_remove_node(NList *list, NList *elem)
-{
-    NList *listnext = list->next;
-
-    // Remove offending element.
-    n_list_remove(elem);
-
-    if (elem == list) { // deleted head of list
-        if (list == listnext) { // was singleton list
-            return NULL; // no list left!
-        } else {
-            return listnext;
-        }
-    } else { // head of list still safe
-        return list;
-    }
-
-    return NULL; // not reached
-
-} // n_list_remove_node
 
 NList *
 n_list_remove_data(NList *list, void *data)
@@ -311,28 +220,7 @@ n_list_remove_data(NList *list, void *data)
 
 } // n_list_remove_data
 
-NList *
-n_list_free_list(NList *list)
-{
-    NList *here, *there;
 
-    if (!list) {
-        return NULL;
-    }
-
-    here = list;
-    while (1) {
-        there = here->next;
-        n_list_free(here);
-        here = there;
-        if (here == list) {
-            break;
-        }
-    }
-
-    return NULL;
-
-} // n_list_free_list
 
 NList *
 n_list_nth(NList *list, int n)
@@ -366,18 +254,6 @@ n_list_nth(NList *list, int n)
 
 } // n_list_nth
 
-void *
-n_list_nth_data(NList *list, int n)
-{
-    NList *elem = n_list_nth(list, n);
-
-    if (elem) {
-        return elem->data;
-    }
-
-    return NULL;
-
-} // n_list_nth_data
 
 int
 n_list_length(NList *list)
@@ -399,28 +275,3 @@ n_list_length(NList *list)
     return i;
 
 } // n_list_length
-
-NList *
-n_list_pop(NList *list, void **data)
-{
-    NList *new_list;
-
-    if (!list) {
-        return list;
-    }
-
-    if (data) {
-        *data = list->data;
-    }
-
-    if (list->next == list) {
-        n_list_remove(list);
-        return NULL;
-    }
-
-    new_list = list->next;
-    n_list_remove(list);
-
-    return new_list;
-
-} // n_list_pop

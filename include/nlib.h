@@ -51,14 +51,6 @@ extern struct NList *n_list_prepend(struct NList *list, void *data);
 extern struct NList *n_list_insert(struct NList *list, void *data, int position);
 extern void n_list_free(struct NList *element); // doesn't free *data for you
 
-// returns 1 for success and 0 for failure
-extern int n_list_insert_after(struct NList *prevelem, void *data);
-
-// returns 1 for success and 0 for failure
-// of course, list_to_insert is allowed to be an empty or singleton list
-extern int n_list_insert_list_after(struct NList *prevelem,
-                                    struct NList *list_to_insert);
-
 extern struct NList *n_list_insert_sorted(struct NList *list, void *data,
                                           NCompareFunc func);
 
@@ -66,23 +58,11 @@ extern struct NList *n_list_insert_sorted(struct NList *list, void *data,
 // Returns elem when func returns 1. Returns NULL if it never does.
 extern struct NList *n_list_find_data(struct NList *list, NMatchFunc func,
                                       void *data);
-// Returns elem when data == elem->data. Returns NULL if it never does.
-extern struct NList *n_list_find_opaque_data(struct NList *list,
-                                             void *data);
 // remove the first element for which elem->data == data
 extern struct NList *n_list_remove_data(struct NList *list, void *data);
 
-// remove an element from the list
-extern struct NList *n_list_remove_node(struct NList *list, struct NList *elem);
-
-// n_list_free_list frees whole list, doesn't do *data
-extern struct NList *n_list_free_list(struct NList *list);
-
-// removes first item, puts data in *data
-extern struct NList *n_list_pop(struct NList *list, void **data);
 
 extern struct NList *n_list_nth(struct NList *list, int n);
-extern void *n_list_nth_data(struct NList *list, int n);
 extern int n_list_length(struct NList *list);
 
 #define N_LIST_NEXT(list) (((struct NList *) list)->next)

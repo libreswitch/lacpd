@@ -133,7 +133,6 @@ struct MLt_msglib__timer {
 /******************************************************************************************/
 /**                             Misc Utilities...                                        **/
 /******************************************************************************************/
-extern int speed_str_to_speed(char *cfg_speed);
 extern enum PM_lport_type speed_to_lport_type(int speed);
 extern int lport_type_to_speed(enum PM_lport_type ptype);
 

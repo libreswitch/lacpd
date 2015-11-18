@@ -190,7 +190,6 @@ extern void db_delete_lag_port(uint16_t lag_id, int port, lacp_per_port_variable
 extern void db_update_interface(lacp_per_port_variables_t *plpinfo);
 
 // Utility functions
-extern const char *find_ifname_by_index(int index);
 extern struct iface_data *find_iface_data_by_index(int index);
 
 /**************************************************************************//**

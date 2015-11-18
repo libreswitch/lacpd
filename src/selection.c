@@ -353,40 +353,6 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
         (((lag->loop_back = loop_back_check(lacp_port)) == TRUE) ||
          (compare_lag_id(lag->LAG_Id, lagId) == FALSE) ||
          (lag->port_type != lacp_port->port_type))) {
-#if 0
-        printf("***** ==== ***** compare_lag_id failed or loopback ?? ******* ==== *****\n");
-        printf("lag->local_system_priority = %d,lagId->local_system_priority = %d\n",
-               lag->LAG_Id->local_system_priority,lagId->local_system_priority);
-        printf("lag->local_port_key = %d,lagId->local_port_key = %d\n",
-               lag->LAG_Id->local_port_key,lagId->local_port_key);
-        printf("lag->local_port_priority = %d,lagId->local_port_priority = %d\n",
-               lag->LAG_Id->local_port_priority,lagId->local_port_priority);
-        printf("lag->local_port_number = %d,lagId->local_port_number = %d\n",
-               lag->LAG_Id->local_port_number,lagId->local_port_number);
-        printf("lag mac address %x:%x:%x:%x:%x:%x:lagId mac address %x:%x:%x:%x:%x:%x:\n",
-               lag->LAG_Id->local_system_mac_addr[0], lag->LAG_Id->local_system_mac_addr[1],
-               lag->LAG_Id->local_system_mac_addr[2], lag->LAG_Id->local_system_mac_addr[3],
-               lag->LAG_Id->local_system_mac_addr[4], lag->LAG_Id->local_system_mac_addr[5],
-               lagId->local_system_mac_addr[0], lagId->local_system_mac_addr[1],
-               lagId->local_system_mac_addr[2], lagId->local_system_mac_addr[3],
-               lagId->local_system_mac_addr[4], lagId->local_system_mac_addr[5]);
-
-        printf("lag->remote_system_priority = %d,lagId->remote_system_priority = %d\n",
-               lag->LAG_Id->remote_system_priority,lagId->remote_system_priority);
-        printf("lag->remote_port_key = %d,lagId->remote_port_key = %d\n",
-               lag->LAG_Id->remote_port_key,lagId->remote_port_key);
-        printf("lag->remote_port_priority = %d,lagId->remote_port_priority = %d\n",
-               lag->LAG_Id->remote_port_priority,lagId->remote_port_priority);
-        printf("lag->local_port_number = %d,lagId->local_port_number = %d\n",
-               lag->LAG_Id->remote_port_number,lagId->remote_port_number);
-        printf("lag mac address %x:%x:%x:%x:%x:%x:lagId mac address %x:%x:%x:%x:%x:%x:\n",
-               lag->LAG_Id->remote_system_mac_addr[0], lag->LAG_Id->remote_system_mac_addr[1],
-               lag->LAG_Id->remote_system_mac_addr[2], lag->LAG_Id->remote_system_mac_addr[3],
-               lag->LAG_Id->remote_system_mac_addr[4], lag->LAG_Id->remote_system_mac_addr[5],
-               lagId->remote_system_mac_addr[0], lagId->remote_system_mac_addr[1],
-               lagId->remote_system_mac_addr[2], lagId->remote_system_mac_addr[3],
-               lagId->remote_system_mac_addr[4], lagId->remote_system_mac_addr[5]);
-#endif
 
         // Make selected UNSELECTED, and cause approp. event in
         // the mux machine.
@@ -491,35 +457,6 @@ LAG_select_aggregator(LAG_t *const lag, lacp_per_port_variables_t *lacp_port)
     REXIT();
 } // LAG_select_aggregator
 
-//******************************************************************
-// Function : LAG_attached_to_aggregator
-// Unused ?
-//******************************************************************
-void
-LAG_attached_to_aggregator(port_handle_t lport_handle,int result)
-{
-    lacp_per_port_variables_t *lacp_port;
-
-    RENTRY();
-    RDEBUG(DL_SELECT, "%s : lport_handle 0x%llx\n", __FUNCTION__, lport_handle);
-
-    printf ("==============ATTACHED =========================\n");
-    lacp_port = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
-    if (lacp_port == NULL) {
-        VLOG_ERR("%s : can't find lport 0x%llx", __FUNCTION__, lport_handle);
-        return;
-    }
-
-    if (result == R_SUCCESS) {
-        stop_wait_while_timer(lacp_port);
-        lacp_port->lacp_control.selected = SELECTED;
-        LACP_mux_fsm(E1,
-                     lacp_port->mux_fsm_state,
-                     lacp_port);
-    }
-
-    REXIT();
-} // LAG_attached_to_aggregator
 
 //**************************************************************
 // Function : is_port_partner_port

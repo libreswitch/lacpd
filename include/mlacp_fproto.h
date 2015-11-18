@@ -80,10 +80,6 @@ extern void LACP_disable_lacp(port_handle_t lport_handle);
 extern void mlacpVapiSportParamsChange(int msg,
                                        struct MLt_vpm_api__lacp_sport_params *pin_lacp_params);
 
-//***************************************************************
-// Functions in selection.c
-//***************************************************************
-extern void LAG_attached_to_aggregator(port_handle_t lport_handle,int result);
 
 //***************************************************************
 // Functions in mux_fsm.c

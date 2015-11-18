@@ -101,7 +101,6 @@ struct super_port_s
 extern int mvlan_sport_init(u_long  first_time);
 extern int mvlan_sport_create(struct MLt_vpm_api__create_sport  *psport_create,
                               super_port_t **ppsport);
-extern int mvlan_sport_delete_validate_generic(super_port_t  *psport);
 extern int mvlan_sport_delete(super_port_t  *psport);
 extern int mvlan_destroy_sport(super_port_t *psport);
 extern int mvlan_get_sport(port_handle_t handle, super_port_t **ppsport, int type);

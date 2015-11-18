@@ -84,18 +84,7 @@ extern unsigned int lacp_avl_get_num_nodes(lacp_avl_tree_t *);
 /*****************************************************************************/
 /* Standard compare functions                                                */
 /*****************************************************************************/
-extern int lacp_compare_byte(void *, void *);
-extern int lacp_compare_short(void *, void *);
-extern int lacp_compare_ushort(void *, void *);
-extern int lacp_compare_long(void *, void *);
-extern int lacp_compare_ulong(void *, void *);
-extern int lacp_compare_int(void *, void *);
 extern int lacp_compare_uint(void *, void *);
-extern int lacp_compare_case_str(void *, void *);
-extern int lacp_compare_str(void *, void *);
 extern int lacp_compare_port_handle(void *, void *);
-extern int lacp_compare_sockaddr(void *, void *);
-extern int lacp_compare_inaddr(void *, void *);
-extern int lacp_compare_macaddr(void *, void *);
 
 #endif /* __LACPD_AVL_H__ */

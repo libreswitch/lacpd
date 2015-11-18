@@ -226,55 +226,6 @@ end:
 
 } // mvlan_sport_create
 
-/*-----------------------------------------------------------------------------
- * mvlan_sport_delete_validate_generic  --
- *
- *        psport - The pointer to the the super port
- *
- * Description  -- This function  validates whether a superport can be deleted.
- *
- * Side effects --
- *      Note this function does not check for ref counts or attached vlans.
- *
- * Return value --
- *            R_SUCCESS - on success
- *            MVLAN_SPORT_LPORT_ATTACHED
- *            MVLAN_SPORT_PORT_HAS_STP
- *            MVLAN_SPORT_IS_TRUNK
- *            MVLAN_LACP_SPORT_PARAMS_SET
- *---------------------------------------------------------------------------*/
-int
-mvlan_sport_delete_validate_generic(super_port_t *psport)
-{
-    int status = R_SUCCESS;
-
-    // if any logical port is attached to this
-    // super port then we cannot delete this super port.
-    if (psport->num_lports > 0) {
-        RDEBUG(DL_VPM, "sport 0x%llx has valid lports", psport->handle);
-        status = MVLAN_SPORT_LPORT_ATTACHED;
-        goto end;
-    }
-
-    // If trunking is enabled on the sport we cannot delete it.
-    if (psport->type & STYPE_TRUNK) {
-        RDEBUG(DL_VPM, "The specified super port has trunking enabled");
-        status = MVLAN_SPORT_IS_TRUNK;
-        goto end;
-    }
-
-    // If the super port has lacp params set then we cannot delete the
-    // super port The parameters must be negated.
-    if (psport->placp_params != NULL ) {
-        RDEBUG(DL_VPM, "The specified super port has lacp parameters set");
-        status = MVLAN_LACP_SPORT_PARAMS_SET;
-        goto end;
-    }
-
-end:
-    return status;
-
-} // mvlan_sport_delete_validate_generic
 
 /*-----------------------------------------------------------------------------
  * mvlan_destroy_sport  --
