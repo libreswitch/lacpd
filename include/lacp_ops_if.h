@@ -182,7 +182,7 @@ extern void ops_detach_port_in_hw(uint16_t lag_id, int port);
 extern void ops_send_lacpdu(unsigned char* data, int len, int port);
 
 // LAG status update functions
-extern void db_update_lag_partner_info(uint16_t lag_id, lacp_sport_params_t *param);
+extern void db_update_lag_partner_info(uint16_t lag_id);
 extern void db_clear_lag_partner_info(uint16_t lag_id);
 extern void db_add_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo);
 extern void db_delete_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo);

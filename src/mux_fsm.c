@@ -506,12 +506,6 @@ start_wait_while_timer(lacp_per_port_variables_t *plpinfo)
     plpinfo->wait_while_timer_expiry_counter = AGGREGATE_WAIT_COUNT;
 }
 
-void
-stop_wait_while_timer(lacp_per_port_variables_t *plpinfo)
-{
-    plpinfo->wait_while_timer_expiry_counter = 0;
-}
-
 //******************************************************************
 // Function : disable_collecting_distributing
 //            enable_collecting_distributing

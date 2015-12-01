@@ -54,15 +54,6 @@ struct MLt_lacp_api__set_lport_overrides {
 #define MLm_vpm_api__unset_lacp_sport_params          17
 #define MLm_vpm_api__set_lacp_lport_params_event      18
 
-struct MLt_vpm_api__static_lag {
-    unsigned long long sport_handle;  // The handle of smart trunk super port
-    unsigned long long lport_handle;  // The handle of logical port to attach/detach
-    int cookie;                       // Used by the caller to store
-                                      // info and will be sent back
-                                      // to the caller un-modified
-    int error;                        // The error code of the operation
-};
-
 struct MLt_vpm_api__create_sport {
     short type;                       //  The type of super port
     unsigned long long handle;        // The handle of smart trunk super port
@@ -159,31 +150,6 @@ struct  MLt_vpm_api__lacp_attach  {
                                        // info and will be sent back
                                        // to the caller un-modified
     int  error;                        // The error code of the operation
-};
-
-// This structure is used to set the LACP parameters of a logical port.
-struct MLt_vpm_api__lacp_lport_params {
-    unsigned long long lport_handle;
-    int flags;                         // flags field to indicate subfields
-    int lacp_state;                    // Enabled or Disabled
-    int port_key;                      // The port key from 1-65535
-    int port_priority;                 // The port priority from 1- 65535
-    int lacp_activity;                 // activity : passive/active
-    int lacp_timeout;                  // timeout : long/short
-    int lacp_aggregation;              // aggregation : indiv/agg
-    int cookie;                        // Used by the caller to store
-                                       // info and will be sent back
-                                       // to the caller un-modified
-    int error;                         // The error code of the operation
-};
-
-struct MLt_vpm_api__lacp_sport_connections {
-    unsigned long long local_sport;
-    int num_lports;
-    unsigned long long *lport_array;
-    int num_lports2;
-    int *lport_oper_state_array;
-    int error;
 };
 
 /*********************************************************************

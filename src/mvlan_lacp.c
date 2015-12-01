@@ -599,8 +599,7 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
                        (int)PM_HANDLE2LAG(psport->handle), placp_match_params->port_type);
 
                 // OpenSwitch: update database with new LAG information when first selected.
-                db_update_lag_partner_info((int)PM_HANDLE2LAG(psport->handle),
-                                           &(ptemp_lacp_sport_params->lacp_params));
+                db_update_lag_partner_info((int)PM_HANDLE2LAG(psport->handle));
             }
 
             break;

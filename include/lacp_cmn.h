@@ -33,15 +33,6 @@ typedef unsigned short        macaddr_3_t[MAC_SHORTADDR_SIZE];
 /* MAC address in 6 elements (bytes)  */
 typedef unsigned char         macaddr_6_t[MAC_BYTEADDR_SIZE];
 
-typedef union macaddr_u {
-    unsigned char  c_mac[MAC_BYTEADDR_SIZE];
-    unsigned short s_mac[MAC_SHORTADDR_SIZE];
-    struct {
-        unsigned long  uu_mac;
-        unsigned short ss_mac;
-    } aa_mac;
-#define u_mac aa_mac.uu_mac
-} macaddr_t;
 
 /******************************************************************************************/
 /**                             MsgLib related                                           **/
@@ -53,13 +44,9 @@ typedef union macaddr_u {
 #define ml_rx_pdu_index  0x33
 #define ml_cfgMgr_index  0x44
 
-#define MSGLIB_INVALID_INDEX (-1)
-
 /******************************************************************************************/
 /**                             ML_event & related                                       **/
 /******************************************************************************************/
-#define ML_MAX_MSG_SIZE  4096
-
 struct ML_event;         /* Forward declaration. */
 
 typedef void (*ML_peer_callback_func_t)(struct ML_event *event, void *data);
@@ -121,14 +108,6 @@ typedef struct ML_event {
     void *msg;          // struct MLt_$protocol__$type
 } ML_event;
 
-
-/******************************************************************************************/
-/**                             Timer stuff...                                           **/
-/******************************************************************************************/
-struct MLt_msglib__timer {
-    int timer_index;
-    int data;
-};
 
 /******************************************************************************************/
 /**                             Misc Utilities...                                        **/

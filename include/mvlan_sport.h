@@ -35,17 +35,8 @@
 #define MVLAN_SPORT_EOT                    -8
 #define MVLAN_LACP_SPORT_KEY_NOT_FOUND     -9
 #define MVLAN_LACP_SPORT_PARAMS_NOT_FOUND  -10
-#define MVLAN_LACP_DUPLICATE_SPORT_PARAMS  -11
-#define MVLAN_LACP_PORT_ALREADY_IN_SPORT   -12
-#define MVLAN_CFG_PORT_NOT_FOUND           -13
-#define MVLAN_LACP_LPORT_IN_TRANSIT        -14
-#define MVLAN_LACP_LPORT_INVALID_PORT_KEY  -15
-#define MVLAN_SPORT_AGGR_PARAMS_NOT_SET    -16
 
-#define STYPE_REGULAR         (0x1)     /*  Super port has exactly one logical port */
-#define STYPE_MLPPP           (0x2)     /*  Is a type of WAN port and has multiple logical ports */
 #define STYPE_802_3AD         (0x4)     /*  Is of type IEEE 803.3ad and has multiple logical ports */
-#define STYPE_TRUNK           (0x8)     /*  Is set to be a smart trunk */
 
 typedef struct super_port_s super_port_t;
 
@@ -63,14 +54,9 @@ struct super_port_s
 
     u_char type;                       /* Type of super port */
     u_long info_flags;                 /* Various bit flags as below */
-#define SPORT_MODE_PTP   (1 << 0)      /* Port is a point-to-point port
-                                        * (NOTE: Not necessarily a PPP port.)
-                                        */
-#define SPORT_DOES_PPP   (1 << 1)      /* Port runs PPP */
 
     u_char admin_state;                /*  The administrative state */
 #define SPORT_ADMIN_UP        (0x01)
-#define SPORT_ADMIN_DOWN      (0x02)
 
     u_char oper_state_bits;            /* These are bit flags that determine
                                         * the operational state of the port for

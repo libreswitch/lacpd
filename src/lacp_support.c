@@ -68,35 +68,6 @@ static void initialize_per_port_variables(
                               char *sys_id);
 
 
-/*----------------------------------------------------------------------
- * Function: LACPResetProtocol(int pnum)
- * Synopsis: Deregister the LACP multicast address from the L2 manager,
- *           set the per port lacp variables to 0.
- * Input  :  int - port number
- * Returns:  void
- *----------------------------------------------------------------------*/
-void
-LACPResetProtocol(lacp_per_port_variables_t *plpinfo)
-{
-    RENTRY();
-
-    /***********************************************************************
-     *   Deregister the LACP multicast address from the L2 Manager.
-     ***********************************************************************/
-    deregister_mcast_addr(plpinfo->lport_handle);
-
-    /***********************************************************************
-     *   zero out the lacp per port variable structure for this port.
-     *   NOTE: Not sure if this is a good idea, a better way might be
-     *         to set the individual fields to 0 or other approp. values.
-     ***********************************************************************/
-    memset(plpinfo, 0,
-           sizeof(lacp_per_port_variables_t));
-
-    REXIT();
-
-} /* LACPResetProtocol */
-
 /*****************************************************************************
  *
  *         Port initialization function

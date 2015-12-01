@@ -159,7 +159,7 @@ ml_event_free(ML_event *event)
  * LACPDU Send and Receive Functions
  ************************************************************************/
 void *
-mlacp_rx_pdu_thread(void *data)
+mlacp_rx_pdu_thread(void *data  __attribute__ ((unused)))
 {
     /* Detach thread to avoid memory leak upon exit. */
     pthread_detach(pthread_self());
@@ -419,7 +419,7 @@ mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle)
  * LACP Protocol Thread
  ************************************************************************/
 void *
-lacpd_protocol_thread(void *arg)
+lacpd_protocol_thread(void *arg  __attribute__ ((unused)))
 {
     ML_event *pevent;
 

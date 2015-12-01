@@ -22,10 +22,6 @@
 /*****************************************************************************
  *   MISC. MACROS (to be placed in appropriate h files later)
  *****************************************************************************/
-#define TIMER_NAME_STRING_LENGTH                64
-#define LACP_PERIODIC_TX_TIMER_TEGBIT           1
-#define LACP_RECEIVE_TIMER_TEGBIT               2
-#define LACP_RECV_Q_TEGBIT                      0
 
 #define FAST_PERIODIC_COUNT             1                          /* 1 second */
 #define SLOW_PERIODIC_COUNT             30                         /* 30 seconds */
@@ -33,12 +29,7 @@
 #define LONG_TIMEOUT_COUNT              (3 * SLOW_PERIODIC_COUNT)  /* 90 seconds */
 #define AGGREGATE_WAIT_COUNT            2                          /* 2 seconds */
 
-#define LACP_MAX_KEY                    ((1 << 16) - 1)
-
 #define STATE_STRING_SIZE               32
-#define DEAGGREGATION_DELAY_COUNT       3
-
-#define CMD_PRESENT                     0x55
 
 #define MAX_ASYNC_TX                    3
 
@@ -61,11 +52,6 @@
 #define PORT_STATE_LACP_ACTIVITY_BIT            0x8
 #define PORT_STATE_LACP_TIMEOUT_BIT             0x10
 #define PORT_STATE_AGGREGATION_BIT              0x20
-#define PORT_STATE_SYNCHRONISATION_BIT          0x40
-#define PORT_STATE_COLLECTING_BIT               0x80
-#define PORT_STATE_DISTRIBUTING_BIT             0x100
-#define PORT_STATE_DEFAULTED_BIT                0x200
-#define PORT_STATE_EXPIRED_BIT                  0x400
 #define PORT_SYSTEM_MAC_ADDR_BIT                0x800
 #define PORT_SYSTEM_PRIORITY_BIT                0x1000
 #define ALL_PARAMS                              0xFFFF
@@ -103,7 +89,6 @@ extern int loop_back_check(lacp_per_port_variables_t *);
 extern void print_lacp_fsm_state(port_handle_t);
 extern void set_actor_admin_parms_2_oper(lacp_per_port_variables_t *, int);
 extern void set_partner_admin_parms_2_oper(lacp_per_port_variables_t *, int);
-extern void LACPResetProtocol(lacp_per_port_variables_t *);
 extern void start_wait_while_timer(lacp_per_port_variables_t *);
 extern void periodic_tx_state_string(int, char *);
 extern void mux_state_string(int, char *);

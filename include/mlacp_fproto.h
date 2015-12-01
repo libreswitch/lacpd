@@ -27,11 +27,11 @@ extern bool exiting;
 //***************************************************************
 // Functions in mlacp_main.c
 //***************************************************************
-extern void *mlacp_rx_pdu_thread(void *data);
+extern void *mlacp_rx_pdu_thread(void *data  __attribute__ ((unused)));
 extern void register_mcast_addr(port_handle_t lport_handle);
 extern void deregister_mcast_addr(port_handle_t lport_handle);
 extern int mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle);
-extern void *lacpd_protocol_thread(void *arg);
+extern void *lacpd_protocol_thread(void *arg  __attribute__ ((unused)));
 extern int mlacp_init(u_long);
 
 //***************************************************************
@@ -80,10 +80,5 @@ extern void LACP_disable_lacp(port_handle_t lport_handle);
 extern void mlacpVapiSportParamsChange(int msg,
                                        struct MLt_vpm_api__lacp_sport_params *pin_lacp_params);
 
-
-//***************************************************************
-// Functions in mux_fsm.c
-//***************************************************************
-extern void stop_wait_while_timer(lacp_per_port_variables_t *plpinfo);
 
 #endif //_MLACP_FPROTO_H
