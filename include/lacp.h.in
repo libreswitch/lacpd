@@ -108,7 +108,7 @@
 #define LACP_LAG_INVALID_ACTOR_KEY      (0)
 
 #define LACP_PKT_SIZE                   (124) // Excluding CRC
-#define LACP_HEADROOM_SIZE              (14)  // 6 + 6 + 2
+#define LACP_HEADROOM_SIZE              (14)  // 6(dest mac) + 6(src mac) + 2(Eth type)
 
 /*****************************************************************************
  *                   MISC. MACROS
@@ -131,7 +131,11 @@
 #define LACP_TLV_COLLECTOR_INFO_LENGTH  0x10
 #define LACP_TLV_TERMINATOR_INFO_LENGTH 0x0
 
+/* According to standard IEEE802.1AX in the encapsulation of PDU,
+*  the EtherType for slow protocols is hexadecimal 88-09 */
 #define LACP_ETYPE                      0x8809
+#define SLOW_PROTOCOLS_ETHERTYPE_PART1 0X88
+#define SLOW_PROTOCOLS_ETHERTYPE_PART2 0X09
 
 /*****************************************************************************
  *                   MACROS REQD FOR MARKER PROTOCOL

@@ -41,6 +41,7 @@ VLOG_DEFINE_THIS_MODULE(lacp_task);
 /****************************************************************************
  *                    Global Variables Definition
  ****************************************************************************/
+/* IEEE 802.3 Slow_Protocols_Multicast group address */
 const unsigned char lacp_mcast_addr[MAC_ADDR_LENGTH] =
 {0x01, 0x80, 0xc2, 0x00, 0x00, 0x02};
 
@@ -422,7 +423,7 @@ LACP_process_input_pkt(port_handle_t lport_handle, unsigned char *data, int len)
 
         printf("Rx LACPDU on port %llx:\n", lport_handle);
         printf("=====================\n\n");
-        display_lacpdu(lacpdu_payload, (char *)&data[6],
+        display_lacpdu(lacpdu_payload, (char *)&data[MAC_ADDR_LENGTH],
                        (char *)&data[0], LACP_ETYPE);
         printf("\n\n");
     }

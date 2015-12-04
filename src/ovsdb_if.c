@@ -330,6 +330,12 @@ set_port_overrides(struct port_data *portp, struct iface_data *idp)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_lacp_api__set_lport_overrides;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_lacp_api__set_lport_overrides *)(event+1);
 
         msg->lport_handle = PM_SMPT2HANDLE(0,0,idp->index,
@@ -368,6 +374,12 @@ clear_port_overrides(struct iface_data *idp)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_lacp_api__set_lport_overrides;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_lacp_api__set_lport_overrides *)(event+1);
 
         msg->lport_handle = PM_SMPT2HANDLE(0,0,idp->index,
@@ -397,6 +409,12 @@ send_sys_pri_msg(int priority)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_lacp_api__setActorSysPriority;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_lacp_api__actorSysPriority *)(event+1);
         msg->actor_system_priority = priority;
 
@@ -422,6 +440,12 @@ send_sys_mac_msg(struct ether_addr *macAddr)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_lacp_api__setActorSysMac;
 
+        /* Set up macMsg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         macMsg = (struct MLt_lacp_api__actorSysMac *)(event+1);
 
         /* Copy MAC address. */
@@ -449,6 +473,12 @@ send_lag_create_msg(int lag_id)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_vpm_api__create_sport;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_vpm_api__create_sport *)(event+1);
         msg->handle = PM_LAG2HANDLE(lag_id);
         msg->type = STYPE_802_3AD;
@@ -475,6 +505,12 @@ send_lag_delete_msg(int lag_id)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_vpm_api__delete_sport;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_vpm_api__delete_sport *)(event+1);
         msg->handle = PM_LAG2HANDLE(lag_id);
 
@@ -501,6 +537,12 @@ send_config_lag_msg(int lag_id, int actor_key, int cycl_ptype)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_vpm_api__set_lacp_sport_params;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_vpm_api__lacp_sport_params *)(event+1);
         msg->sport_handle = PM_LAG2HANDLE(lag_id);
         msg->flags = (LACP_LAG_PORT_TYPE_FIELD_PRESENT |
@@ -531,6 +573,12 @@ send_unconfig_lag_msg(int lag_id)
         event->sender.peer = ml_cfgMgr_index;
         event->msgnum = MLm_vpm_api__unset_lacp_sport_params;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_vpm_api__lacp_sport_params *)(event+1);
         msg->sport_handle = PM_LAG2HANDLE(lag_id);
 
@@ -558,10 +606,16 @@ send_config_lport_msg(struct iface_data *info_ptr)
         event->sender.peer = ml_lport_index;
         event->msgnum = MLm_vpm_api__set_lacp_lport_params_event;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_vpm_api__lport_lacp_change *)(event+1);
         msg->lport_handle = PM_SMPT2HANDLE(0,0,info_ptr->index,
                                            info_ptr->cycl_port_type);
-        msg->link_state = (info_ptr->link_state == INTERFACE_LINK_STATE_UP) ? 1 : 0;
+        msg->link_state = info_ptr->link_state;  // INTERFACE_LINK_STATE_DOWN or INTERFACE_LINK_STATE_UP
         msg->link_speed = info_ptr->link_speed;
 
         /* NOTE: 802.3ad requires port number to be non-zero.  So we'll
@@ -634,6 +688,12 @@ send_lport_lacp_change_msg(struct iface_data *info_ptr, unsigned int flags)
         event->sender.peer = ml_lport_index;
         event->msgnum = MLm_vpm_api__set_lacp_lport_params_event;
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_vpm_api__lport_lacp_change *)(event+1);
         msg->lport_handle = PM_SMPT2HANDLE(0,0,info_ptr->index,
                                            info_ptr->cycl_port_type);
@@ -675,6 +735,12 @@ send_link_state_change_msg(struct iface_data *info_ptr)
                          MLm_vpm_api__lport_state_up :
                          MLm_vpm_api__lport_state_down);
 
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
         msg = (struct MLt_vpm_api__lport_state_change *)(event+1);
         msg->lport_handle = PM_SMPT2HANDLE(0, 0, info_ptr->index,
                                            info_ptr->cycl_port_type);
@@ -883,7 +949,7 @@ add_new_interface(const struct ovsrec_interface *ifrow)
             port_priority = smap_get_int(&(ifrow->other_config),
                                          INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_PRIORITY, -1);
             /* If not supplied by user, default is set 1 */
-            idp->actor_priority = IS_VALID_ACTOR_PRI(port_priority) ? port_priority : 1;
+            idp->actor_priority = IS_VALID_ACTOR_PRI(port_priority) ? port_priority : DEFAULT_PORT_PRIORITY;
         }
 
         /* Initialize the interface to be not part of any LAG.
@@ -973,7 +1039,7 @@ update_interface_cache(void)
             val = smap_get_int(&(ifrow->other_config),
                                INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_PRIORITY, 1);
             if (!IS_VALID_ACTOR_PRI(val)) {
-                val = 1;
+                val = DEFAULT_PORT_PRIORITY;
             }
 
             if (val != idp->actor_priority) {
@@ -2624,13 +2690,13 @@ lacpd_interfaces_dump(struct ds *ds, int argc, const char *argv[])
     struct shash_node *sh_node;
     struct iface_data *idp = NULL;
 
-    if (argc > 2) {
+    if (argc > 2) { /* an interface is specified in argv */
         struct iface_data *idp =
             shash_find_data(&all_interfaces, argv[2]);
         if (idp){
             lacpd_interface_dump(ds, idp);
         }
-    } else {
+    } else { /* dump all interfaces */
         ds_put_cstr(ds, "================ Interfaces ================\n");
 
         SHASH_FOR_EACH(sh_node, &all_interfaces) {
@@ -2679,12 +2745,12 @@ lacpd_ports_dump(struct ds *ds, int argc, const char *argv[])
     struct shash_node *sh_node;
     struct port_data *portp = NULL;
 
-    if (argc > 2) {
+    if (argc > 2) { /* a port is specified in argv */
         portp = shash_find_data(&all_ports, argv[2]);
         if (portp){
             lacpd_port_dump(ds, portp);
         }
-    } else {
+    } else { /* dump all ports */
         ds_put_cstr(ds, "================ Ports ================\n");
 
         SHASH_FOR_EACH(sh_node, &all_ports) {

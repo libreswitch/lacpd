@@ -24,6 +24,10 @@
 /* MAC Address length in bytes */
 #define MAC_BYTEADDR_SIZE  (6)
 
+/* MAC Address string length, function L2_hexmac_to_strmac()
+ * needs at least 20 bytes in the buffer */
+#define MAC_STRING_ADDR_SIZE  (20)
+
 /* MAC Address length in short int */
 #define MAC_SHORTADDR_SIZE (3)
 

@@ -35,6 +35,7 @@
 #include "lacp.h"
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
+#include <vswitch-idl.h>
 
 VLOG_DEFINE_THIS_MODULE(lacpd_support);
 
@@ -143,7 +144,7 @@ LACP_initialize_port(port_handle_t lport_handle,
 
     /* Start lacpd with "-l" option to set this dynamically */
     /* OPS_TODO: convert to use VLOG. */
-    plpinfo->debug_level = 0xFFFFFFFF;
+    plpinfo->debug_level = DBG_ALL;
     /* plpinfo->debug_level = (DBG_FATAL | DBG_WARNING | DBG_ERROR); */
 
     /********************************************************************
@@ -346,7 +347,7 @@ initialize_per_port_variables(lacp_per_port_variables_t *plpinfo,
         // nothing : leave the previous value (maybe default) as it is
     }
 
-    if (link_state == 1) { // now it's operational_state (admin && link)
+    if (link_state == INTERFACE_LINK_STATE_UP) { // now it's operational_state (admin && link)
         plpinfo->lacp_control.port_enabled = TRUE;
     } else {
         plpinfo->lacp_control.port_enabled = FALSE;
@@ -904,8 +905,8 @@ periodic_tx_state_string(int state_number, char *string)
 void
 LAG_id_string(char *const str, LAG_Id_t *const lag_id)
 {
-    char local_system_mac_addr_str[20];
-    char remote_system_mac_addr_str[20];
+    char local_system_mac_addr_str[MAC_STRING_ADDR_SIZE];
+    char remote_system_mac_addr_str[MAC_STRING_ADDR_SIZE];
 
     if (!lag_id) {
         *str = '\0';
@@ -958,12 +959,12 @@ display_lacpdu(lacpdu_payload_t *lacpdu_payload,
            char *dst_mac,
            int type)
 {
-  char buffer[20];
+  char mac_addr_str[MAC_STRING_ADDR_SIZE];
 
-  L2_hexmac_to_strmac((u8_t*)dst_mac, buffer, sizeof(buffer), L2_MAC_TWOxSIX);
-  printf("Dst MAC: %s\n", buffer);
-  L2_hexmac_to_strmac((u8_t*)src_mac, buffer, sizeof(buffer), L2_MAC_TWOxSIX);
-  printf("Src MAC: %s\n", buffer);
+  L2_hexmac_to_strmac((u8_t*)dst_mac, mac_addr_str, sizeof(mac_addr_str), L2_MAC_TWOxSIX);
+  printf("Dst MAC: %s\n", mac_addr_str);
+  L2_hexmac_to_strmac((u8_t*)src_mac, mac_addr_str, sizeof(mac_addr_str), L2_MAC_TWOxSIX);
+  printf("Src MAC: %s\n", mac_addr_str);
 
   printf("Type: 0x%x \n", type);
   printf("SubType: 0x%x\n", lacpdu_payload->subtype);
@@ -973,8 +974,8 @@ display_lacpdu(lacpdu_payload_t *lacpdu_payload,
   printf("Actor System Priority: %d\n", ntohs(lacpdu_payload->actor_system_priority));
 
   L2_hexmac_to_strmac((u8_t*)lacpdu_payload->actor_system,
-                      buffer, sizeof(buffer), L2_MAC_TWOxSIX);
-  printf("Actor system MAC : %s\n", buffer);
+		              mac_addr_str, sizeof(mac_addr_str), L2_MAC_TWOxSIX);
+  printf("Actor system MAC : %s\n", mac_addr_str);
   printf("Actor Key: %d\n", ntohs(lacpdu_payload->actor_key));
   printf("Actor Port Priority: %d\n", ntohs(lacpdu_payload->actor_port_priority));
   printf("Actor Port : %d\n", ntohs(lacpdu_payload->actor_port));
@@ -984,8 +985,8 @@ display_lacpdu(lacpdu_payload_t *lacpdu_payload,
   printf("Partner System Priority: %d\n", ntohs(lacpdu_payload->partner_system_priority));
 
   L2_hexmac_to_strmac((u8_t*)lacpdu_payload->partner_system,
-                      buffer, sizeof(buffer), L2_MAC_TWOxSIX);
-  printf("Partner system MAC: %s\n", buffer);
+		              mac_addr_str, sizeof(mac_addr_str), L2_MAC_TWOxSIX);
+  printf("Partner system MAC: %s\n", mac_addr_str);
   printf("Partner Key: %d\n", ntohs(lacpdu_payload->partner_key));
   printf("Partner Port Priority: %d\n", ntohs(lacpdu_payload->partner_port_priority));
   printf("Partner Port : %d\n", ntohs(lacpdu_payload->partner_port));

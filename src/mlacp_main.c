@@ -175,6 +175,7 @@ mlacp_rx_pdu_thread(void *data  __attribute__ ((unused)))
         int nfds;
         struct epoll_event events[MAX_EVENTS];
 
+        /* Wait infinite time (-1) for events on epfd */
         nfds = epoll_wait(epfd, events, MAX_EVENTS, -1);
 
         if (nfds < 0) {
@@ -214,11 +215,18 @@ mlacp_rx_pdu_thread(void *data  __attribute__ ((unused)))
 
             event = xzalloc(total_msg_size);
             event->sender.peer = ml_rx_pdu_index;
+
+            /* Set up pkt_event pointer to just after the event
+             * structure itself. This must be done here since the
+             * sender's event->msg pointer points sender's memory
+             * space, and will result in fatal errors if we try to
+             * access it in LACP process space.
+             */
             pkt_event = (struct MLt_drivers_mlacp__rxPdu *)(event+1);
 
             clientlen = sizeof(clientaddr);
             count = recvfrom(idp->pdu_sockfd, (void *)pkt_event->data,
-                             MAX_LACPDU_PKT_SIZE, 0,
+                              LACP_PKT_SIZE, 0,
                              (struct sockaddr *)&clientaddr,
                              (unsigned int *)&clientlen);
             if (count < 0) {
@@ -234,7 +242,7 @@ mlacp_rx_pdu_thread(void *data  __attribute__ ((unused)))
                 free(event);
                 continue;
 
-            } else if (count <= MAX_LACPDU_PKT_SIZE) {
+            } else if (count <= LACP_PKT_SIZE) {
                 pkt_event->lport_handle = PM_SMPT2HANDLE(0, 0, idp->index,
                                                          idp->cycl_port_type);
                 pkt_event->pktLen = count;
@@ -399,11 +407,12 @@ mlacp_tx_pdu(unsigned char* data, int length, port_handle_t lport_handle)
 
     /* Set up LACPDU header dest/src MAC addresses. */
     memcpy(data, lacp_mcast_addr, MAC_ADDR_LENGTH);
-    memcpy(&data[6], my_mac_addr, MAC_ADDR_LENGTH);
+    memcpy(&data[MAC_ADDR_LENGTH], my_mac_addr, MAC_ADDR_LENGTH);
 
-    /* IEEE802.3 slow protocol (LACP) */
-    data[12] = 0x88;
-    data[13] = 0x09;
+    /* Add Ethernet Type to the header. According to standard
+     * IEEE802.1AX Slow Protocols EtherType is 88-09 hexadecimal*/
+    data[12] = SLOW_PROTOCOLS_ETHERTYPE_PART1;
+    data[13] = SLOW_PROTOCOLS_ETHERTYPE_PART2;
 
     rc = sendto(idp->pdu_sockfd, data, length, 0, NULL, 0);
     if (rc == -1) {

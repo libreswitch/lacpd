@@ -43,13 +43,6 @@
 VLOG_DEFINE_THIS_MODULE(mlacp_send);
 
 //***********************************************************************
-// Global & extern Variables
-//***********************************************************************
-#ifndef ETHER_ADDR_LEN
-#define ETHER_ADDR_LEN (6)
-#endif
-
-//***********************************************************************
 // Local function prototypes
 //***********************************************************************
 
@@ -207,7 +200,6 @@ mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port)
         lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
         port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
-#if 1
         //--- OPS_TODO: enable attach for now since STP is not running... ---
         //---------------------------------------------------------------
         // NOTE: lacpd is no longer responsible for attaching/detaching
@@ -218,7 +210,6 @@ mlacp_blocking_send_enable_collecting(lacp_per_port_variables_t *lacp_port)
 
         // Add the port to a trunk in hardware
         ops_attach_port_in_hw(lag_id, port);
-#endif
 
         // Update DB with new info.
         db_add_lag_port(lag_id, port, lacp_port);
@@ -263,7 +254,6 @@ mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
         lag_id = (int)PM_HANDLE2LAG(lacp_port->sport_handle);
         port = (int)PM_HANDLE2PORT(lacp_port->lport_handle);
 
-#if 1
         //--- OPS_TODO: enable attach for now since STP is not running... ---
         //---------------------------------------------------------------
         // NOTE: lacpd is no longer responsible for attaching/detaching
@@ -274,7 +264,6 @@ mlacp_blocking_send_disable_collect_dist(lacp_per_port_variables_t *lacp_port)
 
         // Detach the port from LAG in h/w
         ops_detach_port_in_hw(lag_id, port);
-#endif
 
         // Update DB with new info.
         db_delete_lag_port(lag_id, port, lacp_port);

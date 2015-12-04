@@ -141,7 +141,7 @@ mvlan_validate_sport(struct MLt_vpm_api__create_sport  *psport_create,
  * Description  --
  *         This function creates the super port. Note that this
  *         function does not add the super port to any VLAN. It is the
- *         caller's responsibility to addthe super port to any vlan.
+ *         caller's responsibility to add the super port to any vlan.
  *
  * Side effects --
  *
@@ -246,6 +246,9 @@ mvlan_destroy_sport(super_port_t *psport)
     int status = R_SUCCESS;
     lacp_avl_node_t *psport_node = NULL;
 
+    /* The memory for the  super_port_t and the lacp_avl_node_t
+     * was contiguously allocated in  mvlan_sport_create(). Therefore
+     * psport_node is equal to psport + 1) */
     psport_node = (lacp_avl_node_t *)( psport + 1);
 
     LACP_AVL_DELETE(sport_handle_tree, *psport_node);

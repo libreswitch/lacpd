@@ -17,7 +17,6 @@
 #ifndef __MLACP_RECV_H__
 #define __MLACP_RECV_H__
 
-#define MAX_LACPDU_PKT_SIZE  124
 
 enum MLm_drivers_mlacp {
     MLm_drivers_mlacp__rxPdu = 0,   //% MLt_drivers_mlacp__rxPdu
@@ -26,7 +25,7 @@ enum MLm_drivers_mlacp {
 struct MLt_drivers_mlacp__rxPdu {
     unsigned long long lport_handle;
     int  pktLen;
-    char data[MAX_LACPDU_PKT_SIZE];
+    char data[LACP_PKT_SIZE];
 };
 
 #endif  /* __MLACP_RECV_H__ */

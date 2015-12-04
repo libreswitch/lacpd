@@ -39,6 +39,7 @@ mqueue_init(mqueue_t *queue)
     queue->q_tail.q_back = &(queue->q_head);
     queue->q_tail.q_data = NULL;
 
+    /* Initialize semaphore to value zero and PSHARED zero. */
     if (sem_init(&(queue->q_avail), 0, 0) != 0) {
         return errno;
     }

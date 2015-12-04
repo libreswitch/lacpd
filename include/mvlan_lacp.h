@@ -26,17 +26,18 @@
 #define MLm_lacp_api__setActorSysMac            2
 #define MLm_lacp_api__set_lport_overrides       3
 
+
 struct MLt_lacp_api__actorSysPriority {
     int actor_system_priority;
 };
 
 struct MLt_lacp_api__actorSysMac {
-    unsigned char actor_sys_mac[6];
+    unsigned char actor_sys_mac[MAC_BYTEADDR_SIZE];
 };
 
 struct MLt_lacp_api__set_lport_overrides {
     int priority;
-    unsigned char actor_sys_mac[6];
+    unsigned char actor_sys_mac[MAC_BYTEADDR_SIZE];
     unsigned long long lport_handle;    /* set port overrides on interface */
 };
 
@@ -82,7 +83,7 @@ struct MLt_vpm_api__lacp_sport_params {
     int  actor_key;                   // A value between 1- 65535
     int  partner_key;                 // A value between 1- 65535
     int  partner_system_priority;     // A value between 1- 65535
-    char partner_system_id[6];        // The mac addressS
+    char partner_system_id[MAC_BYTEADDR_SIZE];        // The mac addressS
     int  aggr_type;                   // individual or aggregateable
     int  negation;                    // whether it's negation : unset cmd is
                                       // used only while negating
@@ -106,7 +107,7 @@ struct MLt_vpm_api__lport_lacp_change {
     int link_speed;
     int collecting_ready;
     int sys_priority;
-    char sys_id[6];
+    char sys_id[MAC_BYTEADDR_SIZE];
 };
 
 struct MLt_vpm_api__lport_state_change {
@@ -127,7 +128,7 @@ struct MLt_vpm_api__lacp_match_params {
     int  actor_key;                    // A value between 1- 65535
     int  partner_key;                  // A value between 1- 65535
     int  partner_system_priority;      // A value between 1- 65535
-    char partner_system_id[6];         // The mac addressS
+    char partner_system_id[MAC_BYTEADDR_SIZE];         // The mac addressS
     int  local_port_number;            // LAG's local_port_number : should
                                        // match aggr_type of aggregator
     int  actor_aggr_type;              // Individual or aggregatable
@@ -144,7 +145,7 @@ struct MLt_vpm_api__lacp_match_params {
 struct  MLt_vpm_api__lacp_attach  {
     unsigned long long lport_handle;   // The lport to be added
     unsigned long long sport_handle;   // The sport to which to attach/detach
-    char partner_mac_addr[6];          // Partner mac address
+    char partner_mac_addr[MAC_BYTEADDR_SIZE];          // Partner mac address
     int  partner_priority;             // The partner priority
     int  cookie;                       // Used by the caller to store
                                        // info and will be sent back
@@ -161,7 +162,7 @@ typedef struct lacp_sport_params_s {
     int      actor_key;                 /* A value between 1- 65535 */
     int      partner_key;               /* A value between 1- 65535 */
     int      partner_system_priority;   /* A value between 1- 65535 */
-    char     partner_system_id[6];      /* The mac address */
+    char     partner_system_id[MAC_BYTEADDR_SIZE];      /* The mac address */
     int      aggr_type;                 /* whether aggregateable or indiv */
 } lacp_sport_params_t;
 
