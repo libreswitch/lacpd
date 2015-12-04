@@ -269,14 +269,16 @@ find_port_data_by_lag_id(int lag_id)
 static int
 valid_lacp_timeout(const char *cp)
 {
-    if (cp) {
-        if (strcmp(cp, PORT_OTHER_CONFIG_LACP_TIME_SLOW) == 0) {
-            return(LONG_TIMEOUT);
-        } else if (strcmp(cp, PORT_OTHER_CONFIG_LACP_TIME_FAST) == 0) {
-            return(SHORT_TIMEOUT);
-        }
-    }
-    return(-1);
+   if (cp) {
+      if (!*cp || strcmp(cp, PORT_OTHER_CONFIG_LACP_TIME_SLOW) == 0) {
+         return(LONG_TIMEOUT);
+      } else if (strcmp(cp, PORT_OTHER_CONFIG_LACP_TIME_FAST) == 0) {
+         return(SHORT_TIMEOUT);
+      } else {
+         return(-1);
+      }
+   }
+   return(LONG_TIMEOUT);
 } /* valid_lacp_timeout */
 
 struct iface_data *

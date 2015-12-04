@@ -621,7 +621,7 @@ class lacpdTest(OpsVsiTest):
                     intf,
                     {
                       "actor_system_id" : system_prio[1] + "," + system_mac[1],
-                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                      "partner_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
                                         "Dist:1,Def:0,Exp:0",
                       "partner_system_id" : system_prio[2] + "," + system_mac[2]
                       },
@@ -631,11 +631,64 @@ class lacpdTest(OpsVsiTest):
                     intf,
                     {
                       "actor_system_id" : system_prio[2] + "," + system_mac[2],
-                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                      "partner_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
                                         "Dist:1,Def:0,Exp:0",
                       "partner_system_id" : system_prio[1] + "," + system_mac[1]
                       },
                     "s1:" + intf)
+
+        # Test lacp-time
+
+        info("Verify port:other_config:lacp-time.\n")
+
+        # Verify default lacp-time is "slow"
+
+        verify_intf_lacp_status(s1,
+                intf,
+                {
+                  "actor_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
+                                  "Dist:1,Def:0,Exp:0",
+                  "actor_system_id" : system_prio[1] + "," + system_mac[1],
+                  "partner_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
+                                    "Dist:1,Def:0,Exp:0"
+                  },
+                "s1:" + intf)
+
+        succes = False
+        out = s1.cmdCLI('show lacp aggregates')
+        lines = out.split('\n')
+        for line in lines:
+            if 'Heartbeat rate' and 'slow' in line:
+                succes = True
+        assert succes == True, "Failed show lacp aggregates, Heartbeat rate is not slow"
+
+        # Set lacp-time back to "fast"
+        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=fast'])
+        set_port_parameter(s1, "lag1" , [ 'other_config:lacp-time=fast'])
+        set_port_parameter(s1, "lag2" , [ 'other_config:lacp-time=fast'])
+        set_port_parameter(s2, "lag0" , [ 'other_config:lacp-time=fast'])
+        set_port_parameter(s2, "lag1" , [ 'other_config:lacp-time=fast'])
+        set_port_parameter(s2, "lag2" , [ 'other_config:lacp-time=fast'])
+
+        # Verify "timeout" is now "fast"
+        verify_intf_lacp_status(s1,
+                intf,
+                {
+                  "actor_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                  "Dist:1,Def:0,Exp:0",
+                  "actor_system_id" : system_prio[1] + "," + system_mac[1],
+                  "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                    "Dist:1,Def:0,Exp:0"
+                  },
+                "s1:" + intf)
+
+        succes = False
+        out = s1.cmdCLI('show lacp aggregates')
+        lines = out.split('\n')
+        for line in lines:
+            if 'Heartbeat rate' and 'fast' in line:
+                succes = True
+        assert succes == True, "Failed show lacp aggregates, Heartbeat rate is not fast"
 
         info("Override system parameters\n")
         # Change the LACP system ID on the switches.
@@ -701,7 +754,7 @@ class lacpdTest(OpsVsiTest):
                     intf,
                     {
                       "actor_system_id" : base_prio + "," + base_mac[1],
-                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                      "partner_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
                                         "Dist:1,Def:0,Exp:0",
                       "partner_system_id" : base_prio + "," + base_mac[2]
                       },
@@ -711,7 +764,7 @@ class lacpdTest(OpsVsiTest):
                     intf,
                     {
                       "actor_system_id" : base_prio + "," + base_mac[2],
-                      "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                      "partner_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
                                         "Dist:1,Def:0,Exp:0",
                       "partner_system_id" : base_prio + "," + base_mac[1]
                       },
@@ -727,6 +780,9 @@ class lacpdTest(OpsVsiTest):
         # we should modify the test case.
         sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
         sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
+
+        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=fast'])
+        set_port_parameter(s2, "lag0" , [ 'other_config:lacp-time=fast'])
 
         # Enable both the interfaces.
         for intf in sw_1G_intf[0:2]:
@@ -815,42 +871,6 @@ class lacpdTest(OpsVsiTest):
         # Set lacp to "active"
         set_port_parameter(s1, "lag0" , [ 'lacp=active'])
 
-        verify_intf_lacp_status(s1,
-                intf,
-                {
-                  "actor_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                  "Dist:1,Def:0,Exp:0",
-                  "actor_system_id" : system_prio[1] + "," + system_mac[1],
-                  "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                    "Dist:1,Def:0,Exp:0",
-                  "partner_system_id" : base_prio + "," + base_mac[2]
-                  },
-                "s1:" + intf)
-
-        # Test lacp-time
-
-        info("Verify port:other_config:lacp-time.\n")
-
-        # Set lacp-time to "slow"
-        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=slow'])
-
-        # Verify "timeout" is now "slow"
-        verify_intf_lacp_status(s1,
-                intf,
-                {
-                  "actor_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
-                                  "Dist:1,Def:0,Exp:0",
-                  "actor_system_id" : system_prio[1] + "," + system_mac[1],
-                  "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                    "Dist:1,Def:0,Exp:0",
-                  "partner_system_id" : base_prio + "," + base_mac[2]
-                  },
-                "s1:" + intf)
-
-        # Set lacp-time back to "fast"
-        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=fast'])
-
-        # Verify "timeout" is now "fast"
         verify_intf_lacp_status(s1,
                 intf,
                 {
