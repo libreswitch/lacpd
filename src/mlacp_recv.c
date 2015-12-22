@@ -249,7 +249,9 @@ mlacp_process_api_msg(ML_event *pevent)
             struct MLt_vpm_api__lacp_sport_params *pMsg = pevent->msg;
             int status;
 
-            RDEBUG(DL_LACP_RCV, "Set/Unset LAG Sport parameters.  handle=0x%llx\n",
+            RDEBUG(DL_LACP_RCV, "%s LAG Sport parameters.  handle=0x%llx\n",
+                   pevent->msgnum == MLm_vpm_api__set_lacp_sport_params ?
+                   "Set" : "Unset",
                    pMsg->sport_handle);
 
             status = mvlan_api_modify_sport_params(pMsg, pevent->msgnum);

@@ -122,6 +122,25 @@ def set_intf_other_config(sw, intf, config):
     debug(c)
     return sw.ovscmd(c)
 
+# Get interface:other_config parameter(s)
+def get_intf_other_config(sw, intf, params):
+    c = OVS_VSCTL + "get interface " + str(intf)
+    for f in params:
+        c += ' other_config:%s' % f
+    out = sw.ovscmd(c).splitlines()
+    if len(out) == 1:
+        out = out[0]
+    debug(out)
+    return out
+
+# Delete interface other config parameter(s)
+def del_intf_other_config(sw, intf, params):
+    c = OVS_VSCTL + "remove interface " + str(intf)
+    for f in params:
+        c += ' other_config %s' % f
+    debug(c)
+    return sw.ovscmd(c)
+
 # Simulate the link state on an Interface
 def simulate_link_state(sw, interface, link_state="up"):
     info("Setting the link state of interface " + interface + " to " + link_state + "\n")
@@ -322,6 +341,7 @@ def verify_intf_lacp_status(sw, intf, verify_values, context=''):
     field_vals = result[1]
     for i in range(0, len(attrs)):
         assert field_vals[i] == verify_values[attrs[i]], context + ": invalid value for " + attrs[i] + ", expected " + verify_values[attrs[i]] + ", got " + field_vals[i]
+
 
 def verify_port_lacp_status(sw, lag, value, msg=''):
     result = timed_compare(sw_get_port_state,
@@ -582,6 +602,10 @@ class lacpdTest(OpsVsiTest):
         s1 = self.net.switches[0]
         s2 = self.net.switches[1]
 
+        # These lines are helpful to debug errors with the daemon during the tests execution
+        #s1.ovscmd("ovs-appctl -t ops-lacpd vlog/set dbg")
+        #s2.ovscmd("ovs-appctl -t ops-lacpd vlog/set dbg")
+
         system_mac = {}
         system_mac[1] = s1.ovscmd("ovs-vsctl get system . system_mac").rstrip('\r\n')
         system_mac[2] = s2.ovscmd("ovs-vsctl get system . system_mac").rstrip('\r\n')
@@ -615,6 +639,10 @@ class lacpdTest(OpsVsiTest):
 
         sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
         sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
+
+        for intf in sw_1G_intf[0:2]:
+            set_intf_other_config(s1, intf, ['lacp-aggregation-key=1'])
+            set_intf_other_config(s2, intf, ['lacp-aggregation-key=1'])
 
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,
@@ -692,6 +720,7 @@ class lacpdTest(OpsVsiTest):
 
         info("Override system parameters\n")
         # Change the LACP system ID on the switches.
+        info("Change LACP system ID\n")
         s1.ovscmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[1] + "' lacp_config:lacp-system-priority=" + base_prio)
         s2.ovscmd("ovs-vsctl set system . lacp_config:lacp-system-id='" + base_mac[2] + "' lacp_config:lacp-system-priority=" + base_prio)
 
@@ -717,6 +746,7 @@ class lacpdTest(OpsVsiTest):
                     "s1:" + intf)
 
         info("Override port parameters\n")
+        info("Change LACP system ID from the port parameters\n")
         s1.ovscmd("ovs-vsctl set port lag0 other_config:lacp-system-id='" + port_mac + "' other_config:lacp-system-priority=" + port_prio)
 
         for intf in sw_1G_intf[0:2]:
@@ -745,8 +775,16 @@ class lacpdTest(OpsVsiTest):
         s1.ovscmd("ovs-vsctl del-port lag0")
         s2.ovscmd("ovs-vsctl del-port lag0")
 
+        for intf in sw_1G_intf[0:2]:
+            sw_set_intf_user_config(s1, intf, ['admin=up'])
+            sw_set_intf_user_config(s2, intf, ['admin=up'])
+
         sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
         sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
+
+        for intf in sw_1G_intf[0:2]:
+            set_intf_other_config(s1, intf, ['lacp-aggregation-key=1'])
+            set_intf_other_config(s2, intf, ['lacp-aggregation-key=1'])
 
         info("Verify system override still in effect\n")
         for intf in sw_1G_intf[0:2]:
@@ -774,17 +812,18 @@ class lacpdTest(OpsVsiTest):
         s1.ovscmd("ovs-vsctl del-port lag0")
         s2.ovscmd("ovs-vsctl del-port lag0")
 
-        # Create two dynamic LAG with two ports each.
+        # Create two dynamic LAG with two interfaces each.
         # the current schema doesn't allow creating a bond
-        # with less than two ports. Once that is changed
+        # with less than two interfaces. Once that is changed
         # we should modify the test case.
+        info("Creating dynamic lag with two interfaces\n")
         sw_create_bond(s1, "lag0", sw_1G_intf[0:2], lacp_mode="active")
         sw_create_bond(s2, "lag0", sw_1G_intf[0:2], lacp_mode="active")
 
         set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=fast'])
         set_port_parameter(s2, "lag0" , [ 'other_config:lacp-time=fast'])
 
-        # Enable both the interfaces.
+        # Enable both interfaces.
         for intf in sw_1G_intf[0:2]:
             sw_set_intf_user_config(s1, intf, ['admin=up'])
             sw_set_intf_user_config(s2, intf, ['admin=up'])
@@ -831,6 +870,7 @@ class lacpdTest(OpsVsiTest):
                 "s1:" + intf)
 
         # Attempt to set invalid sys_id and invalid sys_pri
+        info("Verify invalid system-id and system-priority are rejected\n")
         set_open_vsw_lacp_config(s1, ['lacp-system-id=' + invalid_mac])
         set_open_vsw_lacp_config(s1, ['lacp-system-priority=99999'])
 
@@ -849,6 +889,7 @@ class lacpdTest(OpsVsiTest):
         # Test port:lacp
 
         # Set lacp to "passive"
+        info("Test port state as passive\n")
         set_port_parameter(s1, "lag0" , [ 'lacp=passive'])
 
         verify_intf_lacp_status(s1,
@@ -864,11 +905,13 @@ class lacpdTest(OpsVsiTest):
                 "s1:" + intf)
 
         # Set lacp to "off"
+        info("Disable lacp in port\n")
         set_port_parameter(s1, "lag0" , [ 'lacp=off'])
 
         verify_intf_field_absent(s1, intf, 'lacp_status:actor_state', "lacp status should be empty")
 
         # Set lacp to "active"
+        info("Set lacp to active\n")
         set_port_parameter(s1, "lag0" , [ 'lacp=active'])
 
         verify_intf_lacp_status(s1,
@@ -883,9 +926,66 @@ class lacpdTest(OpsVsiTest):
                   },
                 "s1:" + intf)
 
-        # OPS_TODO: lacp-aggregation-key isn't implemented.
+        # Test lacp-time
+
+        info("Verify port:other_config:lacp-time.\n")
+
+        # Set lacp-time to "slow"
+        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=slow'])
+
+        # Verify "timeout" is now "slow"
+        verify_intf_lacp_status(s1,
+                intf,
+                {
+                  "actor_state" : "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
+                                  "Dist:1,Def:0,Exp:0",
+                  "actor_system_id" : system_prio[1] + "," + system_mac[1],
+                  "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                    "Dist:1,Def:0,Exp:0",
+                  "partner_system_id" : base_prio + "," + base_mac[2]
+                  },
+                "s1:" + intf)
+
+        # Set lacp-time back to "fast"
+        set_port_parameter(s1, "lag0" , [ 'other_config:lacp-time=fast'])
+
+        # Verify "timeout" is now "fast"
+        verify_intf_lacp_status(s1,
+                intf,
+                {
+                  "actor_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                  "Dist:1,Def:0,Exp:0",
+                  "actor_system_id" : system_prio[1] + "," + system_mac[1],
+                  "partner_state" : "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
+                                    "Dist:1,Def:0,Exp:0",
+                  "partner_system_id" : base_prio + "," + base_mac[2]
+                  },
+                "s1:" + intf)
+
         # Test interface:other_config:{lacp-port-id,lacp-port-priority}
 
+        # Changing aggregation key on interface for s1
+        # This will take out the interface from the lag0
+        info("Validate aggregation key functionality\n")
+        set_intf_other_config(s1, intf, ['lacp-aggregation-key=2'])
+
+        # First validate if the interface change the aggregation key correctly
+        verify_intf_lacp_status(s1,
+                intf,
+                {
+                  "actor_key" : "2",
+                  },
+                "s1:" + intf)
+
+        # Verifying the interface is not part of any LAG anymore
+        verify_intf_not_in_bond(s1, intf, "Interfaces should not be part of the dynamic LAG when aggregation key is changed")
+
+        # Get the interface back to the LAG
+        set_intf_other_config(s1, intf, ['lacp-aggregation-key=1'])
+        verify_intf_in_bond(s1, intf, "Interface should get part of the dynamic LAG when aggregation key is changed")
+
+        # Test interface:other_config:{lacp-port-id,lacp-port-priority}
+        info("Test interface other_config values for lacp-port-id and lacp-port-priority")
         # save original values
         original_pri_info = sw_get_intf_state((s1, intf, ['lacp_status:actor_port_id']))[0]
         # Set port_id, port_priority, and aggregation-key
@@ -1000,6 +1100,10 @@ class lacpdTest(OpsVsiTest):
         for intf in sw_1G_intf[4:6]:
             sw_set_intf_user_config(s1, intf, ['admin=up'])
             sw_set_intf_user_config(s2, intf, ['admin=up'])
+
+        for intf in sw_1G_intf[4:6]:
+            set_intf_other_config(s1, intf, ['lacp-aggregation-key=2'])
+            set_intf_other_config(s2, intf, ['lacp-aggregation-key=2'])
 
         for intf in sw_1G_intf[4:6]:
             verify_intf_lacp_status(s2,

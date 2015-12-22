@@ -162,7 +162,7 @@ struct port_data {
 #define VALID_LAG_ID(x) ((x)>=min_lag_id && (x)<=max_lag_id)
 
 const uint16_t min_lag_id = 1;
-uint16_t max_lag_id = 0;
+uint16_t max_lag_id = 0; // This will be set in init_lag_id_pool
 uint16_t *lag_id_pool = NULL;
 
 /* To serialize updates to OVSDB.  Both LACP and OVS
@@ -232,7 +232,7 @@ alloc_lag_id(void)
 static void
 free_lag_id(uint16_t id)
 {
-    if ((lag_id_pool == NULL) && VALID_LAG_ID(id)) {
+    if ((lag_id_pool != NULL) && VALID_LAG_ID(id)) {
         if (lag_id_pool[id] == LAG_ID_IN_USE) {
             lag_id_pool[id] = 0;
         } else {
@@ -903,8 +903,11 @@ add_new_interface(const struct ovsrec_interface *ifrow)
         idp->lag_eligible = false;
         idp->lacp_current = false;
         idp->lacp_current_set = false;
-        idp->actor_key = -1;
 
+        int key = smap_get_int(&(ifrow->other_config),
+                              INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY,
+                              -1);
+        idp->actor_key = IS_VALID_AGGR_KEY(key) ? key : -1;
 
         /* Get the interface type. The default interface type is system. */
         if ((ifrow->type == NULL) ||
@@ -1032,6 +1035,8 @@ update_interface_cache(void)
             OVSREC_IDL_IS_ROW_MODIFIED(ifrow, idl_seqno)) {
 
             int val;
+            int key = 0;
+            const char* key_str = NULL;
             unsigned int new_speed;
             enum ovsrec_interface_duplex_e new_duplex;
             enum ovsrec_interface_link_state_e new_link_state;
@@ -1071,6 +1076,7 @@ update_interface_cache(void)
                     new_duplex = INTERFACE_DUPLEX_FULL;
                 }
             }
+            /* Update Port Id*/
             new_port_id = smap_get_int(&(ifrow->other_config),
                                         INTERFACE_OTHER_CONFIG_MAP_LACP_PORT_ID,
                                         0);
@@ -1085,6 +1091,26 @@ update_interface_cache(void)
                          ifrow->name, new_port_id);
                 idp->port_id = new_port_id;
                 flag = 1;
+            }
+
+            /* Update Aggregation Key */
+            key_str = smap_get(&(ifrow->other_config),
+                      INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY);
+            if(key_str)
+            {
+                key = atoi(key_str);
+
+                if (!IS_VALID_AGGR_KEY(key)) {
+                    key = -1;
+                }
+
+                if (key != idp->actor_key) {
+                    VLOG_DBG("Interface %s actor_key change in DB: "
+                            "new actor_key=%d",
+                            ifrow->name, key);
+                    idp->actor_key = key;
+                    flag = 1;
+                }
             }
 
             if (flag) {
@@ -1273,7 +1299,9 @@ update_interface_lag_eligibility(struct iface_data *idp)
     }
     portp = idp->port_datap;
 
-    idp->actor_key = portp->lag_id;
+    if (!IS_VALID_AGGR_KEY(idp->actor_key)) {
+        idp->actor_key = portp->lag_id;
+    }
 
     /* Check if the interface is currently eligible. */
     if (shash_find_data(&portp->eligible_member_ifs, idp->name)) {
