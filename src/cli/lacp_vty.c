@@ -621,11 +621,11 @@ lacp_set_fallback(const char *lag_name, const char *fallback_status)
 
   if(strcmp("false", fallback_status) == 0)
   {
-    smap_remove(&smap, "lacp-fallback-ab");
+    smap_remove(&smap, PORT_OTHER_CONFIG_LACP_FALLBACK);
   }
   else
   {
-    smap_replace(&smap, "lacp-fallback-ab", fallback_status);
+    smap_replace(&smap, PORT_OTHER_CONFIG_LACP_FALLBACK, fallback_status);
   }
 
   ovsrec_port_set_other_config(port_row, &smap);
@@ -1535,7 +1535,7 @@ lacp_show_aggregates(const char *lag_name)
             vty_out(vty, "%s%s%s", "Heartbeat rate        : ",
                          PORT_OTHER_CONFIG_LACP_TIME_SLOW, VTY_NEWLINE);
 
-         fallback = smap_get_bool(&lag_port->other_config, "lacp-fallback-ab", false);
+         fallback = smap_get_bool(&lag_port->other_config, PORT_OTHER_CONFIG_LACP_FALLBACK, false);
          vty_out(vty, "%s%s%s", "Fallback              : ",(fallback)?"true":"false", VTY_NEWLINE);
 
          hash = smap_get(&lag_port->other_config, "bond_mode");

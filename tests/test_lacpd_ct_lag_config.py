@@ -25,6 +25,20 @@ import pytest
 from opsvsi.docker import *
 from opsvsi.opsvsitest import *
 
+from lib_test import sw_set_intf_user_config
+from lib_test import sw_clear_user_config
+from lib_test import sw_set_intf_pm_info
+from lib_test import set_port_parameter
+from lib_test import sw_get_intf_state
+from lib_test import sw_get_port_state
+from lib_test import sw_create_bond
+from lib_test import verify_intf_in_bond
+from lib_test import verify_intf_not_in_bond
+from lib_test import verify_intf_status
+from lib_test import timed_compare
+from lib_test import remove_intf_from_bond
+from lib_test import remove_intf_list_from_bond
+
 OVS_VSCTL = "/usr/bin/ovs-vsctl "
 
 # Test case configuration.
@@ -52,51 +66,10 @@ n_40G_link2 = 6
 sw_40G_intf = [str(i) for i in irange(sw_40G_intf_start, sw_40G_intf_end)]
 
 
-# This method calls a function to retrieve data, then calls another function
-# to compare the data to the expected value(s). If it fails, it sleeps for
-# half a second, then retries, up to a specified retry limit (default 20 = 10
-# seconds). It returns a tuple of the test status and the actual results.
-def timed_compare(data_func, params, compare_func,
-                  expected_results, retries=20):
-    while retries != 0:
-        actual_results = data_func(params)
-        result = compare_func(actual_results, expected_results, retries == 1)
-        if result is True:
-            return True, actual_results
-        time.sleep(0.5)
-        retries -= 1
-    return False, actual_results
-
-
-# Set user_config for an Interface.
-def sw_set_intf_user_config(sw, interface, config):
-    c = OVS_VSCTL + "set interface " + str(interface)
-    for s in config:
-        c += " user_config:" + s
-    debug(c)
-    return sw.ovscmd(c)
-
-
-# Clear user_config for an Interface.
-def sw_clear_user_config(sw, interface):
-    c = OVS_VSCTL + "clear interface " + str(interface) + " user_config"
-    debug(c)
-    return sw.ovscmd(c)
-
-
 # Parse the lacp_status:*_state string
 def parse_lacp_state(state):
     return dict(map(lambda l: map(lambda j: j.strip(), l),
                 map(lambda i: i.split(':'), state.split(','))))
-
-
-# Set pm_info for an Interface.
-def sw_set_intf_pm_info(sw, interface, config):
-    c = OVS_VSCTL + "set interface " + str(interface)
-    for s in config:
-        c += " pm_info:" + s
-    debug(c)
-    return sw.ovscmd(c)
 
 
 # Set open_vsw_lacp_config parameter(s)
@@ -113,15 +86,6 @@ def sys_open_vsw_lacp_config_clear(sw):
         "lacp_config lacp-system-priority"
     debug(c)
     sw.ovscmd(c)
-
-
-# Set open_vsw_lacp_config parameter(s)
-def set_port_parameter(sw, port, config):
-    c = OVS_VSCTL + "set port " + str(port)
-    for s in config:
-        c += ' %s' % s
-    debug(c)
-    return sw.ovscmd(c)
 
 
 # Set interface:other_config parameter(s)
@@ -162,41 +126,6 @@ def simulate_link_state(sw, interface, link_state="up"):
         " link_state=" + link_state
     debug(c)
     return sw.ovscmd(c)
-
-
-# Get the values of a set of columns from Interface table.
-# This function returns a list of values if 2 or more
-# fields are requested, and returns a single value (no list)
-# if only 1 field is requested.
-def sw_get_intf_state(params):
-    c = OVS_VSCTL + "get interface " + str(params[1])
-    for f in params[2]:
-        c += " " + f
-    out = params[0].ovscmd(c).splitlines()
-    debug(out)
-    return out
-
-
-def sw_get_port_state(params):
-    c = OVS_VSCTL + "get port " + str(params[1])
-    for f in params[2]:
-        c += " " + f
-    out = params[0].ovscmd(c).splitlines()
-    if len(out) == 1:
-        out = out[0]
-    debug(out)
-    return out
-
-
-# Create a bond/lag/trunk in the OVS-DB.
-def sw_create_bond(s1, bond_name, intf_list, lacp_mode="off"):
-    info("Creating LAG " + bond_name + " with interfaces: " +
-         str(intf_list) + "\n")
-    c = OVS_VSCTL + "add-bond bridge_normal " + bond_name +\
-        " " + " ".join(map(str, intf_list))
-    c += " -- set port " + bond_name + " lacp=" + lacp_mode
-    debug(c)
-    return s1.ovscmd(c)
 
 
 # Delete a bond/lag/trunk from OVS-DB.
@@ -245,45 +174,6 @@ def add_intf_list_from_bond(sw, bond_name, intf_list):
         add_intf_to_bond(sw, bond_name, intf)
 
 
-# Remove an Interface from a bond.
-def remove_intf_from_bond(sw, bond_name, intf_name, fail=True):
-
-    info("Removing interface " + intf_name + " from LAG " + bond_name + "\n")
-
-    # Get the UUID of the Interface that has to be removed.
-    c = OVS_VSCTL + "get interface " + str(intf_name) + " _uuid"
-    debug(c)
-    intf_uuid = sw.ovscmd(c).rstrip('\r\n')
-
-    # Get the current list of Interfaces in the bond.
-    c = OVS_VSCTL + "get port " + bond_name + " interfaces"
-    debug(c)
-    out = sw.ovscmd(c)
-    intf_list = out.rstrip('\r\n').strip("[]").replace(" ", "").split(',')
-
-    if intf_uuid not in intf_list:
-        assert fail is True, "Unable to find the interface in the bond"
-        return
-
-    # Remove the given intf_name's UUID from the bond's Interfaces.
-    new_intf_list = [i for i in intf_list if i != intf_uuid]
-
-    # Set the new Interface list in the bond.
-    new_intf_str = '[' + ",".join(new_intf_list) + ']'
-
-    c = OVS_VSCTL + "set port " + bond_name + " interfaces=" + new_intf_str
-    debug(c)
-    out = sw.ovscmd(c)
-
-    return out
-
-
-# Remove a list of Interfaces from the bond.
-def remove_intf_list_from_bond(sw, bond_name, intf_list):
-    for intf in intf_list:
-        remove_intf_from_bond(sw, bond_name, intf)
-
-
 def verify_compare_value(actual, expected, final):
     if actual != expected:
         return False
@@ -317,45 +207,6 @@ def verify_compare_complex(actual, expected, final):
         if actual[i] != expected[attrs[i]]:
             return False
     return True
-
-
-# Verify that an Interface is part of a bond.
-def verify_intf_in_bond(sw, intf, msg):
-    result = timed_compare(sw_get_intf_state,
-                          (sw, intf, ['hw_bond_config:rx_enabled',
-                                      'hw_bond_config:tx_enabled']),
-                           verify_compare_tuple, ['true', 'true'])
-    assert result == (True, ["true", "true"]), msg
-
-
-# Verify that an Interface is not part of any bond.
-def verify_intf_not_in_bond(sw, intf, msg):
-    result = timed_compare(sw_get_intf_state,
-                           (sw, intf, ['hw_bond_config:rx_enabled',
-                                       'hw_bond_config:tx_enabled']),
-                           verify_compare_tuple_negate, ['true', 'true'])
-    assert result[0] is True and\
-        result[1][0] is not 'true' and\
-        result[1][1] is not 'true', msg
-
-
-# Verify Interface status
-def verify_intf_status(sw, intf, column_name, value, msg=''):
-    result = timed_compare(sw_get_intf_state,
-                           (sw, intf, [column_name]),
-                           verify_compare_tuple, [value])
-    assert result == (True, [value]), msg
-
-
-def verify_intf_field_absent(sw, intf, field, msg):
-    retries = 20
-    while retries != 0:
-        result = sw_get_intf_state((sw, intf, [field]))
-        if "no key" in result[0]:
-            return
-        time.sleep(0.5)
-        retries -= 1
-    assert "no key" in result, msg
 
 
 def verify_intf_lacp_status(sw, intf, verify_values, context=''):
@@ -499,7 +350,7 @@ class lacpdTest(OpsVsiTest):
         info("Setting up valid pluggable modules in all the Interfaces.\n")
         self.test_pre_setup()
 
-        # Create a Staic lag of 'eight' ports of each speed type
+        # Create a Static lag of 'eight' ports of each speed type
         sw_create_bond(s1, "lag0", sw_1G_intf[0:8])
         sw_create_bond(s1, "lag1", sw_10G_intf[0:8])
         sw_create_bond(s1, "lag2", sw_40G_intf[0:8])
@@ -735,7 +586,7 @@ class lacpdTest(OpsVsiTest):
         # Verify default lacp-time is "slow"
 
         verify_intf_lacp_status(s1,
-                                intf,
+                                1,
                                 {"actor_state":
                                  "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
                                  "Dist:1,Def:0,Exp:0",
@@ -744,7 +595,7 @@ class lacpdTest(OpsVsiTest):
                                  "partner_state":
                                  "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
                                  "Dist:1,Def:0,Exp:0"},
-                                "s1:" + intf)
+                                "s1:1")
 
         succes = False
         out = s1.cmdCLI('show lacp aggregates')
@@ -998,13 +849,6 @@ class lacpdTest(OpsVsiTest):
                                  "," + base_mac[2]},
                                 "s1:" + intf)
 
-        # Set lacp to "off"
-        set_port_parameter(s1, "lag0", ['lacp=off'])
-
-        verify_intf_field_absent(s1, intf,
-                                 'lacp_status:actor_state',
-                                 "lacp status should be empty")
-
         # Set lacp to "active"
         set_port_parameter(s1, "lag0", ['lacp=active'])
 
@@ -1031,9 +875,9 @@ class lacpdTest(OpsVsiTest):
 
         # Verify "timeout" is now "slow"
         verify_intf_lacp_status(s1,
-                                intf,
+                                1,
                                 {"actor_state":
-                                 "Activ:1,TmOut:0,Aggr:1,Sync:1,Col:1,"
+                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
                                  "Dist:1,Def:0,Exp:0",
                                  "actor_system_id": system_prio[1] +
                                  "," + system_mac[1],
@@ -1042,7 +886,7 @@ class lacpdTest(OpsVsiTest):
                                  "Dist:1,Def:0,Exp:0",
                                  "partner_system_id": base_prio +
                                  "," + base_mac[2]},
-                                "s1:" + intf)
+                                "s1:1")
 
         # Set lacp-time back to "fast"
         set_port_parameter(s1, "lag0", ['other_config:lacp-time=fast'])
@@ -1087,7 +931,7 @@ class lacpdTest(OpsVsiTest):
 
         # Test interface:other_config:{lacp-port-id,lacp-port-priority}
         info("Test interface other_config values for lacp-port-id and "
-             "lacp-port-priority")
+             "lacp-port-priority\n")
         # save original values
         original_pri_info = sw_get_intf_state((s1, intf,
                                               ['lacp_status:'
@@ -1216,17 +1060,17 @@ class lacpdTest(OpsVsiTest):
                                     "s2:" + intf)
 
         info("Verify dynamic update of port-level override\n")
-        sw_create_bond(s2, "lag1", sw_1G_intf[4:6], lacp_mode="active")
+        sw_create_bond(s2, "lag1", sw_1G_intf[2:4], lacp_mode="active")
 
-        for intf in sw_1G_intf[4:6]:
+        for intf in sw_1G_intf[2:4]:
             sw_set_intf_user_config(s1, intf, ['admin=up'])
             sw_set_intf_user_config(s2, intf, ['admin=up'])
 
-        for intf in sw_1G_intf[4:6]:
+        for intf in sw_1G_intf[2:4]:
             set_intf_other_config(s1, intf, ['lacp-aggregation-key=2'])
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=2'])
 
-        for intf in sw_1G_intf[4:6]:
+        for intf in sw_1G_intf[2:4]:
             verify_intf_lacp_status(s2,
                                     intf,
                                     {"actor_system_id": base_prio +
@@ -1248,7 +1092,7 @@ class lacpdTest(OpsVsiTest):
                                     "s2:" + intf)
 
         # verify that lag1 did not change
-        for intf in sw_1G_intf[4:6]:
+        for intf in sw_1G_intf[2:4]:
             verify_intf_lacp_status(s2,
                                     intf,
                                     {"actor_system_id": base_prio +
