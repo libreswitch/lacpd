@@ -1,4 +1,4 @@
-# (C) Copyright 2015 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
 #
 #  Licensed under the Apache License, Version 2.0 (the "License"); you may
 #  not use this file except in compliance with the License. You may obtain
@@ -32,6 +32,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Werror -ggdb -g3 -O0")
 include(FindPkgConfig)
 pkg_check_modules(OVSCOMMON REQUIRED libovscommon)
 pkg_check_modules(OVSDB REQUIRED libovsdb)
+pkg_check_modules(OVSDB REQUIRED opsutils)
 
 include_directories (${PROJECT_BINARY_DIR}/${INCL_DIR}
                      ${PROJECT_SOURCE_DIR}/${INCL_DIR}
@@ -50,6 +51,7 @@ set (SOURCES ${SRC_DIR}/avl.c ${SRC_DIR}/dlist.c ${SRC_DIR}/lacpd.c
 add_executable (${OPSLACPD} ${SOURCES})
 
 target_link_libraries (${OPSLACPD} ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
+                       ${OPSUTILS_LIBRARIES}
 	               -lpthread -lrt)
 
 # Rules to install ops-lacpd binary in rootfs
