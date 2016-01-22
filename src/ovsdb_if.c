@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -1370,6 +1370,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
     bool lacp_mode_switched = false;
     size_t i;
     const char *cp;
+    char agg_key[AGG_KEY_MAX_LENGTH];
 
     VLOG_DBG("%s: port %s, n_interfaces=%d",
              __FUNCTION__, row->name, (int)row->n_interfaces);
@@ -1458,10 +1459,13 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                 /* Send LAG configuration information.
                  * We control actor_key and port type parameters,
                  * so we'll simply initialize them with default values.
-                 * Just use lag_id for actor_key during creation.
+                 * Use aggregation key (agg_key) for actor_key during
+                 * creation.
                  */
+                snprintf(agg_key, AGG_KEY_MAX_LENGTH, "%s",
+                         portp->name + LAG_PORT_NAME_PREFIX_LENGTH);
                 send_config_lag_msg(portp->lag_id,
-                                    portp->lag_id, /* actor key*/
+                                    atoi(agg_key),
                                     PM_LPORT_INVALID);
             } else {
                 VLOG_ERR("Failed to allocate LAGID for port %s!", portp->name);

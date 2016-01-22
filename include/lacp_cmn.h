@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -36,6 +36,12 @@ typedef unsigned short        macaddr_3_t[MAC_SHORTADDR_SIZE];
 
 /* MAC address in 6 elements (bytes)  */
 typedef unsigned char         macaddr_6_t[MAC_BYTEADDR_SIZE];
+
+/* Aggregation Key defines */
+#define AGG_KEY_MAX_LENGTH  (6)
+
+/* LAG Port Name prefix */
+#define LAG_PORT_NAME_PREFIX_LENGTH (3)
 
 
 /******************************************************************************************/
