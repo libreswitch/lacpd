@@ -54,6 +54,8 @@ target_link_libraries (${OPSLACPD} ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
                        ${OPSUTILS_LIBRARIES}
 	               -lpthread -lrt)
 
+add_subdirectory(src/cli)
+
 # Rules to install ops-lacpd binary in rootfs
 install(TARGETS ${OPSLACPD}
         RUNTIME DESTINATION bin)
