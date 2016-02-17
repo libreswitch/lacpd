@@ -772,7 +772,7 @@ configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
     /* OPS_TODO: temporary hard-code. */
     idp->cycl_port_type = PM_LPORT_10GIGE;
     idp->aggregateable = AGGREGATABLE;
-    idp->collecting_ready = 1;
+    idp->collecting_ready = 0;
 #endif
 
     idp->timeout_mode = portp->timeout_mode;
