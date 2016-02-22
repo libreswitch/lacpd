@@ -649,21 +649,26 @@ send_config_lport_msg(struct iface_data *info_ptr)
          */
 
         portp = info_ptr->port_datap;
-
-        if (portp->lacp_mode != PORT_LACP_OFF && portp->sys_prio != 0) {
-            msg->flags |= LACP_LPORT_SYS_PRIORITY_FIELD_PRESENT;
-            msg->sys_priority = portp->sys_prio;
+        if (!portp) {
+            VLOG_WARN("Port data is empty when trying to configure "
+                      "System Priority and System ID");
         }
+        else {
+            if (portp->lacp_mode != PORT_LACP_OFF && portp->sys_prio != 0) {
+                msg->flags |= LACP_LPORT_SYS_PRIORITY_FIELD_PRESENT;
+                msg->sys_priority = portp->sys_prio;
+            }
 
-        if (portp->lacp_mode != PORT_LACP_OFF && portp->sys_id != NULL) {
-            struct ether_addr *eth_addr_p;
-            struct ether_addr eth_addr;
+            if (portp->lacp_mode != PORT_LACP_OFF && portp->sys_id != NULL) {
+                struct ether_addr *eth_addr_p;
+                struct ether_addr eth_addr;
 
-            eth_addr_p = ether_aton_r(portp->sys_id, &eth_addr);
+                eth_addr_p = ether_aton_r(portp->sys_id, &eth_addr);
 
-            if (eth_addr_p != NULL) {
-                msg->flags |= LACP_LPORT_SYS_ID_FIELD_PRESENT;
-                memcpy(msg->sys_id, eth_addr_p, ETH_ALEN);
+                if (eth_addr_p != NULL) {
+                    msg->flags |= LACP_LPORT_SYS_ID_FIELD_PRESENT;
+                    memcpy(msg->sys_id, eth_addr_p, ETH_ALEN);
+                }
             }
         }
 
