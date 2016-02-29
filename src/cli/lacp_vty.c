@@ -70,6 +70,22 @@ lacp_exceeded_maximum_lag()
   return lags_found >= MAX_LAG_INTERFACES;
 }
 
+char *
+lacp_remove_lb_hash_suffix(const char * lb_hash) {
+    char * temp_hash_suffix = NULL;
+    char * temp_hash = NULL;
+
+    if (lb_hash) {
+        temp_hash = strdup(lb_hash);
+        temp_hash_suffix = strstr(temp_hash, OVSDB_LB_HASH_SUFFIX);
+        if (temp_hash_suffix) {
+            temp_hash_suffix[0] = '\0';
+        }
+    }
+
+    return temp_hash;
+}
+
 static struct cmd_node link_aggregation_node =
 {
   LINK_AGGREGATION_NODE,
@@ -454,7 +470,7 @@ lacp_set_hash(const char *lag_name, const char *hash)
   }
   smap_clone(&smap, &port_row->other_config);
 
-  if(strcmp("l3-src-dst", hash) == 0)
+  if(strncmp(OVSDB_LB_L3_HASH, hash, strlen(OVSDB_LB_L3_HASH)) == 0)
     smap_remove(&smap, "bond_mode");
   else
     smap_replace(&smap, "bond_mode", hash);
@@ -479,7 +495,7 @@ DEFUN (cli_lacp_set_l2_hash,
        "The type of hash algorithm used for aggregated port (Default:l3-src-dst)\n"
        "Base the hash on l2-src-dst\n")
 {
-  return lacp_set_hash((char*) vty->index, "l2-src-dst");
+  return lacp_set_hash((char*) vty->index, OVSDB_LB_L2_HASH);
 }
 
 DEFUN (cli_lacp_set_l2vid_hash,
@@ -488,7 +504,7 @@ DEFUN (cli_lacp_set_l2vid_hash,
        "The type of hash algorithm used for aggregated port (Default:l3-src-dst)\n"
        "Base the hash on l2vid-src-dst\n")
 {
-  return lacp_set_hash((char*) vty->index, "l2vid-src-dst");
+  return lacp_set_hash((char*) vty->index, OVSDB_LB_L2VID_HASH);
 }
 
 DEFUN (cli_lacp_set_l3_hash,
@@ -497,7 +513,7 @@ DEFUN (cli_lacp_set_l3_hash,
        "The type of hash algorithm used for aggregated port (Default:l3-src-dst)\n"
        "Base the hash on l3-src-dst\n")
 {
-  return lacp_set_hash((char*) vty->index, "l3-src-dst");
+  return lacp_set_hash((char*) vty->index, OVSDB_LB_L3_HASH);
 }
 
 DEFUN (cli_lacp_set_l4_hash,
@@ -506,7 +522,7 @@ DEFUN (cli_lacp_set_l4_hash,
        "The type of hash algorithm used for aggregated port (Default:l3-src-dst)\n"
        "Base the hash on l4-src-dst\n")
 {
-  return lacp_set_hash((char*) vty->index, "l4-src-dst");
+  return lacp_set_hash((char*) vty->index, OVSDB_LB_L4_HASH);
 }
 
 static int
@@ -1431,6 +1447,7 @@ lacp_show_aggregates(const char *lag_name)
    bool fallback = false;
    const char *aggregate_mode = NULL;
    const char *hash = NULL;
+   char * tmp_hash = NULL;
    bool show_all = false;
    bool port_found = false;
    int k = 0;
@@ -1465,10 +1482,17 @@ lacp_show_aggregates(const char *lag_name)
          vty_out(vty, "%s%s%s", "Fallback              : ",(fallback)?"true":"false", VTY_NEWLINE);
 
          hash = smap_get(&lag_port->other_config, "bond_mode");
-         if(hash)
-            vty_out(vty, "%s%s%s", "Hash                  : ",hash, VTY_NEWLINE);
-         else
-            vty_out(vty, "%s%s%s", "Hash                  : ","l3-src-dst", VTY_NEWLINE);
+         if(hash) {
+            tmp_hash = lacp_remove_lb_hash_suffix(hash);
+            if (tmp_hash) {
+                vty_out(vty, "%s%s%s", "Hash                  : ",tmp_hash, VTY_NEWLINE);
+                free(tmp_hash);
+                tmp_hash = NULL;
+            }
+         }
+         else {
+            vty_out(vty, "%s%s%s", "Hash                  : ", LAG_LB_ALG_L3, VTY_NEWLINE);
+         }
 
          aggregate_mode = lag_port->lacp;
          if(aggregate_mode)

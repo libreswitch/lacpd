@@ -33,6 +33,7 @@
 #include "vtysh/utils/vlan_vtysh_utils.h"
 #include "vtysh/utils/intf_vtysh_utils.h"
 #include "vtysh/utils/system_vtysh_utils.h"
+#include "lacp_vty.h"
 
 char intflagcontextclientname[] = "vtysh_intf_lag_context_clientcallback";
 
@@ -121,6 +122,7 @@ vtysh_intf_lag_context_clientcallback(void *p_private)
   vtysh_ovsdb_cbmsg_ptr p_msg = (vtysh_ovsdb_cbmsg *)p_private;
   const char *data = NULL;
   const struct ovsrec_port *port_row = NULL;
+  char * hash_prefix = NULL;
 
   OVSREC_PORT_FOR_EACH(port_row, p_msg->idl)
   {
@@ -151,7 +153,12 @@ vtysh_intf_lag_context_clientcallback(void *p_private)
       data = smap_get(&port_row->other_config, "bond_mode");
       if(data)
       {
-        vtysh_ovsdb_cli_print(p_msg, "%4shash %s"," ",data);
+        hash_prefix = lacp_remove_lb_hash_suffix(data);
+        if (hash_prefix) {
+            vtysh_ovsdb_cli_print(p_msg, "%4shash %s"," ",hash_prefix);
+            free(hash_prefix);
+            hash_prefix = NULL;
+        }
       }
       data = NULL;
       data = smap_get(&port_row->other_config, "lacp-fallback-ab");

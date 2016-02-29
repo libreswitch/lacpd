@@ -156,7 +156,7 @@ class LACPCliTest(OpsVsiTest):
         out = s1.cmd('ovs-vsctl list port')
         lines = out.split('\n')
         for line in lines:
-            if 'bond_mode="l2-src-dst"' in line:
+            if 'bond_mode="l2-src-dst-hash"' in line:
                 success = True
                 break
         assert success, \
@@ -201,7 +201,7 @@ class LACPCliTest(OpsVsiTest):
         out = s1.cmd('ovs-vsctl list port')
         lines = out.split('\n')
         for line in lines:
-            if 'bond_mode="l2vid-src-dst"' in line:
+            if 'bond_mode="l2vid-src-dst-hash"' in line:
                 success = True
                 break
         assert success, \
@@ -293,7 +293,7 @@ class LACPCliTest(OpsVsiTest):
         out = s1.cmd('ovs-vsctl list port')
         lines = out.split('\n')
         for line in lines:
-            if 'bond_mode="l4-src-dst"' in line:
+            if 'bond_mode="l4-src-dst-hash"' in line:
                 success = True
                 break
         assert success, \
@@ -359,7 +359,7 @@ class LACPCliTest(OpsVsiTest):
         out = s1.cmd('ovs-vsctl list port')
         lines = out.split('\n')
         for line in lines:
-            if 'bond_mode="l2-src-dst"' in line:
+            if 'bond_mode="l2-src-dst-hash"' in line:
                 success += 1
                 break
         out = s1.cmd('ovs-vsctl list port')
@@ -871,7 +871,7 @@ class LACPMaxNumberOfLags(OpsVsiTest):
             s1.cmdCLI('interface lag %d' % lag_num)
             s1.cmdCLI('exit')
 
-        #exit configure terminal
+        # exit configure terminal
         s1.cmdCLI('exit')
 
         out = s1.cmdCLI("show running-config")
