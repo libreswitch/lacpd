@@ -2033,6 +2033,75 @@ DEFUN(cli_lag_no_routing,
 }
 
 /*
+ * CLI "shutdown"
+ * default : enabled
+ */
+DEFUN (cli_lag_shutdown,
+        cli_lag_shutdown_cmd,
+        "shutdown",
+        "Enable/disable a LAG\n")
+{
+    const struct ovsrec_interface * intf_row = NULL;
+    const struct ovsrec_port *port_row = NULL;
+    struct ovsdb_idl_txn* status_txn = cli_do_config_start();
+    enum ovsdb_idl_txn_status status;
+    struct smap smap_user_config;
+    int i;
+
+    if (status_txn == NULL) {
+        VLOG_ERR(OVSDB_TXN_CREATE_ERROR);
+        cli_do_config_abort(status_txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    OVSREC_PORT_FOR_EACH(port_row, idl) {
+
+        if(strncmp(port_row->name,
+                   (char*)vty->index,
+                   strlen(port_row->name)) == 0) {
+
+            if(vty_flags & CMD_FLAG_NO_CMD) {
+                ovsrec_port_set_admin(port_row,
+                                      OVSREC_INTERFACE_ADMIN_STATE_UP);
+            } else {
+                ovsrec_port_set_admin(port_row,
+                                      OVSREC_INTERFACE_ADMIN_STATE_DOWN);
+            }
+
+            for (i = 0; i < port_row->n_interfaces; i++) {
+                intf_row = port_row->interfaces[i];
+                smap_clone(&smap_user_config, &intf_row->user_config);
+                if (vty_flags & CMD_FLAG_NO_CMD) {
+                    smap_replace(&smap_user_config,
+                                 INTERFACE_USER_CONFIG_MAP_ADMIN,
+                                 OVSREC_INTERFACE_USER_CONFIG_ADMIN_UP);
+                } else {
+                    smap_remove(&smap_user_config,
+                                INTERFACE_USER_CONFIG_MAP_ADMIN);
+                }
+                ovsrec_interface_set_user_config(intf_row, &smap_user_config);
+                smap_destroy(&smap_user_config);
+            }
+            break;
+        }
+    }
+
+    status = cli_do_config_finish(status_txn);
+
+    if (status == TXN_SUCCESS || status == TXN_UNCHANGED) {
+        return CMD_SUCCESS;
+    } else {
+        VLOG_ERR(OVSDB_TXN_COMMIT_ERROR);
+    }
+
+    return CMD_OVSDB_FAILURE;
+}
+
+DEFUN_NO_FORM (cli_lag_shutdown,
+        cli_lag_shutdown_cmd,
+        "shutdown",
+        "Enable/disable a LAG\n");
+/*
  * Function: lacp_ovsdb_init
  * Responsibility : Add lacp related column ops-cli idl cache.
  *
@@ -2096,6 +2165,8 @@ void cli_post_init(void)
   install_element (LINK_AGGREGATION_NODE, &lacp_set_no_heartbeat_rate_fast_cmd);
   install_element (LINK_AGGREGATION_NODE, &vtysh_exit_lacp_interface_cmd);
   install_element (LINK_AGGREGATION_NODE, &vtysh_end_all_cmd);
+  install_element (LINK_AGGREGATION_NODE, &cli_lag_shutdown_cmd);
+  install_element (LINK_AGGREGATION_NODE, &no_cli_lag_shutdown_cmd);
 
   install_element (CONFIG_NODE, &lacp_set_global_sys_priority_cmd);
   install_element (CONFIG_NODE, &lacp_set_no_global_sys_priority_cmd);

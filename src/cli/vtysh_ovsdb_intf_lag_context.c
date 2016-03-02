@@ -129,6 +129,14 @@ vtysh_intf_lag_context_clientcallback(void *p_private)
       /* Print the LAG port name because lag port is present. */
       vtysh_ovsdb_cli_print(p_msg, "interface lag %d",
                           atoi(&port_row->name[LAG_PORT_NAME_PREFIX_LENGTH]));
+
+      data = port_row->admin;
+      if(data && strncmp(data,
+                         OVSREC_PORT_ADMIN_UP,
+                         strlen(OVSREC_PORT_ADMIN_UP)) == 0) {
+          vtysh_ovsdb_cli_print(p_msg, "%4s%s", "", "no shutdown");
+      }
+
       if (check_port_in_bridge(port_row->name))
       {
           vtysh_ovsdb_cli_print(p_msg, "%4s%s", "", "no routing");

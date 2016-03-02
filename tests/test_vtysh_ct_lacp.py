@@ -585,7 +585,7 @@ class LACPCliTest(OpsVsiTest):
         info('''
 ########## Test show interface lag transceiver command ##########
 ''')
-        success = 0;
+        success = 0
         out = s1.cmdCLI('show interface lag5 transceiver')
         if 'Invalid switch interface ID.' in out:
             success += 1
@@ -683,6 +683,57 @@ class LACPCliTest(OpsVsiTest):
             'Test show lacp interface command = FAILED!'
         return True
 
+    def test_lag_shutdown(self):
+
+        n_intfs = 4
+        s1 = self.net.switches[0]
+        s1.cmdCLI('configure terminal')
+        s1.cmdCLI('interface lag 1')
+        s1.cmdCLI('exit')
+
+        for intf_num in range(1, n_intfs):
+            s1.cmdCLI('interface %d' % intf_num)
+            s1.cmdCLI('lag 1')
+            s1.cmdCLI('exit')
+
+        s1.cmdCLI('interface lag 1')
+        s1.cmdCLI('no shutdown')
+        s1.cmdCLI('exit')
+        s1.cmdCLI('exit')
+
+        out = s1.cmdCLI('show running-config')
+
+        total_lag = 0
+        lines = out.split("\n")
+
+        for line in lines:
+            if 'no shutdown' in line:
+                total_lag += 1
+
+        # total_lag should be the number of intfs + lag + default vlan
+        assert total_lag is 5, \
+            "Failed test, all interfaces are not up!"
+
+        s1.cmdCLI('configure terminal')
+        s1.cmdCLI('interface lag 1')
+        s1.cmdCLI('shutdown')
+        s1.cmdCLI('exit')
+        s1.cmdCLI('exit')
+
+        out = s1.cmdCLI('show running-config')
+
+        total_lag = 0
+        lines = out.split("\n")
+
+        for line in lines:
+            if 'no shutdown' in line:
+                total_lag += 1
+
+        # total_lag should be the no shutdown of the default vlan
+        assert total_lag is 1, \
+            "Failed test, all interfaces are not down!"
+
+        return True
 
 class Test_lacp_cli:
 
@@ -763,6 +814,12 @@ class Test_lacp_cli:
 
     def test_showLacpInterface(self):
         if self.test.showLacpInterfaces():
+            info('''
+########## Test show lacp interface command - SUCCESS! ##########
+''')
+
+    def test_lag_shutdown(self):
+        if self.test.test_lag_shutdown():
             info('''
 ########## Test show lacp interface command - SUCCESS! ##########
 ''')
