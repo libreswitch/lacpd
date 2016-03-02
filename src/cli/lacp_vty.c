@@ -51,6 +51,8 @@
 #include "vtysh/utils/vlan_vtysh_utils.h"
 #include "vtysh_ovsdb_intf_lag_context.h"
 
+#define IP_ADDRESS_LENGTH    18
+
 VLOG_DEFINE_THIS_MODULE(vtysh_lacp_cli);
 extern struct ovsdb_idl *idl;
 
@@ -69,6 +71,69 @@ lacp_exceeded_maximum_lag()
   }
 
   return lags_found >= MAX_LAG_INTERFACES;
+}
+
+/*
+ * This function will check if a given IPv4/IPv6 address
+ * is already present as a primary or secondary IPv4/IPv6 address.
+ */
+bool
+check_ip_addr_duplicate (const char *ip_address,
+                         const struct ovsrec_port *port_row, bool ipv6,
+                         bool *secondary)
+{
+  size_t i;
+  if (ipv6) {
+      if (port_row->ip6_address && !strcmp (port_row->ip6_address, ip_address)) {
+          *secondary = false;
+          return true;
+      }
+      for (i = 0; i < port_row->n_ip6_address_secondary; i++) {
+          if (!strcmp (port_row->ip6_address_secondary[i], ip_address)) {
+              *secondary = true;
+              return true;
+          }
+      }
+  } else {
+      if (port_row->ip4_address && !strcmp (port_row->ip4_address, ip_address)) {
+          *secondary = false;
+          return true;
+      }
+      for (i = 0; i < port_row->n_ip4_address_secondary; i++) {
+          if (!strcmp (port_row->ip4_address_secondary[i], ip_address)) {
+              *secondary = true;
+              return true;
+          }
+      }
+    }
+  return false;
+}
+
+/*
+ * This function mask subnet from the entered IP address
+ * using subnet bits.
+ * Parameter 1 : IPv4 address
+ * Return      : subnet_mask for the ip4 address
+ */
+static int
+mask_ip4_subnet(const char* ip4)
+{
+   char ipAddressString[IP_ADDRESS_LENGTH];
+   int mask_bits = 0, addr = 0;
+   unsigned int i = 0;
+   unsigned int subnet_bits = 0;
+
+   strncpy(ipAddressString, ip4, IP_ADDRESS_LENGTH);
+   strcpy(strchr(ipAddressString, '/'), "\0");
+   mask_bits = atoi(strchr(ip4,'/') + 1);
+
+   inet_pton(AF_INET, ipAddressString, &addr);
+
+   while(i < mask_bits) {
+       subnet_bits |= (1 << i++);
+   }
+
+   return (addr & subnet_bits);
 }
 
 char *
@@ -1971,6 +2036,7 @@ static int lag_no_routing(const char *port_name)
     enum ovsdb_idl_txn_status status;
     struct ovsrec_port **vrf_ports;
     struct ovsrec_port **bridge_ports;
+    struct smap smap = SMAP_INITIALIZER(&smap);
     int64_t* trunks = NULL;
     int trunk_count = 0;
     int64_t* tag = NULL;
@@ -1989,6 +2055,8 @@ static int lag_no_routing(const char *port_name)
 
     port_row = port_check_and_add(port_name, true, false, status_txn);
     if (check_port_in_bridge(port_name)) {
+        vty_out(vty,"Interface \"%s\" is already L2. No change required. %s",
+                port_name, VTY_NEWLINE);
         VLOG_DBG(
             "%s Interface \"%s\" is already L2. No change required.",
             __func__, port_name);
@@ -2006,7 +2074,9 @@ static int lag_no_routing(const char *port_name)
         free(vrf_ports);
     }
 
+    /* assign external vlan */
     ovsrec_port_set_vlan_mode(port_row, OVSREC_PORT_VLAN_MODE_ACCESS);
+
     ovsrec_port_set_trunks(port_row, trunks, trunk_count);
 
     tag = xmalloc(sizeof *port_row->tag);
@@ -2014,6 +2084,12 @@ static int lag_no_routing(const char *port_name)
     tag[0] = DEFAULT_VLAN;
 
     ovsrec_port_set_tag(port_row, tag, tag_count);
+
+    smap_clone(&smap, &port_row->other_config);
+    smap_remove(&smap, PORT_HW_CONFIG_MAP_INTERNAL_VLAN_ID);
+    ovsrec_port_set_hw_config(port_row, &smap);
+    smap_destroy(&smap);
+
     free(tag);
 
     default_bridge_row = ovsrec_bridge_first(idl);
@@ -2141,6 +2217,288 @@ DEFUN_NO_FORM (cli_lag_shutdown,
         cli_lag_shutdown_cmd,
         "shutdown",
         "Enable/disable a LAG\n");
+
+/*
+ * This function is used to configure an IP address for a port
+ * which is attached to a sub interface.
+ * This function accepts 2 arguments both as const char type.
+ * Parameter 1 : intf lag name
+ * Parameter 2 : ipv4 address
+ * Return      : On Success it returns CMD_SUCCESS
+ *               On Failure it returns CMD_OVSDB_FAILURE
+ */
+static int
+lag_intf_config_ip (const char *if_name, const char *ip4)
+{
+    const struct ovsrec_port *port_row = NULL;
+    struct ovsdb_idl_txn *status_txn = NULL;
+    enum ovsdb_idl_txn_status status;
+    bool port_found;
+    int input_ip_subnet, port_ip_subnet;
+
+    if (!is_valid_ip_address(ip4)) {
+        vty_out(vty, "Invalid IP address. %s", VTY_NEWLINE);
+        return CMD_SUCCESS;
+    }
+
+    input_ip_subnet = mask_ip4_subnet(ip4);
+    OVSREC_PORT_FOR_EACH(port_row, idl) {
+        if (port_row->ip4_address != NULL ) {
+            port_ip_subnet = mask_ip4_subnet(port_row->ip4_address);
+
+            if (input_ip_subnet == port_ip_subnet) {
+                if (strncmp(port_row->name, if_name, strlen(if_name)) == 0) {
+                    break;
+                }
+                else {
+                    vty_out(vty, "Duplicate IP Address.%s",VTY_NEWLINE);
+                    return CMD_SUCCESS;
+                }
+            }
+        }
+        else if (port_row->ip4_address_secondary != NULL ) {
+            port_ip_subnet = mask_ip4_subnet(*port_row->ip4_address_secondary);
+
+            if (input_ip_subnet == port_ip_subnet) {
+                vty_out(vty, "Duplicate IP Address.%s",VTY_NEWLINE);
+                return CMD_SUCCESS;
+            }
+        }
+    }
+
+    OVSREC_PORT_FOR_EACH(port_row, idl) {
+        if (strncmp(port_row->name, if_name, strlen(if_name)) == 0) {
+            port_found = true;
+            break;
+        }
+    }
+    if (!port_found) {
+        vty_out(vty, "Port %s not found.%s", if_name, VTY_NEWLINE);
+        return CMD_SUCCESS;
+    }
+
+    if (check_iface_in_bridge (if_name) && (VERIFY_VLAN_IFNAME (if_name) != 0)) {
+        vty_out (vty, "Interface %s is not L3.%s", if_name, VTY_NEWLINE);
+        VLOG_DBG ("%s Interface \"%s\" is not attached to any SUB_IF.%s"
+                "It is attached to default bridge",
+                __func__, if_name, VTY_NEWLINE);
+        return CMD_SUCCESS;
+    }
+
+    status_txn = cli_do_config_start ();
+    if (status_txn == NULL) {
+        VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
+        cli_do_config_abort (status_txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    ovsrec_port_set_ip4_address(port_row, ip4);
+
+    status = cli_do_config_finish (status_txn);
+    if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
+        return CMD_SUCCESS;
+    }
+    else {
+        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+        return CMD_OVSDB_FAILURE;
+    }
+}
+
+DEFUN (cli_lag_intf_config_ip4,
+        cli_lag_intf_config_ip4_cmd,
+        "ip address A.B.C.D/M",
+        IP_STR
+        "Set IP address\n"
+        "LAG Interface IP address\n")
+{
+    return lag_intf_config_ip((char*) vty->index, argv[0]);
+}
+
+DEFUN (cli_lag_intf_del_ip4,
+        cli_lag_intf_del_ip4_cmd,
+        "no ip address A.B.C.D/M",
+        NO_STR
+        IP_STR
+        "Delete IP address\n"
+        "Delete Sub Interface IP address\n")
+{
+    const struct ovsrec_port *port_row = NULL;
+    struct ovsdb_idl_txn *status_txn = NULL;
+    enum ovsdb_idl_txn_status status;
+    bool port_found = false;
+    const char *if_name = (char*)vty->index;
+    char ip4[IP_ADDRESS_LENGTH];
+
+    if (NULL != argv[0]) {
+        sprintf(ip4,"%s",argv[0]);
+    }
+
+    OVSREC_PORT_FOR_EACH(port_row, idl) {
+        if (strcmp(port_row->name, if_name) == 0) {
+            port_found = true;
+            break;
+        }
+    }
+
+    if (!port_found) {
+        vty_out(vty,"Port %s not found.%s", if_name, VTY_NEWLINE);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    if (!port_row->ip4_address) {
+        VLOG_DBG ("%s No IPv4 address configured on interface \"%s\".%s",
+                  __func__, if_name, VTY_NEWLINE);
+        return CMD_SUCCESS;
+    }
+
+    if ((NULL != ip4) && (NULL != port_row->ip4_address)
+            && (strncmp (port_row->ip4_address, ip4, IP_ADDRESS_LENGTH) != 0)) {
+        vty_out (vty, "IPv4 address %s not configured.%s", ip4, VTY_NEWLINE);
+        VLOG_DBG ("%s IPv4 address \"%s\" not configured on interface "
+                "\"%s\".%s", __func__, ip4, if_name, VTY_NEWLINE);
+        return CMD_SUCCESS;
+    }
+
+    status_txn = cli_do_config_start ();
+    if (status_txn == NULL) {
+        VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
+        cli_do_config_abort (status_txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    ovsrec_port_set_ip4_address (port_row, NULL);
+
+    status = cli_do_config_finish (status_txn);
+
+    if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
+        return CMD_SUCCESS;
+    }
+    else {
+        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+        return CMD_OVSDB_FAILURE;
+      }
+    return CMD_SUCCESS;
+}
+
+DEFUN (cli_lag_intf_config_ipv6,
+        cli_lag_intf_config_ipv6_cmd,
+        "ipv6 address X:X::X:X/M",
+        IPV6_STR
+        "Set IPv6 address\n"
+        "LAG Interface IPv6 address\n")
+{
+    const struct ovsrec_port *port_row = NULL;
+    struct ovsdb_idl_txn *status_txn = NULL;
+    enum ovsdb_idl_txn_status status;
+    bool is_secondary = false;
+    const char *if_name = (char*) vty->index;
+    const char *ipv6 = argv[0];
+
+    if (!is_valid_ip_address(argv[0])) {
+        vty_out(vty, "Invalid IP address.%s", VTY_NEWLINE);
+        return CMD_SUCCESS;
+    }
+
+    status_txn = cli_do_config_start ();
+    if (status_txn == NULL) {
+        VLOG_ERR(OVSDB_TXN_CREATE_ERROR);
+        cli_do_config_abort(status_txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    port_row = port_check_and_add (if_name, true, true, status_txn);
+    if (check_iface_in_bridge (if_name) && (VERIFY_VLAN_IFNAME (if_name) != 0)) {
+        vty_out (vty, "Interface %s is not L3.%s", if_name, VTY_NEWLINE);
+        cli_do_config_abort (status_txn);
+        return CMD_SUCCESS;
+    }
+
+    if (check_ip_addr_duplicate(ipv6, port_row, true, &is_secondary)) {
+        vty_out (vty, "IPv6 address is already assigned to interface %s"
+                " as %s.%s",
+                if_name, is_secondary ? "secondary" : "primary", VTY_NEWLINE);
+        VLOG_DBG ("%s Interface \"%s\" already has the IP address \"%s\""
+                " assigned to it as \"%s\".%s",
+                __func__, if_name, ipv6,
+                is_secondary ? "secondary" : "primary", VTY_NEWLINE);
+        cli_do_config_abort (status_txn);
+        return CMD_SUCCESS;
+    }
+    ovsrec_port_set_ip6_address (port_row, ipv6);
+
+    status = cli_do_config_finish (status_txn);
+    if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
+        return CMD_SUCCESS;
+    } else {
+        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+        return CMD_OVSDB_FAILURE;
+      }
+}
+
+DEFUN (cli_lag_intf_del_ipv6,
+        cli_lag_intf_del_ipv6_cmd,
+        "no ipv6 address X:X::X:X/M",
+        NO_STR
+        IPV6_STR
+        "Delete IPv6 address\n"
+        "Delete LAG Interface IPv6 address\n")
+{
+    const struct ovsrec_port *port_row = NULL;
+    struct ovsdb_idl_txn *status_txn = NULL;
+    enum ovsdb_idl_txn_status status;
+    const char *if_name = (char*) vty->index;
+    const char *ipv6 = NULL;
+
+    if (argv[0] != NULL) {
+        ipv6 = argv[0];
+    }
+
+    status_txn = cli_do_config_start ();
+
+    if (status_txn == NULL) {
+        VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
+        cli_do_config_abort (status_txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    port_row = port_check_and_add (if_name, false, false, status_txn);
+
+    if (!port_row) {
+        VLOG_DBG ("%s Interface \"%s\" does not have any port configuration.%s",
+                __func__, if_name, VTY_NEWLINE);
+        cli_do_config_abort (status_txn);
+        return CMD_SUCCESS;
+    }
+
+    if (!port_row->ip6_address) {
+        vty_out (vty, "No IPv6 address configured on interface"
+                 " %s.%s", if_name, VTY_NEWLINE);
+        VLOG_DBG ("%s No IPv6 address configured on interface"
+                  " \"%s\".%s", __func__, if_name, VTY_NEWLINE);
+        cli_do_config_abort (status_txn);
+        return CMD_SUCCESS;
+    }
+
+    if ((NULL != ipv6) && (strncmp (port_row->ip6_address,
+        ipv6, strlen(ipv6)) != 0)) {
+        vty_out (vty, "IPv6 address %s not found.%s", ipv6, VTY_NEWLINE);
+        VLOG_DBG ("%s IPv6 address \"%s\" not configured on interface"
+                  " \"%s\".%s", __func__, ipv6, if_name, VTY_NEWLINE);
+        cli_do_config_abort (status_txn);
+        return CMD_SUCCESS;
+    }
+    ovsrec_port_set_ip6_address (port_row, NULL);
+
+    status = cli_do_config_finish (status_txn);
+
+    if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
+        return CMD_SUCCESS;
+    } else {
+        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+        return CMD_OVSDB_FAILURE;
+      }
+}
+
 /*
  * Function: lacp_ovsdb_init
  * Responsibility : Add lacp related column ops-cli idl cache.
@@ -2207,6 +2565,11 @@ void cli_post_init(void)
   install_element (LINK_AGGREGATION_NODE, &vtysh_end_all_cmd);
   install_element (LINK_AGGREGATION_NODE, &cli_lag_shutdown_cmd);
   install_element (LINK_AGGREGATION_NODE, &no_cli_lag_shutdown_cmd);
+
+  install_element (LINK_AGGREGATION_NODE, &cli_lag_intf_config_ip4_cmd);
+  install_element (LINK_AGGREGATION_NODE, &cli_lag_intf_del_ip4_cmd);
+  install_element (LINK_AGGREGATION_NODE, &cli_lag_intf_config_ipv6_cmd);
+  install_element (LINK_AGGREGATION_NODE, &cli_lag_intf_del_ipv6_cmd);
 
   install_element (CONFIG_NODE, &lacp_set_global_sys_priority_cmd);
   install_element (CONFIG_NODE, &lacp_set_no_global_sys_priority_cmd);
