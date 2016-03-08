@@ -2214,7 +2214,6 @@ void cli_post_init(void)
   install_element (ENABLE_NODE, &cli_lacp_show_interfaces_cmd);
 
   /* Initialize lacp context show running client callback function. */
-  vtysh_init_intf_lag_context_clients();
   retval = e_vtysh_error;
   retval = install_show_run_config_subcontext(e_vtysh_interface_context,
                                        e_vtysh_interface_context_lacp,

@@ -26,7 +26,6 @@
 #ifndef VTYSH_OVSDB_INTF_LAG_CONTEXT_H
 #define VTYSH_OVSDB_INTF_LAG_CONTEXT_H
 
-int vtysh_init_intf_lag_context_clients();
 vtysh_ret_val vtysh_intf_lag_context_clientcallback(void *p_private);
 vtysh_ret_val vtysh_intf_context_lag_clientcallback(void *p_private);
 vtysh_ret_val vtysh_intf_context_lacp_clientcallback(void *p_private);
