@@ -704,7 +704,7 @@ class lacpdTest(OpsVsiTest):
         for intf in sw_1G_intf[0:2]:
             set_intf_other_config(s1, intf, ['lacp-aggregation-key=1'])
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=1'])
-
+        time.sleep(30)
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,
                                     intf,
@@ -867,6 +867,7 @@ class lacpdTest(OpsVsiTest):
             set_intf_other_config(s1, intf, ['lacp-aggregation-key=1'])
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=1'])
 
+        time.sleep(30)
         info("Verify system override still in effect\n")
         for intf in sw_1G_intf[0:2]:
             verify_intf_lacp_status(s1,
