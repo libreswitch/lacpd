@@ -145,7 +145,7 @@ class LACPCliTest(OpsVsiTest):
 
     def lag_hash_LoadBalancing(self):
         info('''
-########## Test LAG Load balancing for L2, L2+VID, L3 and L4 ##########
+########## Test LAG Load balancing for L2, L3 and L4 ##########
 ''')
         s1 = self.net.switches[0]
         s1.cmdCLI('configure terminal')
@@ -192,53 +192,6 @@ class LACPCliTest(OpsVsiTest):
                 break
         assert success, \
             'Test (show lacp aggregates) LAG Load balancing for L2 - FAILED!'
-
-        success = False
-        s1.cmdCLI('configure terminal')
-        s1.cmdCLI('interface lag 1')
-        s1.cmdCLI('hash l2vid-src-dst')
-        s1.cmdCLI('end')
-        out = s1.cmd('ovs-vsctl list port')
-        lines = out.split('\n')
-        for line in lines:
-            if 'bond_mode="l2vid-src-dst-hash"' in line:
-                success = True
-                break
-        assert success, \
-            'Test (ovs-ctl) LAG Load balancing for L2+VID - FAILED!'
-
-        success = False
-        out = s1.cmdCLI('show running-config')
-        lines = out.split('\n')
-        for line in lines:
-            if 'hash l2vid-src-dst' in line:
-                success = True
-                break
-        assert success, \
-            'Test (show running config) LAG Load balancing for L2+VID'\
-            ' - FAILED!'
-
-        success = False
-        out = s1.cmdCLI('show running interface lag1')
-        lines = out.split('\n')
-        for line in lines:
-            if 'hash l2vid-src-dst' in line:
-                success = True
-                break
-        assert success, \
-            'Test (show running interface) LAG Load balancing for L2+VID '\
-            '- FAILED!'
-
-        success = False
-        out = s1.cmdCLI('show lacp aggregates')
-        lines = out.split('\n')
-        for line in lines:
-            if 'Hash                  : l2vid-src-dst' in line:
-                success = True
-                break
-        assert success, \
-            'Test (show lacp aggregates) LAG Load balancing for L2+VID'\
-            ' - FAILED!'
 
         success = True
         s1.cmdCLI('configure terminal')
@@ -561,7 +514,7 @@ class LACPCliTest(OpsVsiTest):
                     'auto' in line and \
                     line.count('--') is 5:
                 success += 1
-        #assert success == 3,\
+        # assert success == 3,\
         #    'Test show interface brief command - FAILED!'
 
         # Verify show interface lag4 brief shows only lag 4
@@ -579,7 +532,7 @@ class LACPCliTest(OpsVsiTest):
                     'lag3' in line or \
                     'lag5' in line:
                 success -= 1
-        #assert success == 1,\
+        # assert success == 1,\
         #    'Test show interface lag4 brief command - FAILED!'
 
         info('''
@@ -735,6 +688,7 @@ class LACPCliTest(OpsVsiTest):
 
         return True
 
+
 class Test_lacp_cli:
 
     def setup(self):
@@ -779,7 +733,7 @@ class Test_lacp_cli:
     def test_lagL234LoadBalancing(self):
         if self.test.lag_hash_LoadBalancing():
             info('''
-########## Test LAG Load balancing for L2, L2+VID, L3 and L4 - SUCCESS! #######
+########## Test LAG Load balancing for L2, L3 and L4 - SUCCESS! #######
 ''')
 
     def test_lagContextCommands(self):

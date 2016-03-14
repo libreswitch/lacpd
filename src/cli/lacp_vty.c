@@ -564,15 +564,6 @@ DEFUN (cli_lacp_set_l2_hash,
   return lacp_set_hash((char*) vty->index, OVSDB_LB_L2_HASH);
 }
 
-DEFUN (cli_lacp_set_l2vid_hash,
-       lacp_set_l2vid_hash_cmd,
-       "hash l2vid-src-dst",
-       "The type of hash algorithm used for aggregated port (Default:l3-src-dst)\n"
-       "Base the hash on l2vid-src-dst\n")
-{
-  return lacp_set_hash((char*) vty->index, OVSDB_LB_L2VID_HASH);
-}
-
 DEFUN (cli_lacp_set_l3_hash,
        lacp_set_l3_hash_cmd,
        "hash l3-src-dst",
@@ -2553,7 +2544,6 @@ void cli_post_init(void)
   install_element (LINK_AGGREGATION_NODE, &cli_lag_routing_cmd);
   install_element (LINK_AGGREGATION_NODE, &cli_lag_no_routing_cmd);
   install_element (LINK_AGGREGATION_NODE, &lacp_set_l2_hash_cmd);
-  install_element (LINK_AGGREGATION_NODE, &lacp_set_l2vid_hash_cmd);
   install_element (LINK_AGGREGATION_NODE, &lacp_set_l3_hash_cmd);
   install_element (LINK_AGGREGATION_NODE, &lacp_set_l4_hash_cmd);
   install_element (LINK_AGGREGATION_NODE, &lacp_set_fallback_cmd);

@@ -26,14 +26,12 @@
 
 
 #define LAG_LB_ALG_L2     "l2-src-dst"
-#define LAG_LB_ALG_L2VID  "l2vid-src-dst"
 #define LAG_LB_ALG_L3     "l3-src-dst"
 #define LAG_LB_ALG_L4     "l4-src-dst"
 
 #define OVSDB_LB_HASH_SUFFIX  "-hash"
 
 #define OVSDB_LB_L2_HASH    (LAG_LB_ALG_L2 OVSDB_LB_HASH_SUFFIX)
-#define OVSDB_LB_L2VID_HASH (LAG_LB_ALG_L2VID OVSDB_LB_HASH_SUFFIX)
 #define OVSDB_LB_L3_HASH    (LAG_LB_ALG_L3 OVSDB_LB_HASH_SUFFIX)
 #define OVSDB_LB_L4_HASH    (LAG_LB_ALG_L4 OVSDB_LB_HASH_SUFFIX)
 
