@@ -78,6 +78,16 @@
   - [Test Result Criteria](#test-result-criteria)
     - [Test Pass Criteria](#test-pass-criteria)
     - [Test Fail Criteria](#test-fail-criteria)
+- [Dynamic LAG created to disable all ports or to fallback](#dynamic-lag-created-to-disable-all-ports-or-to-fallback)
+  - [Objective](#objective)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+    - [Topology Diagram](#topology-diagram)
+  - [Test Setup](#test-setup)
+  - [Description](#description)
+  - [Test Result Criteria](#test-result-criteria)
+    - [Test Pass Criteria](#test-pass-criteria)
+    - [Test Fail Criteria](#test-fail-criteria)
 
 ## Static LAG Membership
 ### Objective
@@ -525,3 +535,48 @@ The switch with higher System Priority is the one deciding which LAG interfaces 
 #### Test Fail Criteria
 * Interfaces 1 and 2 in both switches are in state In Sync or Collecting/Distributing
 * Interfaces 3 and 4 in both switches are in state Out of Sync or not in Collecting/Distributing
+
+## dynamic lag created to disable all ports or to fallback
+### Objective
+Verify that configured LAG to either disable all ports or to fallback to active/backup when dynamic LACP is configured and the LACP negotiation fail.
+### Requirements
+ - Virtual Mininet Test Setup
+ - Script is in tests/test_lacpd_ct_lag_fallback.py
+
+### Setup
+#### Topology Diagram
+```
++--------+                  +--------+
+|        1------------------1        |
+|   s1   |                  |   s2   |
+|        2------------------2        |
++--------+                  +--------+
+```
+
+### Description
+1. Create LAGs with 1 Gb interfaces.
+   Create LAG 1 with active mode with interfaces 1 and 2 in switch 1
+   Create LAG 1 with active mode with interfaces 1 and 2 in switch 2
+   Verify that interfaces are not operating in LAGs (because they are not enabled)
+2. Enable all the interfaces
+   Verify that interfaces are operating in LAGs (because they have been enabled and are linked)
+3. Verify lacp_status in interfaces configured in LACP LAGs
+4. Override port parameters on s1 and s2 (set other_config lacp-time to "fast")
+5. Verify that interfaces are linked and operating at 1 Gb
+   Verify that interfaces are operating in LAG
+6. Override port parameters on s1 and s2 (set other_config lacp-fallback-ab as true)
+7. Change lacp mode in port from "active" to "off" on s2
+   Vefiry that interface 1 continue up
+   Verify that interface 2 were down on LAG
+8. LACP mode back to active on s2
+   Verify that interfaces are in LAG
+   Verify that interface 1 and interface 2 are in state up for switch 1
+9. Set port:other_config lacp-fallback to "false"
+10. Change lacp mode in port from "active" to "off" on s2
+    Verify that interfaces were down on LAG on switch 1
+11. Clear all user configuration
+### Test Result Criteria
+#### Test Pass Criteria
+* Interfaces 1 and 2 in both switches changing state from up to down or down to up according with fallback and switch lacp mode.
+#### Test Fail Criteria
+One or more verifications fail.
