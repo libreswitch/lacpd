@@ -15,7 +15,7 @@
 #
 
 ##########################################################################
-# Name:        ft_lacp_library.py
+# Name:        lacp_lib.py
 #
 # Objective:   Library for all utils function used across all LACP tests
 #
@@ -47,6 +47,11 @@ def create_lag_active(sw, lag_id):
 def create_lag_passive(sw, lag_id):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         ctx.lacp_mode_passive()
+
+
+def lag_no_routing(sw, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_routing()
 
 
 def delete_lag(sw, lag_id):
@@ -234,9 +239,6 @@ def create_vlan(sw, vlan_id):
     with sw.libs.vtysh.ConfigVlan(vlan_id) as ctx:
         ctx.no_shutdown()
     output = sw.libs.vtysh.show_vlan(vlan_id)
-    print(output)
-    print(output[vlan_id])
-    print(output[vlan_id]['status'])
     assert output[vlan_id]['status'] == 'up',\
         'Vlan is not up after turning it on'
 
@@ -264,3 +266,49 @@ def validate_interface_not_in_lag(sw, interface, lag_id):
     print("Came back from show lacp interface")
     assert output['lag_id'] == "",\
         "Unable to associate interface to lag"
+
+
+def is_interface_up(sw, interface):
+    interface_status = sw('show interface {interface}'.format(**locals()))
+    lines = interface_status.split('\n')
+    for line in lines:
+        if "Admin state" in line and "up" in line:
+            return True
+    return False
+
+
+def is_interface_down(sw, interface):
+    interface_status = sw('show interface {interface}'.format(**locals()))
+    lines = interface_status.split('\n')
+    for line in lines:
+        if "Admin state" in line and "up" not in line:
+            return True
+    return False
+
+
+def check_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, ping_num, success):
+    ping = h1.libs.ping.ping(ping_num, h2_ip)
+    if success:
+        assert ping['transmitted'] == ping['received'] == ping_num,\
+            'Ping between ' + h1_ip + ' and ' + h2_ip + ' failed'
+    else:
+        assert not ping['transmitted'] == ping['received'] == ping_num,\
+            'Ping between ' + h1_ip + ' and ' + h2_ip + ' success'
+
+    ping = h2.libs.ping.ping(ping_num, h1_ip)
+    if success:
+        assert ping['transmitted'] == ping['received'] == ping_num,\
+            'Ping between ' + h2_ip + ' and ' + h1_ip + ' failed'
+    else:
+        assert not ping['transmitted'] == ping['received'] == ping_num,\
+            'Ping between ' + h2_ip + ' and ' + h1_ip + ' success'
+
+
+def lag_shutdown(sw, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.shutdown()
+
+
+def lag_no_shutdown(sw, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_shutdown()
