@@ -688,6 +688,29 @@ class LACPCliTest(OpsVsiTest):
 
         return True
 
+    def test_lag_ip_running_config(self):
+        s1 = self.net.switches[0]
+        s1.cmdCLI('configure terminal')
+        s1.cmdCLI('interface lag 1')
+        s1.cmdCLI('ip address 10.1.1.1/24')
+        s1.cmdCLI('ipv6 address 2001:db8:a0b:12f0::1/64')
+        s1.cmdCLI('exit')
+        s1.cmdCLI('exit')
+
+        out = s1.cmdCLI('show running-config')
+        lines = out.split("\n")
+
+        total = 0
+        for line in lines:
+            if 'ip address 10.1.1.1/24' in line:
+                total += 1
+            if 'ipv6 address 2001:db8:a0b:12f0::1/64' in line:
+                total += 1
+
+        assert total == 2,\
+            "Failed test, LAG has no IP assigned"
+
+        return True
 
 class Test_lacp_cli:
 
@@ -775,7 +798,13 @@ class Test_lacp_cli:
     def test_lag_shutdown(self):
         if self.test.test_lag_shutdown():
             info('''
-########## Test show lacp interface command - SUCCESS! ##########
+########## Test show lacp shutdown command - SUCCESS! ##########
+''')
+
+    def test_lag_ip_running_config(self):
+        if self.test.test_lag_ip_running_config():
+            info('''
+########## Test show LACP IP running-config command  - SUCCESS! ##########
 ''')
 
     def teardown_class(cls):

@@ -174,6 +174,19 @@ vtysh_intf_lag_context_clientcallback(void *p_private)
         vtysh_ovsdb_cli_print(p_msg, "%4slacp rate %s"," ",data);
       }
 
+      data = NULL;
+      data = port_row->ip4_address;
+      if(data)
+      {
+        vtysh_ovsdb_cli_print(p_msg, "%4sip address %s"," ",data);
+      }
+
+      data = NULL;
+      data = port_row->ip6_address;
+      if(data)
+      {
+        vtysh_ovsdb_cli_print(p_msg, "%4sipv6 address %s", " ",data);
+      }
     }
   }
 
