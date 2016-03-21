@@ -634,6 +634,39 @@ class LACPCliTest(OpsVsiTest):
 
         assert success == 12,\
             'Test show lacp interface command = FAILED!'
+        out = s1.cmdCLI('show lacp interface lag1')
+        success = 0
+        lines = out.split('\n')
+        for line in lines:
+            if 'Aggregate-name :' in line:
+                success += 1
+        assert success == 0,\
+            'Test show lacp interface lag# command = FAILED!'
+        out = s1.cmdCLI('show lacp interface lag')
+        success = 0
+        lines = out.split('\n')
+        for line in lines:
+            if 'Aggregate-name :' in line:
+                success += 1
+        assert success == 0,\
+            'Test show lacp interface lag command = FAILED!'
+        out = s1.cmdCLI('show lacp interface lag 1')
+        success = 0
+        lines = out.split('\n')
+        for line in lines:
+            if 'Aggregate-name :' in line:
+                success += 1
+        assert success == 0,\
+            'Test show lacp interface lag # command = FAILED!'
+        out = s1.cmdCLI('show lacp interface X')
+        success = 0
+        lines = out.split('\n')
+        for line in lines:
+            if 'Aggregate-name :' in line:
+                success += 1
+        assert success == 0,\
+            'Test show lacp interface X command = FAILED!'
+
         return True
 
     def test_lag_shutdown(self):

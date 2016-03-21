@@ -1931,7 +1931,12 @@ DEFUN (cli_lacp_show_interfaces,
       "Show LACP interfaces\n"
       "Interface's name\n")
 {
-  return lacp_show_interfaces(argv[0]);
+   if(strncmp(argv[0], LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) != 0) {
+      return lacp_show_interfaces(argv[0]);
+   } else {
+       vty_out(vty, "%% Unknown command.%s", VTY_NEWLINE);
+       return CMD_SUCCESS;
+   }
 }
 
 /*
