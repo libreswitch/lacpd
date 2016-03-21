@@ -47,7 +47,6 @@ from lacp_lib import validate_lag_state_default_neighbor
 from lacp_lib import get_device_mac_address
 from lacp_lib import tcpdump_capture_interface
 from lacp_lib import get_info_from_packet_capture
-from lacp_lib import set_debug
 from lacp_lib import LOCAL_STATE
 from lacp_lib import REMOTE_STATE
 from lacp_lib import ACTOR
@@ -73,7 +72,7 @@ sw1:7 -- sw2:5
 """
 
 
-def test_lacp_aggregation_key_case_1(topology):
+def test_lacp_agg_key_move_interface(topology):
     """
     Case 1:
         Verify aggregation key functionality when
@@ -144,14 +143,14 @@ def test_lacp_aggregation_key_case_1(topology):
     validate_lag_name(map_lacp_sw1, sw1_lag_id)
     validate_local_key(map_lacp_sw1, sw1_lag_id)
     validate_remote_key(map_lacp_sw1, sw2_lag_id)
-    validate_lag_state_sync(map_lacp_sw1, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1, lacp_lib.REMOTE_STATE)
+    validate_lag_state_sync(map_lacp_sw1, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1, REMOTE_STATE)
 
     validate_lag_name(map_lacp_sw2, sw2_lag_id)
     validate_local_key(map_lacp_sw2, sw2_lag_id)
     validate_remote_key(map_lacp_sw2, sw1_lag_id)
-    validate_lag_state_sync(map_lacp_sw2, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2, lacp_lib.REMOTE_STATE)
+    validate_lag_state_sync(map_lacp_sw2, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2, REMOTE_STATE)
 
     print("Changing interface 1 to lag 200 in switch 1")
     create_lag_active(sw1, sw1_lag_id_2)
@@ -175,20 +174,20 @@ def test_lacp_aggregation_key_case_1(topology):
     validate_lag_name(map_lacp_sw1_p11, sw1_lag_id_2)
     validate_local_key(map_lacp_sw1_p11, sw1_lag_id_2)
     validate_remote_key(map_lacp_sw1_p11, sw2_lag_id)
-    validate_lag_state_alfn(map_lacp_sw1_p11, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_p12, lacp_lib.LOCAL_STATE)
+    validate_lag_state_alfn(map_lacp_sw1_p11, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_p12, LOCAL_STATE)
     validate_lag_state_default_neighbor(map_lacp_sw1_p13,
-                                                 LOCAL_STATE)
+                                        LOCAL_STATE)
     validate_lag_state_default_neighbor(map_lacp_sw1_p14,
-                                                 LOCAL_STATE)
+                                        LOCAL_STATE)
 
     validate_lag_name(map_lacp_sw2_p21, sw2_lag_id)
     validate_local_key(map_lacp_sw2_p21, sw2_lag_id)
     validate_remote_key(map_lacp_sw2_p21, sw1_lag_id_2)
     validate_lag_state_out_of_sync(map_lacp_sw2_p21,
-                                            LOCAL_STATE)
+                                   LOCAL_STATE)
     validate_lag_state_sync(map_lacp_sw2_p22,
-                                     LOCAL_STATE)
+                            LOCAL_STATE)
 
     print("Cleaning configuration")
     for port in ports_sw1:
@@ -247,15 +246,15 @@ def lacp_aggregation_key_packet_validation(topology):
 
     print("Validate actor and partner key from sw1 packets")
     sw1_actor = get_info_from_packet_capture(capture,
-                                                      ACTOR,
-                                                      sw1_mac)
+                                             ACTOR,
+                                             sw1_mac)
 
     assert sw1_actor['key'] == sw1_lag_id,\
         'Packet is not sending the correct actor key in sw1'
 
     sw1_partner = get_info_from_packet_capture(capture,
-                                                        PARTNER,
-                                                        sw1_mac)
+                                               PARTNER,
+                                               sw1_mac)
 
     assert sw1_partner['key'] == sw2_lag_id,\
         'Packet is not sending the correct partner key in sw1'
@@ -271,7 +270,7 @@ def lacp_aggregation_key_packet_validation(topology):
     delete_lag(sw2, sw2_lag_id)
 
 
-def test_lacp_aggregation_key_case_2(topology):
+def test_lacp_agg_key_more_than_one_lag_connected(topology):
     """
     Case 2:
         Verify only interfaces associated with the same
@@ -345,17 +344,17 @@ def test_lacp_aggregation_key_case_2(topology):
 
     # set_trace()
     print("Validate the LAG was created in both switches")
-    validate_lag_state_sync(map_lacp_sw1_p11, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_p12, lacp_lib.LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_p11, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_p12, LOCAL_STATE)
     validate_lag_state_out_of_sync(map_lacp_sw1_p13,
-                                            LOCAL_STATE)
+                                   LOCAL_STATE)
     validate_lag_state_out_of_sync(map_lacp_sw1_p14,
-                                            LOCAL_STATE)
+                                   LOCAL_STATE)
 
-    validate_lag_state_sync(map_lacp_sw2_p21, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2_p22, lacp_lib.LOCAL_STATE)
-    validate_lag_state_alfn(map_lacp_sw2_p23, lacp_lib.LOCAL_STATE)
-    validate_lag_state_alfn(map_lacp_sw2_p24, lacp_lib.LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2_p21, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2_p22, LOCAL_STATE)
+    validate_lag_state_alfn(map_lacp_sw2_p23, LOCAL_STATE)
+    validate_lag_state_alfn(map_lacp_sw2_p24, LOCAL_STATE)
 
     print("Cleaning configuration")
     for port in ports_sw1:
@@ -369,7 +368,7 @@ def test_lacp_aggregation_key_case_2(topology):
     delete_lag(sw2, sw2_lag_id_2)
 
 
-def test_lacp_aggregation_key_case_3(topology):
+def test_lacp_agg_key_cross_links(topology):
     """
     Case 3:
         Verify LAGs should be formed independent of port ids as long
@@ -460,9 +459,9 @@ def test_lacp_aggregation_key_case_3(topology):
     validate_lag_name(map_lacp_sw1_7, lag_id_3)
 
     print("Validate correct state in switch1 for interfaces 5,6,7")
-    validate_lag_state_sync(map_lacp_sw1_5, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_6, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_7, lacp_lib.LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_5, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_6, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_7, LOCAL_STATE)
 
     print("Validate correct lag name in switch2")
     validate_lag_name(map_lacp_sw2_5, lag_id_3)
@@ -470,9 +469,9 @@ def test_lacp_aggregation_key_case_3(topology):
     validate_lag_name(map_lacp_sw2_7, lag_id_2)
 
     print("Validate correct state in switch2 for interfaces 5,6,7")
-    validate_lag_state_sync(map_lacp_sw2_5, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2_6, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2_7, lacp_lib.LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2_5, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2_6, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2_7, LOCAL_STATE)
 
     print("Cleaning configuration")
     for port in ports_sw1:
@@ -486,7 +485,7 @@ def test_lacp_aggregation_key_case_3(topology):
         delete_lag(sw2, lag)
 
 
-def test_lacp_aggregation_key_case_4(topology):
+def test_lacp_different_aggregation_keys(topology):
     """
     Case 4:
         Verify LAGs with different names from switches can
@@ -537,7 +536,7 @@ def test_lacp_aggregation_key_case_4(topology):
     # Without this sleep time, we are validating temporary
     # states in state machines
     print("Waiting for LAG negotations between switches")
-    time.sleep(30)
+    time.sleep(40)
 
     print("Get information for LAG in interface 1 with both switches")
     map_lacp_sw1_1 = sw1.libs.vtysh.show_lacp_interface(p11)
@@ -545,17 +544,17 @@ def test_lacp_aggregation_key_case_4(topology):
     map_lacp_sw2_1 = sw2.libs.vtysh.show_lacp_interface(p21)
     map_lacp_sw2_2 = sw2.libs.vtysh.show_lacp_interface(p21)
 
-    print("Validate the LAG was created in swith1")
-    validate_lag_state_sync(map_lacp_sw1_1, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_1, lacp_lib.REMOTE_STATE)
-    validate_lag_state_sync(map_lacp_sw1_2, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_2, lacp_lib.REMOTE_STATE)
+    print("Validate the LAG was created in switch1")
+    validate_lag_state_sync(map_lacp_sw1_1, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_1, REMOTE_STATE)
+    validate_lag_state_sync(map_lacp_sw1_2, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw1_2, REMOTE_STATE)
 
-    print("Validate the LAG was created in swith2")
-    validate_lag_state_sync(map_lacp_sw2_1, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2_1, lacp_lib.REMOTE_STATE)
-    validate_lag_state_sync(map_lacp_sw2_2, lacp_lib.LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2_2, lacp_lib.REMOTE_STATE)
+    print("Validate the LAG was created in switch2")
+    validate_lag_state_sync(map_lacp_sw2_1, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2_1, REMOTE_STATE)
+    validate_lag_state_sync(map_lacp_sw2_2, LOCAL_STATE)
+    validate_lag_state_sync(map_lacp_sw2_2, REMOTE_STATE)
 
     print("Cleaning configuration")
     for port in ports_sw1:
