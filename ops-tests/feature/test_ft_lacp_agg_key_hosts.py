@@ -239,5 +239,4 @@ def test_lacp_aggregation_key_with_hosts(topology):
     hs3.libs.ip.interface('1', addr=(hs3_ip_1 + mask), up=True)
 
     print("Check connectivity between Host 1 and Host 3")
-    # This validation is failing, commenting for now @wip
-    # check_connectivity_between_hosts(hs1, hs1_ip, hs3, hs3_ip_1)
+    check_connectivity_between_hosts(hs1, hs1_ip, hs3, hs3_ip_1)

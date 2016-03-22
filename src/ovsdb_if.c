@@ -124,6 +124,14 @@ static int system_priority = DFLT_SYSTEM_LACP_CONFIG_SYSTEM_PRIORITY;
 static struct shash all_interfaces = SHASH_INITIALIZER(&all_interfaces);
 
 /**
+ * A hash map of daemon's internal data for the interfaces recently added to some port.
+ * The idea of this hash is to prevent completely deleting an interface that was previously
+ * added to another port.
+ * This scenario can occur when an interface is moved from one LAG to another.
+ */
+static struct shash interfaces_recently_added = SHASH_INITIALIZER(&interfaces_recently_added);
+
+/**
  * A hash map of daemon's internal data for all the ports maintained by lacpd.
  */
 static struct shash all_ports = SHASH_INITIALIZER(&all_ports);
@@ -852,6 +860,7 @@ lacpd_ovsdb_if_exit(void)
 {
     shash_destroy_free_data(&all_ports);
     shash_destroy_free_data(&all_interfaces);
+    shash_destroy_free_data(&interfaces_recently_added);
     ovsdb_idl_destroy(idl);
 } /* lacpd_ovsdb_if_exit */
 
@@ -1405,12 +1414,18 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                 shash_find_data(&all_interfaces, node->name);
             if (idp) {
                 VLOG_DBG("Found a deleted interface %s", node->name);
+
+                /* If this interface was added to another port in this same cycle
+                 * of SHASH_FOR_EACH(sh_node, &all_ports), then we don't have to
+                 * delete it.*/
+                if (shash_find_data(&interfaces_recently_added, node->name) == NULL) {
+                    db_clear_interface(idp);
+                    set_interface_lag_eligibility(portp, idp, false);
+                    idp->port_datap = NULL;
+                    clear_port_overrides(idp);
+                    rc++;
+                }
                 shash_delete(&portp->cfg_member_ifs, node);
-                db_clear_interface(idp);
-                set_interface_lag_eligibility(portp, idp, false);
-                idp->port_datap = NULL;
-                clear_port_overrides(idp);
-                rc++;
             }
         }
     }
@@ -1532,6 +1547,8 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                 continue;
             }
             shash_add(&portp->cfg_member_ifs, node->name, (void *)idp);
+            /* Add interface to recently added list */
+            shash_add(&interfaces_recently_added, node->name, (void *)idp);
             idp->port_datap = portp;
             set_port_overrides(portp, idp);
         }
@@ -1760,6 +1777,11 @@ update_port_cache(void)
                 rc++;
             }
         }
+    }
+
+    /* Remove the interfaces added to interfaces_recently_added. */
+    SHASH_FOR_EACH_SAFE(sh_node, sh_next, &interfaces_recently_added) {
+        shash_delete(&interfaces_recently_added, sh_node);
     }
 
     /* Destroy the shash of the IDL ports. */
