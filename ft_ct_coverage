@@ -1,0 +1,8 @@
+# Specify the minimum coverage percentage to be accepted for this repo in the following form
+#Minimum_coverage=80
+# If no value is specified a default of 80 is assumed
+#Minimum_coverage=65
+# Specify the code coverage exclude patterns (if any) using wild-cards and separated by spaces
+# Example, to exclude fiels and directories that contain gtest or openvswitch use the following
+# Exclude_pattern=*gtest* *openvswitch*
+Exclude_pattern=*openvswitch* *CMake* *ovs/*
