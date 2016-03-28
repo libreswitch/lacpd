@@ -1138,6 +1138,7 @@ update_interface_cache(void)
                 idp->link_state = new_link_state;
                 idp->link_speed = new_speed;
                 idp->duplex = new_duplex;
+
                 VLOG_DBG("Interface %s link state changed in DB: "
                          "new_speed=%d, new_link=%s, new_duplex=%s, ",
                          ifrow->name, idp->link_speed,
@@ -2363,6 +2364,7 @@ ops_detach_port_in_hw(uint16_t lag_id, int port)
         VLOG_ERR("Failed to find interface data for attaching port in hw. "
                  "port index=%d", port);
     }
+
 } /* ops_detach_port_in_hw */
 
 void
@@ -2397,10 +2399,8 @@ db_update_port_status(struct port_data *portp)
     const struct ovsrec_port *prow;
     struct smap smap;
     struct ovsdb_idl_txn *txn;
-    bool fallback_ab = false;
     bool changed = false;
     char *speed_str;
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
     prow = portp->cfg;
 
@@ -2421,7 +2421,7 @@ db_update_port_status(struct port_data *portp)
 
         if (portp->current_status != STATUS_DOWN) {
             /* record port as non-operational */
-            VLOG_WARN_RL(&rl, "Port %s isn't operational - no interfaces working",
+            VLOG_WARN("Port %s isn't operational - no interfaces working",
                       portp->name);
 
             smap_replace(&smap,
@@ -2437,6 +2437,7 @@ db_update_port_status(struct port_data *portp)
             portp->current_status = STATUS_DOWN;
             changed = true;
         }
+
     } else if (shash_count(&portp->participant_ifs) == 1) {
         /* determine if interface is defaulted or not */
         struct shash_node *node;
@@ -2446,9 +2447,6 @@ db_update_port_status(struct port_data *portp)
         node = shash_first(&portp->participant_ifs);
         idp = (struct iface_data *)node->data;
 
-        fallback_ab = smap_get_bool(&prow->other_config,
-                                        PORT_OTHER_CONFIG_LACP_FALLBACK,
-                                        false);
         if (idp->local_state.defaulted) {
             if (portp->current_status != STATUS_DEFAULTED) {
                 smap_replace(&smap,
@@ -2461,14 +2459,6 @@ db_update_port_status(struct port_data *portp)
 
                 portp->current_status = STATUS_DEFAULTED;
                 changed = true;
-                if (!fallback_ab) {
-                    lacpd_thread_intf_update_hw_bond_config(idp,
-                                                        true,   /* update_rx */
-                                                        false,  /* rx_enabled */
-                                                        true,   /* update_tx */
-                                                        false); /* tx_enabled */
-                }
-
             }
         } else {
             if (portp->current_status != STATUS_UP) {
