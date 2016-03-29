@@ -93,6 +93,11 @@ def remove_interface_from_lag(sw, interface, lag_id):
         "Unable to remove interface from lag"
 
 
+def disassociate_interface_to_lag(sw, interface, lag_id):
+    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
+        ctx.no_lag(lag_id)
+
+
 def associate_vlan_to_lag(sw, vlan_id, lag_id):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         ctx.no_routing()
@@ -145,8 +150,6 @@ def validate_lag_name(map_lacp, lag_id):
 def validate_lag_state_sync(map_lacp, state):
     assert map_lacp[state]['active'] is True,\
         "LAG state should be active"
-    assert map_lacp[state]['long_timeout'] is True,\
-        "LAG state should have long timeout"
     assert map_lacp[state]['aggregable'] is True,\
         "LAG state should have aggregable enabled"
     assert map_lacp[state]['in_sync'] is True,\
@@ -172,11 +175,9 @@ def validate_lag_state_out_of_sync(map_lacp, state):
         "LAG state should not be out of sync"
 
 
-def validate_lag_state_alfn(map_lacp, state):
+def validate_lag_state_afn(map_lacp, state):
     assert map_lacp[state]['active'] is True,\
         "LAG state should be active"
-    assert map_lacp[state]['long_timeout'] is True,\
-        "LAG state should have long timeout"
     assert map_lacp[state]['aggregable'] is True,\
         "LAG state should have aggregable enabled"
     assert map_lacp[state]['in_sync'] is True,\
@@ -333,6 +334,10 @@ def create_vlan(sw, vlan_id):
     with sw.libs.vtysh.ConfigVlan(vlan_id) as ctx:
         ctx.no_shutdown()
 
+def validate_vlan_state(sw, vlan_id, state):
+    output = sw.libs.vtysh.show_vlan(vlan_id)
+    assert output[vlan_id]['status'] == state,\
+        'Vlan is not in ' + state + ' state'
 
 def delete_vlan(sw, vlan):
     with sw.libs.vtysh.Configure() as ctx:
@@ -433,10 +438,13 @@ def assign_ip_to_lag(sw, lag_id, ip_address, ip_address_mask):
         ctx.routing()
         ctx.ip_address(ip_address_complete)
 
-
 def config_lacp_rate(sw, lag_id, lacp_rate_fast=False):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         if lacp_rate_fast:
             ctx.lacp_rate_fast()
         else:
             ctx.no_lacp_rate_fast()
+
+def set_lacp_rate_fast(sw, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.lacp_rate_fast()

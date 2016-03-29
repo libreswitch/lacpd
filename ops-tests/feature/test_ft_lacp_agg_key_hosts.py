@@ -40,6 +40,7 @@ from lacp_lib import validate_lag_state_sync
 from lacp_lib import validate_lag_state_out_of_sync
 from lacp_lib import LOCAL_STATE
 from lacp_lib import validate_turn_on_interfaces
+from lacp_lib import set_lacp_rate_fast
 
 TOPOLOGY = """
 # +-------+              +-------+
@@ -153,6 +154,11 @@ def test_lacp_aggregation_key_with_hosts(topology):
     create_lag_active(sw3, sw3_lag_id)
     create_lag_active(sw3, sw3_lag_id_2)
 
+    set_lacp_rate_fast(sw1, sw1_lag_id)
+    set_lacp_rate_fast(sw2, sw2_lag_id)
+    set_lacp_rate_fast(sw3, sw3_lag_id)
+    set_lacp_rate_fast(sw3, sw3_lag_id_2)
+
     print("Associate interfaces with LAG")
     for intf in ports_sw1[0:2]:
         associate_interface_to_lag(sw1, intf, sw1_lag_id)
@@ -191,7 +197,7 @@ def test_lacp_aggregation_key_with_hosts(topology):
     associate_vlan_to_l2_interface(sw3, sw3_sw1_vlan, p34h)
 
     print("Check connectivity between Host 1 and 3")
-    check_connectivity_between_hosts(hs1, hs1_ip, hs3, hs3_ip_1)
+    check_connectivity_between_hosts(hs1, hs1_ip, hs3, hs3_ip_1, 5, True)
 
     # Then associate Host 3 with Vlan from Switch 2
     print("Configure connection between Host 2 and 3")
@@ -202,7 +208,7 @@ def test_lacp_aggregation_key_with_hosts(topology):
 
     time.sleep(5)
     print("Check connectivty between Host 2 and 3")
-    check_connectivity_between_hosts(hs2, hs2_ip, hs3, hs3_ip_2)
+    check_connectivity_between_hosts(hs2, hs2_ip, hs3, hs3_ip_2, 5, True)
 
     # Now change interface 2 from Switch 3 to LAG with Switch 2
     # This should get the interface Out of Sync because that

@@ -30,7 +30,6 @@ OpenSwitch Test for LACP aggregation key functionality
 """
 
 import time
-# from . import lacp_lib
 from lacp_lib import create_lag_active
 from lacp_lib import create_lag_passive
 from lacp_lib import delete_lag
@@ -42,7 +41,7 @@ from lacp_lib import validate_remote_key
 from lacp_lib import validate_lag_name
 from lacp_lib import validate_lag_state_sync
 from lacp_lib import validate_lag_state_out_of_sync
-from lacp_lib import validate_lag_state_alfn
+from lacp_lib import validate_lag_state_afn
 from lacp_lib import validate_lag_state_default_neighbor
 from lacp_lib import get_device_mac_address
 from lacp_lib import tcpdump_capture_interface
@@ -51,6 +50,7 @@ from lacp_lib import LOCAL_STATE
 from lacp_lib import REMOTE_STATE
 from lacp_lib import ACTOR
 from lacp_lib import PARTNER
+from lacp_lib import set_lacp_rate_fast
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -124,6 +124,9 @@ def test_lacp_agg_key_move_interface(topology):
     create_lag_active(sw1, sw1_lag_id)
     create_lag_active(sw2, sw2_lag_id)
 
+    set_lacp_rate_fast(sw1, sw1_lag_id)
+    set_lacp_rate_fast(sw2, sw2_lag_id)
+
     print("Associate interfaces [1,2] to lag in both switches")
     associate_interface_to_lag(sw1, p11, sw1_lag_id)
     associate_interface_to_lag(sw1, p12, sw1_lag_id)
@@ -154,6 +157,7 @@ def test_lacp_agg_key_move_interface(topology):
 
     print("Changing interface 1 to lag 200 in switch 1")
     create_lag_active(sw1, sw1_lag_id_2)
+    set_lacp_rate_fast(sw1, sw1_lag_id_2)
     associate_interface_to_lag(sw1, p11, sw1_lag_id_2)
     associate_interface_to_lag(sw1, p13, sw1_lag_id_2)
     associate_interface_to_lag(sw1, p14, sw1_lag_id)
@@ -174,7 +178,7 @@ def test_lacp_agg_key_move_interface(topology):
     validate_lag_name(map_lacp_sw1_p11, sw1_lag_id_2)
     validate_local_key(map_lacp_sw1_p11, sw1_lag_id_2)
     validate_remote_key(map_lacp_sw1_p11, sw2_lag_id)
-    validate_lag_state_alfn(map_lacp_sw1_p11, LOCAL_STATE)
+    validate_lag_state_afn(map_lacp_sw1_p11, LOCAL_STATE)
     validate_lag_state_sync(map_lacp_sw1_p12, LOCAL_STATE)
     validate_lag_state_default_neighbor(map_lacp_sw1_p13,
                                         LOCAL_STATE)
@@ -229,6 +233,9 @@ def lacp_aggregation_key_packet_validation(topology):
     print("Create LAG in both switches")
     create_lag_active(sw1, sw1_lag_id)
     create_lag_passive(sw2, sw2_lag_id)
+
+    set_lacp_rate_fast(sw1, sw1_lag_id)
+    set_lacp_rate_fast(sw2, sw2_lag_id)
 
     print("Associate interfaces [1,2] to lag in both switches")
     associate_interface_to_lag(sw1, p11, sw1_lag_id)
@@ -318,6 +325,10 @@ def test_lacp_agg_key_more_than_one_lag_connected(topology):
     create_lag_active(sw2, sw2_lag_id)
     create_lag_active(sw2, sw2_lag_id_2)
 
+    set_lacp_rate_fast(sw1, sw1_lag_id)
+    set_lacp_rate_fast(sw2, sw2_lag_id)
+    set_lacp_rate_fast(sw2, sw2_lag_id_2)
+
     print("Associate interfaces to lag in both switches")
     for interface in ports_sw1:
         associate_interface_to_lag(sw1, interface, sw1_lag_id)
@@ -353,8 +364,8 @@ def test_lacp_agg_key_more_than_one_lag_connected(topology):
 
     validate_lag_state_sync(map_lacp_sw2_p21, LOCAL_STATE)
     validate_lag_state_sync(map_lacp_sw2_p22, LOCAL_STATE)
-    validate_lag_state_alfn(map_lacp_sw2_p23, LOCAL_STATE)
-    validate_lag_state_alfn(map_lacp_sw2_p24, LOCAL_STATE)
+    validate_lag_state_afn(map_lacp_sw2_p23, LOCAL_STATE)
+    validate_lag_state_afn(map_lacp_sw2_p24, LOCAL_STATE)
 
     print("Cleaning configuration")
     for port in ports_sw1:
@@ -423,6 +434,8 @@ def test_lacp_agg_key_cross_links(topology):
     for lag in sw_lag_id:
         create_lag_active(sw1, lag)
         create_lag_active(sw2, lag)
+        set_lacp_rate_fast(sw1, lag)
+        set_lacp_rate_fast(sw2, lag)
 
     print("Associate interfaces with LAG in switch1")
     associate_interface_to_lag(sw1, p11, lag_id_1)
@@ -526,6 +539,9 @@ def test_lacp_different_aggregation_keys(topology):
     print("Create LAG in both switches")
     create_lag_active(sw1, sw1_lag_id)
     create_lag_active(sw2, sw2_lag_id)
+
+    set_lacp_rate_fast(sw1, sw1_lag_id)
+    set_lacp_rate_fast(sw2, sw2_lag_id)
 
     print("Associate interfaces 1,2 to the lag in both switches")
     associate_interface_to_lag(sw1, p11, sw1_lag_id)

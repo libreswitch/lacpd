@@ -25,7 +25,6 @@
 #
 ##########################################################################
 import time
-from lacp_lib import lag_no_routing
 from lacp_lib import create_lag_active
 from lacp_lib import create_lag_passive
 from lacp_lib import delete_lag
@@ -91,10 +90,10 @@ def test_lag_shutdown_by_default(topology):
     assert hs2 is not None
 
     print("Configure IP and bring UP in host 1")
-    hs1.libs.ip.interface('1', addr=h1_ip_address + mask, up=True)
+    hs1.libs.ip.interface('1', addr=(h1_ip_address + mask), up=True)
 
     print("Configure IP and bring UP in host 2")
-    hs2.libs.ip.interface('1', addr=h2_ip_address + mask, up=True)
+    hs2.libs.ip.interface('1', addr=(h2_ip_address + mask), up=True)
 
     p11 = sw1.ports['1']
     p12 = sw1.ports['2']
@@ -115,9 +114,6 @@ def test_lag_shutdown_by_default(topology):
     print("Create LAG in both switches")
     create_lag_active(sw1, sw1_lag_id)
     create_lag_active(sw2, sw2_lag_id)
-
-    lag_no_routing(sw1, sw1_lag_id)
-    lag_no_routing(sw2, sw2_lag_id)
 
     print("Configure vlan and switch interfaces")
     create_vlan(sw1, vlan)
@@ -199,10 +195,10 @@ def test_lag_shutdown_disabled(topology):
     assert hs2 is not None
 
     print("Configure IP and bring UP in host 1")
-    hs1.libs.ip.interface('1', addr=h1_ip_address + mask, up=True)
+    hs1.libs.ip.interface('1', addr=(h1_ip_address + mask), up=True)
 
     print("Configure IP and bring UP in host 2")
-    hs2.libs.ip.interface('1', addr=h2_ip_address + mask, up=True)
+    hs2.libs.ip.interface('1', addr=(h2_ip_address + mask), up=True)
 
     p11 = sw1.ports['1']
     p12 = sw1.ports['2']
@@ -223,8 +219,6 @@ def test_lag_shutdown_disabled(topology):
     print("Create LAG in both switches")
     create_lag_active(sw1, sw1_lag_id)
     create_lag_active(sw2, sw2_lag_id)
-    lag_no_routing(sw1, sw1_lag_id)
-    lag_no_routing(sw2, sw2_lag_id)
 
     print("Configure vlan and switch interfaces")
     create_vlan(sw1, vlan)
@@ -348,8 +342,6 @@ def test_lag_shutdown_enabled(topology):
     print("Create LAG in both switches")
     create_lag_passive(sw1, sw1_lag_id)
     create_lag_active(sw2, sw2_lag_id)
-    lag_no_routing(sw1, sw1_lag_id)
-    lag_no_routing(sw2, sw2_lag_id)
 
     print("Configure vlan and switch interfaces")
     create_vlan(sw1, vlan)

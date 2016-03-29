@@ -352,7 +352,7 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         for intf in sw_intf[2:4]:
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=60'])
 
-        time.sleep(30)
+        time.sleep(40)
         for intf in sw_intf_str[0:2]:
             verify_intf_lacp_status(s1,
                                     intf,
