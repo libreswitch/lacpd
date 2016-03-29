@@ -32,11 +32,13 @@ add_definitions(-DHAVE_CONFIG_H -DHAVE_SOCKLEN_T -DSYSCONFDIR=\"/etc/\")
 include(FindPkgConfig)
 pkg_check_modules(OVSCOMMON REQUIRED libovscommon)
 pkg_check_modules(OVSDB REQUIRED libovsdb)
+pkg_check_modules(OPSUTILS REQUIRED opsutils)
 pkg_check_modules(OPSCLI REQUIRED ops-cli)
 
 include_directories (${INCL_DIR}
                      ${PROJECT_SOURCE_DIR}
                      ${OVSCOMMON_INCLUDE_DIRS}
+                     ${OPSUTILS_INCLUDE_DIRS}
                      ${OPSCLI_INCLUDE_DIRS}
                      )
 
