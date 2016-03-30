@@ -332,6 +332,9 @@ class Test_vtysh_vrf:
 
     def teardown_class(cls):
 
+        # ops-lacpd is stopped so that it produces the gcov coverage data
+        Test_vtysh_vrf.test.net.switches[0].cmd("/bin/systemctl stop ops-lacpd")
+
         # Stop the Docker containers, and
         # mininet topology
 

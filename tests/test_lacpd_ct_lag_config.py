@@ -1,7 +1,6 @@
 #!/usr/bin/python
 #
-# Copyright (C) 2015 Hewlett-Packard Development Company, L.P.
-# All Rights Reserved.
+# (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -903,6 +902,17 @@ class Test_lacpd:
     def teardown_class(cls):
         Test_lacpd.test.net.switches[0].cmd("/bin/systemctl start pmd")
         Test_lacpd.test.net.switches[1].cmd("/bin/systemctl start pmd")
+
+        # ops-lacpd is stopped so that it produces the gcov coverage data
+        #
+        # Daemons from both switches will dump the coverage data to the
+        # same file but the data write is done on daemon exit only.
+        # The systemctl command waits until the process exits to return the
+        # prompt and the object.cmd() function waits for the command to return,
+        # therefore it is safe to stop the ops-lacpd daemons sequentially
+        # This ensures that data from both processes is captured.
+        Test_lacpd.test.net.switches[0].cmd("/bin/systemctl stop ops-lacpd")
+        Test_lacpd.test.net.switches[1].cmd("/bin/systemctl stop ops-lacpd")
 
         # Stop the Docker containers, and
         # mininet topology
