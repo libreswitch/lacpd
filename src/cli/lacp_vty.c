@@ -53,6 +53,7 @@
 #include "vrf-utils.h"
 
 #define IP_ADDRESS_LENGTH    18
+#define IPV6_ADDRESS_LENGTH  49
 
 VLOG_DEFINE_THIS_MODULE(vtysh_lacp_cli);
 extern struct ovsdb_idl *idl;
@@ -2225,33 +2226,34 @@ DEFUN_NO_FORM (cli_lag_shutdown,
  *               On Failure it returns CMD_OVSDB_FAILURE
  */
 static int
-lag_intf_config_ip (const char *if_name, const char *ip4)
+lag_intf_config_ip (const char *if_name, const char *ip4, bool secondary)
 {
     const struct ovsrec_port *port_row = NULL;
     struct ovsdb_idl_txn *status_txn = NULL;
     enum ovsdb_idl_txn_status status;
     bool port_found;
     int input_ip_subnet, port_ip_subnet;
+    char **secondary_ip4_addresses;
+    size_t i;
 
     if (!is_valid_ip_address(ip4)) {
-        vty_out(vty, "Invalid IP address. %s", VTY_NEWLINE);
-        return CMD_SUCCESS;
+      vty_out(vty, "Invalid IP address. %s", VTY_NEWLINE);
+      return CMD_SUCCESS;
     }
 
     input_ip_subnet = mask_ip4_subnet(ip4);
     OVSREC_PORT_FOR_EACH(port_row, idl) {
         if (port_row->ip4_address != NULL ) {
-            port_ip_subnet = mask_ip4_subnet(port_row->ip4_address);
+          port_ip_subnet = mask_ip4_subnet(port_row->ip4_address);
 
-            if (input_ip_subnet == port_ip_subnet) {
-                if (strncmp(port_row->name, if_name, strlen(if_name)) == 0) {
-                    break;
-                }
-                else {
-                    vty_out(vty, "Duplicate IP Address.%s",VTY_NEWLINE);
-                    return CMD_SUCCESS;
-                }
-            }
+          if (input_ip_subnet == port_ip_subnet) {
+            if (strncmp(port_row->name, if_name, strlen(if_name)) == 0) {
+              break;
+            } else {
+                vty_out(vty, "Duplicate IP Address.%s",VTY_NEWLINE);
+                return CMD_SUCCESS;
+              }
+          }
         }
         else if (port_row->ip4_address_secondary != NULL ) {
             port_ip_subnet = mask_ip4_subnet(*port_row->ip4_address_secondary);
@@ -2265,55 +2267,72 @@ lag_intf_config_ip (const char *if_name, const char *ip4)
 
     OVSREC_PORT_FOR_EACH(port_row, idl) {
         if (strncmp(port_row->name, if_name, strlen(if_name)) == 0) {
-            port_found = true;
-            break;
+          port_found = true;
+          break;
         }
     }
     if (!port_found) {
-        vty_out(vty, "Port %s not found.%s", if_name, VTY_NEWLINE);
-        return CMD_SUCCESS;
+      vty_out(vty, "Port %s not found.%s", if_name, VTY_NEWLINE);
+      return CMD_SUCCESS;
     }
 
     if (check_iface_in_bridge (if_name) && (VERIFY_VLAN_IFNAME (if_name) != 0)) {
-        vty_out (vty, "Interface %s is not L3.%s", if_name, VTY_NEWLINE);
-        VLOG_DBG ("%s Interface \"%s\" is not attached to any SUB_IF.%s"
+      vty_out (vty, "Interface %s is not L3.%s", if_name, VTY_NEWLINE);
+      VLOG_DBG ("%s Interface \"%s\" is not attached to any SUB_IF.%s"
                 "It is attached to default bridge",
                 __func__, if_name, VTY_NEWLINE);
-        return CMD_SUCCESS;
+      return CMD_SUCCESS;
     }
 
     status_txn = cli_do_config_start ();
     if (status_txn == NULL) {
-        VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
-        cli_do_config_abort (status_txn);
-        return CMD_OVSDB_FAILURE;
+      VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
+      cli_do_config_abort (status_txn);
+      return CMD_OVSDB_FAILURE;
     }
 
-    ovsrec_port_set_ip4_address(port_row, ip4);
+    if (!secondary) {
+      ovsrec_port_set_ip4_address(port_row, ip4);
+    } else {
+        /*
+         * Duplicate entries are taken care of set function.
+         * Refer to ovsdb_datum_sort_unique() in vswitch-idl.c
+         */
+        secondary_ip4_addresses = xmalloc(
+            IP_ADDRESS_LENGTH * (port_row->n_ip4_address_secondary + 1));
+        for (i = 0; i < port_row->n_ip4_address_secondary; i++) {
+          secondary_ip4_addresses[i] = port_row->ip4_address_secondary[i];
+        }
+        secondary_ip4_addresses[port_row->n_ip4_address_secondary] = (char *) ip4;
+        ovsrec_port_set_ip4_address_secondary(port_row, secondary_ip4_addresses,
+                                              port_row->n_ip4_address_secondary + 1);
+        free (secondary_ip4_addresses);
+    }
 
-    status = cli_do_config_finish (status_txn);
+    status = cli_do_config_finish(status_txn);
     if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
-        return CMD_SUCCESS;
+      return CMD_SUCCESS;
     }
     else {
-        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
-        return CMD_OVSDB_FAILURE;
+      VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+      return CMD_OVSDB_FAILURE;
     }
 }
 
 DEFUN (cli_lag_intf_config_ip4,
         cli_lag_intf_config_ip4_cmd,
-        "ip address A.B.C.D/M",
+        "ip address A.B.C.D/M {secondary}",
         IP_STR
         "Set IP address\n"
         "LAG Interface IP address\n")
 {
-    return lag_intf_config_ip((char*) vty->index, argv[0]);
+    return lag_intf_config_ip((char*) vty->index, argv[0],
+      (argv[1] != NULL) ? true : false);
 }
 
 DEFUN (cli_lag_intf_del_ip4,
         cli_lag_intf_del_ip4_cmd,
-        "no ip address A.B.C.D/M",
+        "no ip address A.B.C.D/M {secondary}",
         NO_STR
         IP_STR
         "Delete IP address\n"
@@ -2325,6 +2344,8 @@ DEFUN (cli_lag_intf_del_ip4,
     bool port_found = false;
     const char *if_name = (char*)vty->index;
     char ip4[IP_ADDRESS_LENGTH];
+    char **secondary_ip4_addresses;
+    size_t i, n;
 
     if (NULL != argv[0]) {
         sprintf(ip4,"%s",argv[0]);
@@ -2347,39 +2368,77 @@ DEFUN (cli_lag_intf_del_ip4,
                   __func__, if_name, VTY_NEWLINE);
         return CMD_SUCCESS;
     }
-
-    if ((NULL != ip4) && (NULL != port_row->ip4_address)
+    if (!(argv[1] != NULL)) {
+        if ((NULL != ip4) && (NULL != port_row->ip4_address)
             && (strncmp (port_row->ip4_address, ip4, IP_ADDRESS_LENGTH) != 0)) {
-        vty_out (vty, "IPv4 address %s not configured.%s", ip4, VTY_NEWLINE);
-        VLOG_DBG ("%s IPv4 address \"%s\" not configured on interface "
-                "\"%s\".%s", __func__, ip4, if_name, VTY_NEWLINE);
-        return CMD_SUCCESS;
+            vty_out (vty, "IPv4 address %s not configured.%s", ip4, VTY_NEWLINE);
+            VLOG_DBG ("%s IPv4 address \"%s\" not configured on interface "
+                      "\"%s\".%s", __func__, ip4, if_name, VTY_NEWLINE);
+            return CMD_SUCCESS;
+       }
+
+       status_txn = cli_do_config_start ();
+       if (status_txn == NULL) {
+           VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
+           cli_do_config_abort (status_txn);
+           return CMD_OVSDB_FAILURE;
+       }
+       ovsrec_port_set_ip4_address (port_row, NULL);
+    } else {
+          if (!port_row->n_ip4_address_secondary) {
+              vty_out (vty, "No secondary IP address configured on"
+                       " interface %s.%s",
+                       if_name, VTY_NEWLINE);
+              VLOG_DBG ("%s No secondary IP address configured on interface "
+                        "\"%s\".",
+                        __func__, if_name);
+              cli_do_config_abort (status_txn);
+              return CMD_SUCCESS;
+          }
+          bool ip4_address_match = false;
+          for (i = 0; i < port_row->n_ip4_address_secondary; i++) {
+              if (strncmp (ip4, port_row->ip4_address_secondary[i],
+                  strlen(port_row->ip4_address_secondary[i])) == 0) {
+                  ip4_address_match = true;
+                  break;
+              }
+          }
+
+          if (!ip4_address_match) {
+              vty_out(vty, "IP address %s not found.%s", ip4, VTY_NEWLINE);
+              VLOG_DBG("%s IP address \"%s\" not configured on interface lag"
+                       "\"%s\".",
+                       __func__, ip4, if_name);
+              cli_do_config_abort(status_txn);
+              return CMD_SUCCESS;
+          }
+          secondary_ip4_addresses = xmalloc(
+              IP_ADDRESS_LENGTH * (port_row->n_ip4_address_secondary - 1));
+          for (i = n = 0; i < port_row->n_ip4_address_secondary; i++) {
+              if (strncmp(ip4, port_row->ip4_address_secondary[i],
+                  strlen(port_row->ip4_address_secondary[i])) != 0) {
+                  secondary_ip4_addresses[n++] = port_row->ip4_address_secondary[i];
+              }
+          }
+          ovsrec_port_set_ip4_address_secondary(port_row,
+                                                secondary_ip4_addresses, n);
+          free (secondary_ip4_addresses);
     }
 
-    status_txn = cli_do_config_start ();
-    if (status_txn == NULL) {
-        VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
-        cli_do_config_abort (status_txn);
-        return CMD_OVSDB_FAILURE;
-    }
-
-    ovsrec_port_set_ip4_address (port_row, NULL);
-
-    status = cli_do_config_finish (status_txn);
+    status = cli_do_config_finish(status_txn);
 
     if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
         return CMD_SUCCESS;
+    } else {
+          VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+          return CMD_OVSDB_FAILURE;
     }
-    else {
-        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
-        return CMD_OVSDB_FAILURE;
-      }
     return CMD_SUCCESS;
 }
 
 DEFUN (cli_lag_intf_config_ipv6,
         cli_lag_intf_config_ipv6_cmd,
-        "ipv6 address X:X::X:X/M",
+        "ipv6 address X:X::X:X/M {secondary}",
         IPV6_STR
         "Set IPv6 address\n"
         "LAG Interface IPv6 address\n")
@@ -2390,6 +2449,8 @@ DEFUN (cli_lag_intf_config_ipv6,
     bool is_secondary = false;
     const char *if_name = (char*) vty->index;
     const char *ipv6 = argv[0];
+    char **secondary_ipv6_addresses;
+    size_t i;
 
     if (!is_valid_ip_address(argv[0])) {
         vty_out(vty, "Invalid IP address.%s", VTY_NEWLINE);
@@ -2403,38 +2464,56 @@ DEFUN (cli_lag_intf_config_ipv6,
         return CMD_OVSDB_FAILURE;
     }
 
-    port_row = port_check_and_add (if_name, true, true, status_txn);
+    port_row = port_check_and_add(if_name, true, true, status_txn);
     if (check_iface_in_bridge (if_name) && (VERIFY_VLAN_IFNAME (if_name) != 0)) {
-        vty_out (vty, "Interface %s is not L3.%s", if_name, VTY_NEWLINE);
-        cli_do_config_abort (status_txn);
+        vty_out(vty, "Interface %s is not L3.%s", if_name, VTY_NEWLINE);
+        cli_do_config_abort(status_txn);
         return CMD_SUCCESS;
     }
 
     if (check_ip_addr_duplicate(ipv6, port_row, true, &is_secondary)) {
-        vty_out (vty, "IPv6 address is already assigned to interface %s"
+        vty_out(vty, "IPv6 address is already assigned to interface %s"
                 " as %s.%s",
                 if_name, is_secondary ? "secondary" : "primary", VTY_NEWLINE);
-        VLOG_DBG ("%s Interface \"%s\" already has the IP address \"%s\""
-                " assigned to it as \"%s\".%s",
-                __func__, if_name, ipv6,
-                is_secondary ? "secondary" : "primary", VTY_NEWLINE);
-        cli_do_config_abort (status_txn);
+        VLOG_DBG("%s Interface \"%s\" already has the IP address \"%s\""
+                 " assigned to it as \"%s\".%s",
+                 __func__, if_name, ipv6,
+                 is_secondary ? "secondary" : "primary", VTY_NEWLINE);
+        cli_do_config_abort(status_txn);
         return CMD_SUCCESS;
     }
-    ovsrec_port_set_ip6_address (port_row, ipv6);
+    if (!(argv[1] != NULL)) {
+      ovsrec_port_set_ip6_address(port_row, ipv6);
+    } else {
+         /*
+          * Duplicate entries are taken care of of set function.
+          * Refer to ovsdb_datum_sort_unique() in vswitch-idl.c
+          */
+         secondary_ipv6_addresses = xmalloc(
+             IPV6_ADDRESS_LENGTH * (port_row->n_ip6_address_secondary + 1));
+         for (i = 0; i < port_row->n_ip6_address_secondary; i++) {
+           secondary_ipv6_addresses[i] = port_row->ip6_address_secondary[i];
+         }
+         secondary_ipv6_addresses[port_row->n_ip6_address_secondary] =
+             (char *) ipv6;
+         ovsrec_port_set_ip6_address_secondary (
+             port_row, secondary_ipv6_addresses,
+             port_row->n_ip6_address_secondary + 1);
+         free (secondary_ipv6_addresses);
+    }
 
     status = cli_do_config_finish (status_txn);
     if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
-        return CMD_SUCCESS;
+       return CMD_SUCCESS;
     } else {
-        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+        VLOG_ERR(OVSDB_TXN_COMMIT_ERROR);
         return CMD_OVSDB_FAILURE;
       }
 }
 
 DEFUN (cli_lag_intf_del_ipv6,
         cli_lag_intf_del_ipv6_cmd,
-        "no ipv6 address X:X::X:X/M",
+        "no ipv6 address X:X::X:X/M {secondary}",
         NO_STR
         IPV6_STR
         "Delete IPv6 address\n"
@@ -2445,6 +2524,8 @@ DEFUN (cli_lag_intf_del_ipv6,
     enum ovsdb_idl_txn_status status;
     const char *if_name = (char*) vty->index;
     const char *ipv6 = NULL;
+    char **secondary_ipv6_addresses;
+    size_t i, n;
 
     if (argv[0] != NULL) {
         ipv6 = argv[0];
@@ -2453,46 +2534,87 @@ DEFUN (cli_lag_intf_del_ipv6,
     status_txn = cli_do_config_start ();
 
     if (status_txn == NULL) {
-        VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
-        cli_do_config_abort (status_txn);
+        VLOG_ERR(OVSDB_TXN_CREATE_ERROR);
+        cli_do_config_abort(status_txn);
         return CMD_OVSDB_FAILURE;
     }
 
-    port_row = port_check_and_add (if_name, false, false, status_txn);
+    port_row = port_check_and_add(if_name, false, false, status_txn);
 
     if (!port_row) {
-        VLOG_DBG ("%s Interface \"%s\" does not have any port configuration.%s",
-                __func__, if_name, VTY_NEWLINE);
+        VLOG_DBG("%s Interface \"%s\" does not have any port configuration.%s",
+                 __func__, if_name, VTY_NEWLINE);
         cli_do_config_abort (status_txn);
         return CMD_SUCCESS;
     }
 
-    if (!port_row->ip6_address) {
-        vty_out (vty, "No IPv6 address configured on interface"
-                 " %s.%s", if_name, VTY_NEWLINE);
-        VLOG_DBG ("%s No IPv6 address configured on interface"
-                  " \"%s\".%s", __func__, if_name, VTY_NEWLINE);
-        cli_do_config_abort (status_txn);
-        return CMD_SUCCESS;
-    }
+    if (!(argv[1] != NULL)) {
+       if (!port_row->ip6_address) {
+           vty_out(vty, "No IPv6 address configured on interface"
+                   " %s.%s", if_name, VTY_NEWLINE);
+           VLOG_DBG("%s No IPv6 address configured on interface"
+                    " \"%s\".%s", __func__, if_name, VTY_NEWLINE);
+           cli_do_config_abort(status_txn);
+           return CMD_SUCCESS;
+       }
 
-    if ((NULL != ipv6) && (strncmp (port_row->ip6_address,
-        ipv6, strlen(ipv6)) != 0)) {
-        vty_out (vty, "IPv6 address %s not found.%s", ipv6, VTY_NEWLINE);
-        VLOG_DBG ("%s IPv6 address \"%s\" not configured on interface"
-                  " \"%s\".%s", __func__, ipv6, if_name, VTY_NEWLINE);
-        cli_do_config_abort (status_txn);
-        return CMD_SUCCESS;
+       if ((NULL != ipv6) && (strncmp(port_row->ip6_address,
+           ipv6, strlen(ipv6)) != 0)) {
+           vty_out(vty, "IPv6 address %s not found.%s", ipv6, VTY_NEWLINE);
+           VLOG_DBG("%s IPv6 address \"%s\" not configured on interface"
+                    " \"%s\".%s", __func__, ipv6, if_name, VTY_NEWLINE);
+           cli_do_config_abort (status_txn);
+           return CMD_SUCCESS;
+       }
+       ovsrec_port_set_ip6_address(port_row, NULL);
+    } else {
+          if (!port_row->n_ip6_address_secondary) {
+              vty_out(vty, "No secondary IPv6 address configured on interface"
+                      " lag%s.%s",
+                      if_name, VTY_NEWLINE);
+              VLOG_DBG("%s No secondary IPv6 address configured on interface"
+                       " lag\"%s\".",
+                       __func__, if_name);
+              cli_do_config_abort (status_txn);
+              return CMD_SUCCESS;
+          }
+          bool ipv6_address_match = false;
+          for (i = 0; i < port_row->n_ip6_address_secondary; i++) {
+              if (strncmp(ipv6, port_row->ip6_address_secondary[i],
+                  strlen(port_row->ip6_address_secondary[i])) == 0) {
+                  ipv6_address_match = true;
+                  break;
+              }
+          }
+
+          if (!ipv6_address_match) {
+              vty_out(vty, "IPv6 address %s not found.%s", ipv6, VTY_NEWLINE);
+              VLOG_DBG("%s IPv6 address \"%s\" not configured on interface"
+                       " \"%s\".",
+                       __func__, ipv6, if_name);
+              cli_do_config_abort(status_txn);
+              return CMD_SUCCESS;
+          }
+          secondary_ipv6_addresses = xmalloc(
+              IPV6_ADDRESS_LENGTH * (port_row->n_ip6_address_secondary - 1));
+          for (i = n = 0; i < port_row->n_ip6_address_secondary; i++) {
+              if (strncmp (ipv6, port_row->ip6_address_secondary[i],
+                  strlen(port_row->ip6_address_secondary[i])) != 0) {
+                  secondary_ipv6_addresses[n++] = port_row->ip6_address_secondary[i];
+              }
+            }
+            ovsrec_port_set_ip6_address_secondary(port_row,
+                                                  secondary_ipv6_addresses, n);
+            free(secondary_ipv6_addresses);
     }
-    ovsrec_port_set_ip6_address (port_row, NULL);
 
     status = cli_do_config_finish (status_txn);
 
     if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
         return CMD_SUCCESS;
     } else {
-        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
-        return CMD_OVSDB_FAILURE;
+          VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+          return CMD_OVSDB_FAILURE;
       }
 }
 

@@ -121,6 +121,7 @@ vtysh_intf_lag_context_clientcallback(void *p_private)
   const char *data = NULL;
   const struct ovsrec_port *port_row = NULL;
   char * hash_prefix = NULL;
+  int i;
 
   OVSREC_PORT_FOR_EACH(port_row, p_msg->idl)
   {
@@ -176,16 +177,24 @@ vtysh_intf_lag_context_clientcallback(void *p_private)
 
       data = NULL;
       data = port_row->ip4_address;
-      if(data)
-      {
-        vtysh_ovsdb_cli_print(p_msg, "%4sip address %s"," ",data);
+      if (data) {
+          vtysh_ovsdb_cli_print(p_msg, "%4sip address %s"," ",data);
+      }
+
+      for (i = 0; i < port_row->n_ip4_address_secondary; i++) {
+         vtysh_ovsdb_cli_print(p_msg, "%4sip address %s secondary"," ",
+                               port_row->ip4_address_secondary[i]);
       }
 
       data = NULL;
       data = port_row->ip6_address;
-      if(data)
-      {
-        vtysh_ovsdb_cli_print(p_msg, "%4sipv6 address %s", " ",data);
+      if (data) {
+          vtysh_ovsdb_cli_print(p_msg, "%4sipv6 address %s", " ",data);
+      }
+
+      for (i = 0; i < port_row->n_ip6_address_secondary; i++) {
+         vtysh_ovsdb_cli_print(p_msg, "%4sipv6 address %s secondary", " ",
+                               port_row->ip6_address_secondary[i]);
       }
     }
   }
