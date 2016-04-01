@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -61,6 +61,9 @@ VLOG_DEFINE_THIS_MODULE(lacpd);
 
 bool exiting = false;
 static unixctl_cb_func lacpd_unixctl_dump;
+static unixctl_cb_func lacpd_unixctl_getlacpinterfaces;
+static unixctl_cb_func lacpd_unixctl_getlacpcounters;
+static unixctl_cb_func lacpd_unixctl_getlacpstate;
 static unixctl_cb_func ops_lacpd_exit;
 
 extern int lacpd_shutdown;
@@ -87,6 +90,77 @@ lacpd_unixctl_dump(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 } /* lacpd_unixctl_dump */
+
+
+/**
+ * ovs-appctl interface callback function to dump the interfaces member of LAGs.
+ * This top level debug dump function calls other functions to dump lacpd
+ * daemon's internal data. The function arguments in argv are used to
+ * control the debug output.
+ *
+ * @param conn connection to ovs-appctl interface.
+ * @param argc number of arguments.
+ * @param argv array of arguments.
+ * @param OVS_UNUSED aux argument not used.
+ */
+static void
+lacpd_unixctl_getlacpinterfaces(struct unixctl_conn *conn, int argc,
+                                const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    lacpd_lag_ports_dump(&ds, argc, argv);
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+} /* lacpd_unixctl_getlacpinterfaces */
+
+/**
+ * ovs-appctl interface callback function to dump LACP counters of LACP_PDUs.
+ * This top level debug dump function calls other functions to dump lacpd
+ * daemon's internal data. The function arguments in argv are used to
+ * control the debug output.
+ *
+ * @param conn connection to ovs-appctl interface.
+ * @param argc number of arguments.
+ * @param argv array of arguments.
+ * @param OVS_UNUSED aux argument not used.
+ */
+static void
+lacpd_unixctl_getlacpcounters(struct unixctl_conn *conn, int argc,
+                              const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    lacpd_pdus_counters_dump(&ds, argc, argv);
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+} /* lacpd_unixctl_getlacpcounters */
+
+/**
+ * ovs-appctl interface callback function to dump LACP state.
+ * This top level debug dump function calls other functions to dump lacpd
+ * daemon's internal data. The function arguments in argv are used to
+ * control the debug output.
+ *
+ * @param conn connection to ovs-appctl interface.
+ * @param argc number of arguments.
+ * @param argv array of arguments.
+ * @param OVS_UNUSED aux argument not used.
+ */
+static void
+lacpd_unixctl_getlacpstate(struct unixctl_conn *conn, int argc,
+                           const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    lacpd_state_dump(&ds, argc, argv);
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+} /* lacpd_unixctl_getlacpstate */
+
 
 /**
  * lacpd daemon's timer handler function.
@@ -142,6 +216,12 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
 
     /* Register ovs-appctl commands for this daemon. */
     unixctl_command_register("lacpd/dump", "", 0, 2, lacpd_unixctl_dump, NULL);
+    unixctl_command_register("lacpd/getlacpinterfaces", "", 0, 1,
+                             lacpd_unixctl_getlacpinterfaces, NULL);
+    unixctl_command_register("lacpd/getlacpcounters", "", 0, 1,
+                             lacpd_unixctl_getlacpcounters, NULL);
+    unixctl_command_register("lacpd/getlacpstate", "", 0, 1,
+                             lacpd_unixctl_getlacpstate, NULL);
 
     /* Spawn off the OVSDB interface thread. */
     rc = pthread_create(&ovs_if_thread,

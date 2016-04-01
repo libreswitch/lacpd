@@ -50,6 +50,7 @@
 
 #include "lacp_ops_if.h"
 #include "lacp.h"
+#include "lacp_support.h"
 #include "mlacp_fproto.h"
 #include "mvlan_sport.h"
 
@@ -2769,16 +2770,16 @@ lacpd_interfaces_dump(struct ds *ds, int argc, const char *argv[])
     }
 } /* lacpd_interfaces_dump */
 
+/**
+ * @details
+ * Dumps the configured, eligible and participant interfaces of one lag
+ * specified in portp parameter.
+ */
 static void
-lacpd_port_dump(struct ds *ds, struct port_data *portp)
+lacpd_lag_member_interfaces_dump(struct ds *ds, struct port_data *portp)
 {
     struct shash_node *node;
 
-    ds_put_format(ds, "Port %s:\n", portp->name);
-    ds_put_format(ds, "    lacp                 : %s\n",
-                  lacp_mode_str(portp->lacp_mode));
-    ds_put_format(ds, "    lag_member_speed     : %d\n",
-                  portp->lag_member_speed);
     ds_put_format(ds, "    configured_members   :");
     SHASH_FOR_EACH(node, &portp->cfg_member_ifs) {
         struct iface_data *idp = shash_find_data(&all_interfaces, node->name);
@@ -2796,6 +2797,26 @@ lacpd_port_dump(struct ds *ds, struct port_data *portp)
         }
     }
     ds_put_format(ds, "\n");
+
+    ds_put_format(ds, "    participant_members  :");
+    SHASH_FOR_EACH(node, &portp->participant_ifs) {
+        struct iface_data *idp = shash_find_data(&all_interfaces, node->name);
+        if (idp) {
+            ds_put_format(ds, " %s", idp->name);
+        }
+    }
+    ds_put_format(ds, "\n");
+} /* lacpd_lag_member_interfaces_dump */
+
+static void
+lacpd_port_dump(struct ds *ds, struct port_data *portp)
+{
+    ds_put_format(ds, "Port %s:\n", portp->name);
+    ds_put_format(ds, "    lacp                 : %s\n",
+                  lacp_mode_str(portp->lacp_mode));
+    ds_put_format(ds, "    lag_member_speed     : %d\n",
+                  portp->lag_member_speed);
+    lacpd_lag_member_interfaces_dump(ds, portp);
     ds_put_format(ds, "    interface_count      : %d\n",
                   (int)shash_count(&portp->participant_ifs));
 } /* lacpd_port_dump */
@@ -2845,6 +2866,264 @@ lacpd_debug_dump(struct ds *ds, int argc, const char *argv[])
         lacpd_ports_dump(ds, 0, NULL);
     }
 } /* lacpd_debug_dump */
+
+/**
+ * @details
+ * Dumps debug data for all the LAG ports in the daemon or for an individual
+ * specified port.
+ */
+void
+lacpd_lag_ports_dump(struct ds *ds, int argc, const char *argv[])
+{
+    struct shash_node *sh_node;
+    struct port_data *portp = NULL;
+
+    if (argc > 1) { /* a lag is specified in argv */
+        portp = shash_find_data(&all_ports, argv[1]);
+        if (portp) {
+            if (!strncmp(portp->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH)) {
+                ds_put_format(ds, "Port %s:\n", portp->name);
+                lacpd_lag_member_interfaces_dump(ds, portp);
+            }
+        }
+    } else { /* dump all ports */
+        SHASH_FOR_EACH(sh_node, &all_ports) {
+            portp = sh_node->data;
+            if (portp) {
+                if (!strncmp(portp->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH)) {
+                    ds_put_format(ds, "Port %s:\n", portp->name);
+                    lacpd_lag_member_interfaces_dump(ds, portp);
+                }
+            }
+        }
+    }
+} /* lacpd_dump_lag_interfaces */
+
+
+/**
+ * @details
+ * The idea of this code is to make the match between two structs:
+ *   1. port_data which contains the port data of a LAG including the list of
+ *      all the configured interfaces.
+ *   2. lacp_per_port_variables_t which contains the pdu counters for each
+ *      interface member of a lag.
+ * We go through all the configured interfaces for the lag specified in the
+ * parameter portp, and we look for an interface in lacp_per_port_vars_tree
+ * with the same port number. Once we find it we print the pdu counters.
+*/
+void lacpd_dump_pdus_per_interface(struct ds *ds, struct port_data *portp)
+{
+    struct shash_node *node;
+    lacp_per_port_variables_t *lacp_port_variable;
+    int port_number_iface_data;
+    int port_number_lacp_port_variable;
+
+    ds_put_format(ds, " Configured interfaces:\n");
+
+    /*Go through all the configured interfaces*/
+    SHASH_FOR_EACH(node, &portp->cfg_member_ifs) {
+        struct iface_data *idp = shash_find_data(&all_interfaces, node->name);
+        if (idp) {
+            /* This port_id has this format "port_priority,port_id" and
+             * is formed using the function format_port_id defined in this file. */
+            const char* port_id_char = idp->actor.port_id;
+            int temp_port_priority;
+            sscanf(port_id_char, "%d,%d", &temp_port_priority, &port_number_iface_data);
+            /* The port_number is equal to the port_id minus one*/
+            port_number_iface_data--;
+
+            RENTRY();
+            /* Go through lacp_per_port_vars_tree looking for a
+             * lacp_per_port_variables_t corresponding to the port number we
+             * found before. */
+            lacp_port_variable = LACP_AVL_FIRST(lacp_per_port_vars_tree);
+            while (lacp_port_variable) {
+
+                port_number_lacp_port_variable = PM_HANDLE2PORT(lacp_port_variable->lport_handle);
+
+                if (port_number_lacp_port_variable == port_number_iface_data) {
+                    ds_put_format(ds, "  Interface: %s\n", idp->name);
+                    ds_put_format(ds, "    lacp_pdus_sent: %d\n",
+                                  lacp_port_variable->lacp_pdus_sent);
+                    ds_put_format(ds, "    marker_response_pdus_sent: %d\n",
+                                  lacp_port_variable->marker_response_pdus_sent);
+                    ds_put_format(ds, "    lacp_pdus_received: %d\n",
+                                  lacp_port_variable->lacp_pdus_received);
+                    ds_put_format(ds, "    marker_pdus_received: %d\n",
+                                  lacp_port_variable->marker_pdus_received);
+                    break;
+                }
+                lacp_port_variable = LACP_AVL_NEXT(lacp_port_variable->avlnode);
+            }
+            REXIT();
+        }
+    }
+}/* lacpd_dump_pdus_per_interface */
+
+/**
+ * @details
+ * Dumps the PDU counters for all the LAG ports in the daemon or for
+ * an individual specified port.
+ */
+void
+lacpd_pdus_counters_dump(struct ds *ds, int argc, const char *argv[])
+{
+    struct shash_node *sh_node;
+    struct port_data *portp = NULL;
+
+    if (argc > 1) { /* a lag is specified in argv */
+        portp = shash_find_data(&all_ports, argv[1]);
+        if (portp){
+            if (!strncmp(portp->name,
+                         LAG_PORT_NAME_PREFIX,
+                         LAG_PORT_NAME_PREFIX_LENGTH)
+                && portp->lacp_mode != PORT_LACP_OFF) {
+
+                ds_put_format(ds, "LAG %s:\n", portp->name);
+                lacpd_dump_pdus_per_interface(ds, portp);
+            }
+        }
+    } else { /* dump all ports */
+        SHASH_FOR_EACH(sh_node, &all_ports) {
+            portp = sh_node->data;
+            if (portp) {
+                if (!strncmp(portp->name,
+                             LAG_PORT_NAME_PREFIX,
+                             LAG_PORT_NAME_PREFIX_LENGTH)
+                    && portp->lacp_mode != PORT_LACP_OFF) {
+
+                    ds_put_format(ds, "LAG %s:\n", portp->name);
+                    lacpd_dump_pdus_per_interface(ds, portp);
+                }
+            }
+        }
+    }
+}/* lacpd_pdus_counters_dump */
+
+/**
+ * @details
+ * The idea of this code is to make the match between two structs:
+ *   1. port_data which contains the port data of a LAG including the list of
+ *      all the configured interfaces.
+ *   2. lacp_per_port_variables_t which contains lacpd state machine control
+ *      variables and the state parameters for each interface member of a lag.
+ * We go through all the configured interfaces for the lag specified in
+ * the parameter portp, and we look for an interface in
+ * lacp_per_port_vars_tree with the same port number. Once we find it we print
+ * the lacpd state.
+*/
+void lacpd_dump_state_per_interface(struct ds *ds, struct port_data *portp)
+{
+    struct shash_node *node;
+    lacp_per_port_variables_t *lacp_port_variable;
+    struct iface_data *idp;
+    const char* port_id_char;
+    int port_number_iface_data;
+    int port_number_lacp_port_variable;
+    int temp_port_priority;
+
+    ds_put_format(ds, " Configured interfaces:\n");
+
+    /* Go through all the configured interfaces */
+    SHASH_FOR_EACH(node, &portp->cfg_member_ifs) {
+        idp = shash_find_data(&all_interfaces, node->name);
+        if (idp) {
+            /* This port_id has this format "port_priority,port_id" and
+             * is formed using the function format_port_id defined in this file. */
+            port_id_char = idp->actor.port_id;
+            sscanf(port_id_char, "%d,%d", &temp_port_priority, &port_number_iface_data);
+            /* The port_number is equal to the port_id minus one*/
+            port_number_iface_data--;
+
+            RENTRY();
+            /* Go through lacp_per_port_vars_tree looking for a lacp_per_port_variables_t
+             * corresponding to the port number we found before. */
+            lacp_port_variable = LACP_AVL_FIRST(lacp_per_port_vars_tree);
+            while (lacp_port_variable) {
+
+                port_number_lacp_port_variable = PM_HANDLE2PORT(lacp_port_variable->lport_handle);
+
+                if (port_number_lacp_port_variable == port_number_iface_data) {
+                    ds_put_format(ds, "  Interface: %s\n", idp->name);
+
+                    ds_put_format(ds, "    actor_oper_port_state \n");
+                    ds_put_format(ds, "       lacp_activity:%d time_out:%d aggregation:%d sync:%d collecting:%d distributing:%d defaulted:%d expired:%d\n",
+                                    lacp_port_variable->actor_oper_port_state.lacp_activity,
+                                    lacp_port_variable->actor_oper_port_state.lacp_timeout,
+                                    lacp_port_variable->actor_oper_port_state.aggregation,
+                                    lacp_port_variable->actor_oper_port_state.synchronization,
+                                    lacp_port_variable->actor_oper_port_state.collecting,
+                                    lacp_port_variable->actor_oper_port_state.distributing,
+                                    lacp_port_variable->actor_oper_port_state.defaulted,
+                                    lacp_port_variable->actor_oper_port_state.expired);
+                    ds_put_format(ds, "    partner_oper_port_state \n");
+                    ds_put_format(ds, "       lacp_activity:%d time_out:%d aggregation:%d sync:%d collecting:%d distributing:%d defaulted:%d expired:%d\n",
+                                    lacp_port_variable->partner_oper_port_state.lacp_activity,
+                                    lacp_port_variable->partner_oper_port_state.lacp_timeout,
+                                    lacp_port_variable->partner_oper_port_state.aggregation,
+                                    lacp_port_variable->partner_oper_port_state.synchronization,
+                                    lacp_port_variable->partner_oper_port_state.collecting,
+                                    lacp_port_variable->partner_oper_port_state.distributing,
+                                    lacp_port_variable->partner_oper_port_state.defaulted,
+                                    lacp_port_variable->partner_oper_port_state.expired);
+                    ds_put_format(ds, "    lacp_control\n");
+                    ds_put_format(ds, "       begin:%d actor_churn:%d partner_churn:%d ready_n:%d selected:%d port_moved:%d ntt:%d port_enabled:%d\n",
+                                    lacp_port_variable->lacp_control.begin,
+                                    lacp_port_variable->lacp_control.actor_churn,
+                                    lacp_port_variable->lacp_control.partner_churn,
+                                    lacp_port_variable->lacp_control.ready_n,
+                                    lacp_port_variable->lacp_control.selected,
+                                    lacp_port_variable->lacp_control.port_moved,
+                                    lacp_port_variable->lacp_control.ntt,
+                                    lacp_port_variable->lacp_control.port_enabled);
+                    break;
+                }
+                lacp_port_variable = LACP_AVL_NEXT(lacp_port_variable->avlnode);
+            }
+            REXIT();
+        }
+    }
+}/* lacpd_dump_state_per_interface */
+
+/**
+ * @details
+ * Dumps the LACP state machine status for all the LAG ports in the daemon or for
+ * an individual specified port.
+ */
+void
+lacpd_state_dump(struct ds *ds, int argc, const char *argv[])
+{
+    struct shash_node *sh_node;
+    struct port_data *portp = NULL;
+
+    if (argc > 1) { /* a lag is specified in argv */
+        portp = shash_find_data(&all_ports, argv[1]);
+        if (portp) {
+            if (!strncmp(portp->name,
+                         LAG_PORT_NAME_PREFIX,
+                         LAG_PORT_NAME_PREFIX_LENGTH)
+                && portp->lacp_mode != PORT_LACP_OFF) {
+
+                ds_put_format(ds, "LAG %s:\n", portp->name);
+                lacpd_dump_state_per_interface(ds, portp);
+            }
+        }
+    } else { /* dump all ports */
+        SHASH_FOR_EACH(sh_node, &all_ports) {
+            portp = sh_node->data;
+            if (portp) {
+                if (!strncmp(portp->name,
+                             LAG_PORT_NAME_PREFIX,
+                             LAG_PORT_NAME_PREFIX_LENGTH)
+                    && portp->lacp_mode != PORT_LACP_OFF) {
+
+                    ds_put_format(ds, "LAG %s:\n", portp->name);
+                    lacpd_dump_state_per_interface(ds, portp);
+                }
+            }
+        }
+    }
+}/* lacpd_state_dump */
 
 /**********************************************************************/
 /*                        OVS Main Thread                             */

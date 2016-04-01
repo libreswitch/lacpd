@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -235,6 +235,41 @@ extern void lacpd_run(void);
  *
  *****************************************************************************/
 extern void lacpd_debug_dump(struct ds *ds, int argc, const char *argv[]);
+
+/**************************************************************************//**
+ * Debug function to dump the interfaces member of LAGs.
+ * Called by lacpd's appctl interface.
+ *
+ * @param[in,out] ds pointer to struct ds that holds the debug output.
+ * @param[in] argc number of arguments passed to this function.
+ * @param[in] argv variable argument list.
+ *
+ *****************************************************************************/
+extern void lacpd_lag_ports_dump(struct ds *ds, int argc, const char *argv[]);
+
+/**************************************************************************//**
+ * Debug function to dump the PDU counters for all the LAG ports in the daemon or for
+ * an individual specified port.
+ * Called by lacpd's appctl interface.
+ *
+ * @param[in,out] ds pointer to struct ds that holds the debug output.
+ * @param[in] argc number of arguments passed to this function.
+ * @param[in] argv variable argument list.
+ *
+ *****************************************************************************/
+extern void lacpd_pdus_counters_dump(struct ds *ds, int argc, const char *argv[]);
+
+/**************************************************************************//**
+ * Debug function to dump the LACP state machine status for all the LAG ports in
+ * the daemon or for an individual specified port.
+ * Called by lacpd's appctl interface.
+ *
+ * @param[in,out] ds pointer to struct ds that holds the debug output.
+ * @param[in] argc number of arguments passed to this function.
+ * @param[in] argv variable argument list.
+ *
+ *****************************************************************************/
+extern void lacpd_state_dump(struct ds *ds, int argc, const char *argv[]);
 
 /**************************************************************************//**
  * lacpd daemon's main OVS interface function.
