@@ -89,6 +89,13 @@ def test_l3_dynamic_lag_ping_case_1(topology):
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
+    print("Wait for interfaces to turn on")
+    time.sleep(40)
+
+    print("Verify all interface are up")
+    validate_turn_on_interfaces(sw1, ports_sw1)
+    validate_turn_on_interfaces(sw2, ports_sw2)
+
     print("Create LAG in both switches")
     create_lag(sw1, sw1_lag_id, 'active')
     create_lag(sw2, sw2_lag_id, 'active')
@@ -102,11 +109,7 @@ def test_l3_dynamic_lag_ping_case_1(topology):
     associate_interface_to_lag(sw2, p23, sw2_lag_id)
 
     print("Waiting for LAG negotations between switches")
-    time.sleep(30)
-
-    print("Verify all interface are up")
-    validate_turn_on_interfaces(sw1, ports_sw1)
-    validate_turn_on_interfaces(sw2, ports_sw2)
+    time.sleep(100)
 
     print("Get information for LAG in interface 1 with both switches")
     map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(p11)

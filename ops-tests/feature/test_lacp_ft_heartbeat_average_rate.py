@@ -116,7 +116,7 @@ def test_lacpd_heartbeat(topology):
             turn_on_interface(curr_ops, curr_p)
 
     print('Wait for interfaces become up')
-    sleep(10)
+    sleep(60)
     for curr_ops in [ops1, ops2]:
         create_vlan(curr_ops, test_vlan)
         validate_turn_on_interfaces(curr_ops,
@@ -150,7 +150,7 @@ def test_lacpd_heartbeat(topology):
                           up=True)
 
     print('Sleep few seconds to wait everything is up')
-    sleep(30)
+    sleep(60)
 
     check_connectivity_between_hosts(hs1, hs1_addr, hs2, hs2_addr,
                                      5, True)
@@ -162,7 +162,7 @@ def test_lacpd_heartbeat(topology):
                       hb_info[lag_rate_mode]['packets_per_second'])
         # Min percentage according heartbeats
         hb_info[lag_rate_mode]['min_percent'] = (heartbeats - 1) / heartbeats
-        hb_info[lag_rate_mode]['max_percent'] += 2 /\
+        hb_info[lag_rate_mode]['max_percent'] += 3 /\
             hb_info[lag_rate_mode]['wait_time']
         # Setting values for slow|fast
         print('Test LAG with {lag_rate_mode} rate'.format(**locals()))
@@ -203,4 +203,5 @@ def test_lacpd_heartbeat(topology):
 
             assert packets_avg >= hb_info[lag_rate_mode]['min_percent']\
                 and packets_avg <= hb_info[lag_rate_mode]['max_percent'],\
-                'Packet average is out of bounds'
+                'Packet average for {lag_rate_mode} mode'\
+                ' is out of bounds'.format(**locals())

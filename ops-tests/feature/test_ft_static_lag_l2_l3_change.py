@@ -126,7 +126,7 @@ def test_l2_l3_switch_case_1(topology):
         turn_on_interface(sw2, port)
 
     print("Waiting some time for the interfaces to be up")
-    sleep(15)
+    sleep(60)
 
     print("Verify all interface are up")
     validate_turn_on_interfaces(sw1, ports_sw1)
@@ -157,7 +157,7 @@ def test_l2_l3_switch_case_1(topology):
     associate_vlan_to_l2_interface(sw2, vlan_identifier, p21)
 
     print("Waiting some time for change to apply")
-    sleep(5)
+    sleep(20)
     # Ping between workstations should succeed
     check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
                                      number_pings, True)
@@ -166,6 +166,7 @@ def test_l2_l3_switch_case_1(topology):
     assign_ip_to_lag(sw1, sw1_lag_id, sw1_lag_ip_address, ip_address_mask)
     assign_ip_to_lag(sw2, sw2_lag_id, sw2_lag_ip_address, ip_address_mask)
 
+    sleep(20)
     # Ping between workstations should fail
     check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
                                      number_pings, False)
@@ -179,7 +180,7 @@ def test_l2_l3_switch_case_1(topology):
     associate_vlan_to_lag(sw2, vlan_identifier, sw2_lag_id)
 
     print("Waiting some time for change to apply")
-    sleep(5)
+    sleep(20)
     # Ping between workstations should succeed
     check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
                                      number_pings, True)

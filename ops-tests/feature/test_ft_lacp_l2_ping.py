@@ -127,7 +127,7 @@ def test_l2_dynamic_lag_ping_case_1(topology):
         turn_on_interface(sw2, port)
 
     print("Waiting some time for the interfaces to be up")
-    sleep(15)
+    sleep(60)
 
     print("Verify all interface are up")
     validate_turn_on_interfaces(sw1, ports_sw1)
@@ -152,7 +152,7 @@ def test_l2_dynamic_lag_ping_case_1(topology):
     associate_interface_to_lag(sw2, p23, sw2_lag_id)
 
     print("Waiting for LAG negotations between switches")
-    sleep(30)
+    sleep(100)
     print("Get information for LAG in interface 2 with both switches")
     map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(p12)
     map_lacp_sw2 = sw2.libs.vtysh.show_lacp_interface(p22)
@@ -176,6 +176,8 @@ def test_l2_dynamic_lag_ping_case_1(topology):
     associate_vlan_to_l2_interface(sw1, vlan_identifier, p11)
     associate_vlan_to_l2_interface(sw2, vlan_identifier, p21)
 
+    print("Wait for vlan configuration")
+    sleep(20)
     print("Ping workstation 2 from workstation 1 and viceversa")
     check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
                                      number_pings, True)

@@ -334,10 +334,12 @@ def create_vlan(sw, vlan_id):
     with sw.libs.vtysh.ConfigVlan(vlan_id) as ctx:
         ctx.no_shutdown()
 
+
 def validate_vlan_state(sw, vlan_id, state):
     output = sw.libs.vtysh.show_vlan(vlan_id)
     assert output[vlan_id]['status'] == state,\
         'Vlan is not in ' + state + ' state'
+
 
 def delete_vlan(sw, vlan):
     with sw.libs.vtysh.Configure() as ctx:
@@ -385,7 +387,7 @@ def check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
         assert ping['transmitted'] == ping['received'] == ping_num,\
             'Ping between ' + s1_ip + ' and ' + s2_ip + ' failed'
     else:
-        assert ping['received'] == 0,\
+        assert len(ping.keys()) == 0, \
             'Ping between ' + s1_ip + ' and ' + s2_ip + ' success'
 
     ping = s2.libs.vtysh.ping_repetitions(s1_ip, ping_num)
@@ -393,7 +395,7 @@ def check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
         assert ping['transmitted'] == ping['received'] == ping_num,\
             'Ping between ' + s2_ip + ' and ' + s1_ip + ' failed'
     else:
-        assert ping['received'] == 0,\
+        assert len(ping.keys()) == 0,\
             'Ping between ' + s2_ip + ' and ' + s1_ip + ' success'
 
 
@@ -438,12 +440,14 @@ def assign_ip_to_lag(sw, lag_id, ip_address, ip_address_mask):
         ctx.routing()
         ctx.ip_address(ip_address_complete)
 
+
 def config_lacp_rate(sw, lag_id, lacp_rate_fast=False):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         if lacp_rate_fast:
             ctx.lacp_rate_fast()
         else:
             ctx.no_lacp_rate_fast()
+
 
 def set_lacp_rate_fast(sw, lag_id):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:

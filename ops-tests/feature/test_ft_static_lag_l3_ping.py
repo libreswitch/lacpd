@@ -96,7 +96,7 @@ def test_l3_static_lag_ping_case_1(topology):
     associate_interface_to_lag(sw2, p23, sw2_lag_id)
 
     print("Waiting some time for the interfaces to be up")
-    time.sleep(20)
+    time.sleep(40)
 
     print("Verify all interface are up")
     validate_turn_on_interfaces(sw1, ports_sw1)

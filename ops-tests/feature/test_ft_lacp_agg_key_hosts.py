@@ -41,6 +41,7 @@ from lacp_lib import validate_lag_state_out_of_sync
 from lacp_lib import LOCAL_STATE
 from lacp_lib import validate_turn_on_interfaces
 from lacp_lib import set_lacp_rate_fast
+from lacp_lib import validate_vlan_state
 
 TOPOLOGY = """
 # +-------+              +-------+
@@ -133,19 +134,19 @@ def test_lacp_aggregation_key_with_hosts(topology):
     ports_sw1 = [p11, p12, p13h]
     for port in ports_sw1:
         turn_on_interface(sw1, port)
-    time.sleep(5)
-    validate_turn_on_interfaces(sw1, ports_sw1)
 
     ports_sw2 = [p21, p23h]
     for port in ports_sw2:
         turn_on_interface(sw2, port)
-    time.sleep(5)
-    validate_turn_on_interfaces(sw2, ports_sw2)
 
     ports_sw3 = [p31, p32, p33, p34h]
     for port in ports_sw3:
         turn_on_interface(sw3, port)
-    time.sleep(5)
+
+    print("Waiting for interface to turn on")
+    time.sleep(60)
+    validate_turn_on_interfaces(sw1, ports_sw1)
+    validate_turn_on_interfaces(sw2, ports_sw2)
     validate_turn_on_interfaces(sw3, ports_sw3)
 
     print("Create LAG in all switches")
@@ -196,6 +197,11 @@ def test_lacp_aggregation_key_with_hosts(topology):
     associate_vlan_to_l2_interface(sw1, sw1_vlan, p13h)
     associate_vlan_to_l2_interface(sw3, sw3_sw1_vlan, p34h)
 
+    validate_vlan_state(sw1, sw1_vlan, "up")
+    validate_vlan_state(sw3, sw3_sw1_vlan, "up")
+
+    print("Wait for interface and vlan configuration")
+    time.sleep(30)
     print("Check connectivity between Host 1 and 3")
     check_connectivity_between_hosts(hs1, hs1_ip, hs3, hs3_ip_1, 5, True)
 
@@ -203,10 +209,15 @@ def test_lacp_aggregation_key_with_hosts(topology):
     print("Configure connection between Host 2 and 3")
     associate_vlan_to_l2_interface(sw2, sw2_vlan, p23h)
     associate_vlan_to_l2_interface(sw3, sw3_sw2_vlan, p34h)
+
+    validate_vlan_state(sw2, sw2_vlan, "up")
+    validate_vlan_state(sw3, sw3_sw2_vlan, "up")
+
     hs3.libs.ip.remove_ip('1', addr=(hs3_ip_1 + mask))
     hs3.libs.ip.interface('1', addr=(hs3_ip_2 + mask), up=True)
 
-    time.sleep(5)
+    print("Waiting for ip configuration to get valid")
+    time.sleep(20)
     print("Check connectivty between Host 2 and 3")
     check_connectivity_between_hosts(hs2, hs2_ip, hs3, hs3_ip_2, 5, True)
 
@@ -214,8 +225,9 @@ def test_lacp_aggregation_key_with_hosts(topology):
     # This should get the interface Out of Sync because that
     # interface is linked with Switch 1
     associate_interface_to_lag(sw3, p32, sw3_lag_id_2)
-    # validate_interface_not_in_lag(sw2, p32, sw3_lag_id)
+    # validate_interface_not_in_lag(sw3, p32, sw3_lag_id)
 
+    print("Wait for negotiation with new interface")
     time.sleep(5)
 
     map_lacp_p11 = sw1.libs.vtysh.show_lacp_interface(p11)
@@ -234,15 +246,20 @@ def test_lacp_aggregation_key_with_hosts(topology):
     validate_lag_state_sync(map_lacp_p31, LOCAL_STATE)
     validate_lag_state_sync(map_lacp_p33, LOCAL_STATE)
 
+    print("Wait for configuration with hosts connectivity")
+    time.sleep(20)
     print("Check connectivity between Host 2 and 3 again")
-    # The validation are being remove because there is a known issue
-    # for this problem, currently under investigation (Taiga defect 651)
-    # check_connectivity_between_hosts(hs2, hs2_ip, hs3, hs3_ip_2)
+    check_connectivity_between_hosts(hs2, hs2_ip, hs3, hs3_ip_2)
 
     print("Change configuration to connect Host 1 and 3 again")
     associate_vlan_to_l2_interface(sw3, sw3_sw1_vlan, p34h)
+
+    validate_vlan_state(sw3, sw3_sw1_vlan, "up")
+
     hs3.libs.ip.remove_ip('1', addr=(hs3_ip_2 + mask))
     hs3.libs.ip.interface('1', addr=(hs3_ip_1 + mask), up=True)
 
+    print("Wait for new IP configuration get active")
+    time.sleep(20)
     print("Check connectivity between Host 1 and Host 3")
     check_connectivity_between_hosts(hs1, hs1_ip, hs3, hs3_ip_1)
