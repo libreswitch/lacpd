@@ -48,6 +48,7 @@
 #include <command-line.h>
 #include <vswitch-idl.h>
 #include <openvswitch/vlog.h>
+#include  <diag_dump.h>
 
 #include <pm_cmn.h>
 #include <lacp_cmn.h>
@@ -58,6 +59,8 @@
 #include "lacp_ops_if.h"
 
 VLOG_DEFINE_THIS_MODULE(lacpd);
+
+#define DIAGNOSTIC_BUFFER_LEN 16000
 
 bool exiting = false;
 static unixctl_cb_func lacpd_unixctl_dump;
@@ -163,6 +166,49 @@ lacpd_unixctl_getlacpstate(struct unixctl_conn *conn, int argc,
 
 
 /**
+ * callback handler function for diagnostic dump basic
+ * it allocates memory as per requirement and populates data.
+ * INIT_DIAG_DUMP_BASIC will free allocated memory.
+ *
+ * @param feature name of the feature.
+ * @param buf pointer to the buffer.
+ */
+static void lacpd_diag_dump_basic_cb(const char *feature , char **buf)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    if (!buf)
+        return;
+    *buf =  xcalloc(1,DIAGNOSTIC_BUFFER_LEN);
+    if (*buf) {
+        /* populate basic diagnostic data to buffer  */
+        ds_put_format(&ds, "System Ports: \n");
+        const char* argv[] = {"", "port"};
+        lacpd_debug_dump(&ds, 2, argv);
+        sprintf(*buf, "%s", ds_cstr(&ds));
+
+        ds_put_format(&ds, "\nLAG interfaces: \n");
+        lacpd_lag_ports_dump(&ds, 0, NULL);
+        sprintf(*buf, "%s", ds_cstr(&ds));
+
+        ds_put_format(&ds, "\nLACP PDUs counters: \n");
+        lacpd_pdus_counters_dump(&ds, 0, NULL);
+        sprintf(*buf, "%s", ds_cstr(&ds));
+
+        ds_put_format(&ds, "\nLACP state: \n");
+
+        lacpd_state_dump(&ds, 0, NULL);
+        sprintf(*buf, "%s", ds_cstr(&ds));
+        VLOG_INFO("basic diag-dump data populated for feature %s",feature);
+    } else{
+        VLOG_ERR("Memory allocation failed for feature %s , %d bytes",
+                 feature , DIAGNOSTIC_BUFFER_LEN);
+    }
+    return ;
+} /* lacpd_diag_dump_basic_cb */
+
+
+/**
  * lacpd daemon's timer handler function.
  */
 static void
@@ -213,6 +259,9 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
 
     /* Initialize IDL through a new connection to the dB. */
     lacpd_ovsdb_if_init(db_path);
+
+    /* Register diagnostic callback function */
+    INIT_DIAG_DUMP_BASIC(lacpd_diag_dump_basic_cb);
 
     /* Register ovs-appctl commands for this daemon. */
     unixctl_command_register("lacpd/dump", "", 0, 2, lacpd_unixctl_dump, NULL);

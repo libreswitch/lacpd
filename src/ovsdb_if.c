@@ -1417,12 +1417,12 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
             if (idp) {
                 VLOG_DBG("Found a deleted interface %s", node->name);
 
+                set_interface_lag_eligibility(portp, idp, false);
                 /* If this interface was added to another port in this same cycle
                  * of SHASH_FOR_EACH(sh_node, &all_ports), then we don't have to
                  * delete it.*/
                 if (shash_find_data(&interfaces_recently_added, node->name) == NULL) {
                     db_clear_interface(idp);
-                    set_interface_lag_eligibility(portp, idp, false);
                     idp->port_datap = NULL;
                     clear_port_overrides(idp);
                     rc++;

@@ -88,6 +88,37 @@
   - [Test Result Criteria](#test-result-criteria)
     - [Test Pass Criteria](#test-pass-criteria)
     - [Test Fail Criteria](#test-fail-criteria)
+- [LAG ovs-appctl command getlacpinterfaces format](#lag-ovs-appctl-command-getlacpinterfaces-format)
+  - [Objective](#objective)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+    - [Topology Diagram](#topology-diagram)
+  - [Test Setup](#test-setup)
+  - [Description](#description)
+  - [Test Result Criteria](#test-result-criteria)
+    - [Test Pass Criteria](#test-pass-criteria)
+    - [Test Fail Criteria](#test-fail-criteria)
+- [LACP ovs-appctl command getlacpcounters format](#lacp-ovs-appctl-command-getlacpcounters-format)
+  - [Objective](#objective)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+    - [Topology Diagram](#topology-diagram)
+  - [Test Setup](#test-setup)
+  - [Description](#description)
+  - [Test Result Criteria](#test-result-criteria)
+    - [Test Pass Criteria](#test-pass-criteria)
+    - [Test Fail Criteria](#test-fail-criteria)
+- [LACP ovs-appctl command getlacpstate format](#lacp-ovs-appctl-command-getlacpinterfaces-format)
+  - [Objective](#objective)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+    - [Topology Diagram](#topology-diagram)
+  - [Test Setup](#test-setup)
+  - [Description](#description)
+  - [Test Result Criteria](#test-result-criteria)
+    - [Test Pass Criteria](#test-pass-criteria)
+    - [Test Fail Criteria](#test-fail-criteria)
+
 
 ## Static LAG Membership
 ### Objective
@@ -578,5 +609,185 @@ Verify that configured LAG to either disable all ports or to fallback to active/
 ### Test Result Criteria
 #### Test Pass Criteria
 * Interfaces 1 and 2 in both switches changing state from up to down or down to up according with fallback and switch lacp mode.
+#### Test Fail Criteria
+One or more verifications fail.
+
+
+# LAG ovs-appctl command getlacpinterfaces format
+### Objective
+Verify correct output format of ovs-appctl command getlacpinterfaces <lag_name>.
+### Requirements
+ - Virtual Mininet Test Setup
+ - Script is in ops-tests/component/test_lag_ct_appctl_getlacpinterfaces.py
+
+### Setup
+#### Topology Diagram
+```
++------------+
+|            |
+|     s1     |
+|            |
++-1--2--3--4-+
+  |  |  |  |
+  |  |  |  |
+  |  |  |  |
+  |  |  |  |
++-1--2--3--4-+
+|            |
+|     s2     |
+|            |
++------------+
+```
+
+### Description
+1. Create 1 dynamic LAG in switch 1 and 2 with interfaces 1 and 2.
+2. Create 1 static LAG in switch 1 and 2 with interfaces 3 and 4.
+3. Execute ovs-appctl command getlacpinterfaces without any LAG.
+4. Execute ovs-appctl command getlacpinterfaces with existent LAG.
+5. Execute ovs-appctl command getlacpinterfaces with non existent LAG.
+
+### Test Result Criteria
+#### Test Pass Criteria
+* Output of step 3 has the following format:
+```
+Port lag_name: <static_lag_name>
+	configured_members   :
+	eligible_members     :
+	participant_members  :
+Port lag_name: <dynamic_lag_name>
+	configured_members   :
+	eligible_members     :
+	participant_members  :
+```
+* Output of step 4 has the following format:
+```
+Port lag_name: <specified_lag_name>
+	configured_members   :
+	eligible_members     :
+	participant_members  :
+```
+* Output of step 5 is empty.
+#### Test Fail Criteria
+One or more verifications fail.
+
+
+# LACP ovs-appctl command getlacpcounters format
+### Objective
+Verify correct output format of ovs-appctl command getlacpcounters <lag_name>.
+### Requirements
+ - Virtual Mininet Test Setup
+ - Script is in ops-tests/component/test_lag_ct_appctl_getlacpcounters.py
+
+### Setup
+#### Topology Diagram
+```
++------------+
+|            |
+|     s1     |
+|            |
++-1--2--3--4-+
+  |  |  |  |
+  |  |  |  |
+  |  |  |  |
+  |  |  |  |
++-1--2--3--4-+
+|            |
+|     s2     |
+|            |
++------------+
+```
+
+### Description
+1. Create 1 dynamic LAG in switch 1 and 2 with interfaces 1 and 2.
+2. Create 1 static LAG in switch 1 and 2 with interfaces 3 and 4.
+3. Execute ovs-appctl command getlacpcounters without any LAG.
+4. Execute ovs-appctl command getlacpcounters with dynamic LAG.
+5. Execute ovs-appctl command getlacpcounters with static LAG.
+6. Execute ovs-appctl command getlacpcounters with non existent LAG.
+
+### Test Result Criteria
+#### Test Pass Criteria
+* Output of step 3 and 4 has the following format:
+```
+LAG <dynamic_lag_name>:
+   Configured interfaces:
+      Interface: 1
+        lacp_pdus_sent: 0
+        marker_response_pdus_sent: 0
+        lacp_pdus_received: 0
+        marker_pdus_received: 0
+      Interface: 2
+        lacp_pdus_sent: 0
+        marker_response_pdus_sent: 0
+        lacp_pdus_received: 0
+        marker_pdus_received: 0
+```
+* Output of step 5 and 6 is empty.
+#### Test Fail Criteria
+One or more verifications fail.
+
+
+# LACP ovs-appctl command getlacpstate format
+### Objective
+Verify correct output format of ovs-appctl command getlacpstate <lag_name>.
+### Requirements
+ - Virtual Mininet Test Setup
+ - Script is in ops-tests/component/test_lag_ct_appctl_getlacpstate.py
+
+### Setup
+#### Topology Diagram
+```
++------------+
+|            |
+|     s1     |
+|            |
++-1--2--3--4-+
+  |  |  |  |
+  |  |  |  |
+  |  |  |  |
+  |  |  |  |
++-1--2--3--4-+
+|            |
+|     s2     |
+|            |
++------------+
+```
+
+### Description
+1. Create 1 dynamic LAG in switch 1 and 2 with interfaces 1 and 2.
+2. Create 1 static LAG in switch 1 and 2 with interfaces 3 and 4.
+3. Execute ovs-appctl command getlacpstate without any LAG.
+4. Execute ovs-appctl command getlacpstate with dynamic LAG.
+5. Execute ovs-appctl command getlacpstate with static LAG.
+6. Execute ovs-appctl command getlacpstate with non existent LAG.
+
+### Test Result Criteria
+#### Test Pass Criteria
+* Output of step 3 and 4 has the following format:
+```
+LAG <dynamic_lag_name>:
+ Configured interfaces:
+  Interface: 1
+	actor_oper_port_state
+	   lacp_activity:0 time_out:0 aggregation:0 sync:0 collecting:0
+	   distributing:0 defaulted:0 expired:0
+	partner_oper_port_state
+	   lacp_activity:0 time_out:0 aggregation:0 sync:0 collecting:0
+	   distributing:0 defaulted:1 expired:0
+	lacp_control
+	   begin:0 actor_churn:0 partner_churn:0 ready_n:0 selected:1
+	   port_moved:0 ntt:0 port_enabled:0
+  Interface: 2
+	actor_oper_port_state
+	   lacp_activity:0 time_out:0 aggregation:0 sync:0 collecting:0
+	   distributing:0 defaulted:0 expired:0
+	partner_oper_port_state
+	   lacp_activity:0 time_out:0 aggregation:0 sync:0 collecting:0
+	   distributing:0 defaulted:0 expired:0
+	lacp_control
+	   begin:0 actor_churn:0 partner_churn:0 ready_n:0 selected:0
+	   port_moved:0 ntt:0 port_enabled:0
+```
+* Output of step 5 and 6 is empty.
 #### Test Fail Criteria
 One or more verifications fail.
