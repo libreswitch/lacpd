@@ -160,6 +160,7 @@ struct port_data {
     int                 timeout_mode;       /*!< 0=long, 1=short */
     int                 sys_prio;           /*!< Port override for system priority */
     char                *sys_id;            /*!< Port override for system mac */
+    bool                fallback_enabled ;  /*!< Default = false*/
 };
 
 /* current_status values */
@@ -773,6 +774,43 @@ send_link_state_change_msg(struct iface_data *info_ptr)
         ml_send_event(event);
     }
 } /* send_link_state_change_msg */
+
+static void
+send_fallback_status_msg(struct iface_data *info_ptr, bool fallback_status)
+{
+    ML_event *event;
+    struct MLt_vpm_api__lport_fallback_status *msg;
+    int msgSize;
+
+    VLOG_DBG("%s: interface=%s, fallback=%d",
+             __FUNCTION__,
+            info_ptr->name,
+            fallback_status);
+
+    msgSize = sizeof(ML_event)
+              + sizeof(struct MLt_vpm_api__lport_fallback_status);
+
+    event = (ML_event *)alloc_msg(msgSize);
+
+    if (event != NULL) {
+        /*** From CfgMgr peer. ***/
+        event->sender.peer = ml_lport_index;
+        event->msgnum = MLm_vpm_api__set_lport_fallback_status;
+
+        /* Set up msg pointer to just after the event
+         * structure itself. This must be done here since the
+         * sender's event->msg pointer points sender's memory
+         * space, and will result in fatal errors if we try to
+         * access it in LACP process space.
+         */
+        msg = (struct MLt_vpm_api__lport_fallback_status *)(event+1);
+        msg->lport_handle = PM_SMPT2HANDLE(0, 0, info_ptr->index,
+                                           info_ptr->cycl_port_type);
+        msg->status = fallback_status;
+
+        ml_send_event(event);
+    }
+} /* send_fallback_status_msg */
 
 static void
 configure_lacp_on_interface(struct port_data *portp, struct iface_data *idp)
@@ -1413,6 +1451,53 @@ update_port_bond_status_map_entry(struct port_data *portp)
 } /* update_port_bond_status_map_entry */
 
 /**
+ * Common function to update port's fallback flag status.
+ * When you turn off a LAG, all the interfaces and super port are removed, so
+ * if you turn LAG again fallback flag will be lost and will be reset to
+ * default value, even when OVSDB the key is present and 'true'.
+ *
+ * @param row pointer to port row in IDL.
+ * @param portp pointer to daemon's internal port data struct.
+ */
+static void
+update_port_fallback_flag(const struct ovsrec_port *row,
+                          struct port_data *portp)
+{
+    const char *ovs_fallback = NULL;
+    bool ovs_fallback_enabled = false;
+
+    struct shash_node *node, *next;
+    struct iface_data *idp = NULL;
+
+    /* We need to verify if fallback flag switched value between OVSDB and
+     * local data.
+     *
+     * You can overpass CLI by using 'ovs-vsctl' and toggle fallback flag
+     * manually. Bad user, bad!
+     */
+    ovs_fallback = smap_get(&(row->other_config),
+                            PORT_OTHER_CONFIG_LACP_FALLBACK);
+
+    if (ovs_fallback) {
+        if (strncmp(ovs_fallback,
+                    PORT_OTHER_CONFIG_LACP_FALLBACK_ENABLED,
+                    strlen(PORT_OTHER_CONFIG_LACP_FALLBACK_ENABLED)) == 0) {
+            ovs_fallback_enabled = true;
+        }
+    }
+
+    if (ovs_fallback_enabled != portp->fallback_enabled) {
+        SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+            idp = shash_find_data(&all_interfaces, node->name);
+
+            if (idp) {
+                send_fallback_status_msg(idp, ovs_fallback_enabled);
+            }
+        }
+    }
+}
+
+/**
  * Common function to set interface's LAG eligibility status for all LAG types.
  * Depending on the LAG type, this function either updates the DB by writing
  * to interface:hw_bond_config column or initiate LACP protocol on the
@@ -1882,6 +1967,9 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                 }
             }
         }
+
+        /* Update Fallback flag, it could be toggled on OVSDB */
+        update_port_fallback_flag(row, portp);
     }
 
     update_port_bond_status_map_entry(portp);
@@ -1945,6 +2033,7 @@ add_new_port(const struct ovsrec_port *port_row)
         portp->cfg = port_row;
         portp->name = xstrdup(port_row->name);
         portp->lacp_mode = PORT_LACP_OFF;
+
         shash_init(&portp->cfg_member_ifs);
         shash_init(&portp->eligible_member_ifs);
         shash_init(&portp->participant_ifs);
@@ -1963,9 +2052,11 @@ add_new_port(const struct ovsrec_port *port_row)
             }
             VLOG_DBG("Storing interface %s in port %s hash map",
                      intf->name, portp->name);
+
             shash_add(&portp->cfg_member_ifs, intf->name, (void *)idp);
             update_member_interface_bond_status(portp);
             idp->port_datap = portp;
+            idp->fallback_enabled = false;
         }
         VLOG_DBG("Created local data for Port %s", port_row->name);
 

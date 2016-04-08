@@ -16,6 +16,14 @@
 from time import sleep
 import re
 
+ovs_vsctl = "/usr/bin/ovs-vsctl "
+
+
+def print_header(msg):
+    header_length = len(msg)
+    print('\n%s\n%s\n%s\n' % ('=' * header_length,
+                               msg,
+                              '=' * header_length))
 
 # This method calls a function to retrieve data, then calls another function
 # to compare the data to the expected value(s). If it fails, it sleeps for
@@ -73,6 +81,35 @@ def sw_get_intf_state(params):
         c += " " + f
     out = params[0](c, shell='vsctl').replace('"', '').splitlines()
     return out
+
+
+def set_port_parameter(sw, port, config):
+    """Configure parameters in 'config' from 'port' on 'sw'."""
+
+    cmd = "set port %s %s" % (str(port), ' '.join(map(str, config)))
+    return sw(cmd, shell='vsctl')
+
+
+def clear_port_parameter(sw, port, config):
+    """Clears parameters in 'config' from 'port' on 'sw'."""
+
+    cmd = "clear port %s %s" % (str(port), ' '.join(map(str, config)))
+    return sw(cmd, shell='vsctl')
+
+
+def remove_port_parameter(sw, port, col, keys):
+    """Removes 'keys' in 'col' section from 'port' on 'sw'."""
+
+    cmd = "remove port %s %s %s" % (port, col, ' '.join(map(str, keys)))
+
+    return sw(cmd, shell='vsctl')
+
+
+def set_intf_parameter(sw, intf, config):
+    """Configure parameters in 'config' to 'intf' in 'sw'."""
+
+    cmd = "set interface %s %s" % (str(intf), ' '.join(map(str, config)))
+    return sw(cmd, shell='vsctl')
 
 
 def sw_get_port_state(params):
@@ -382,3 +419,46 @@ def enable_intf_list(sw, intf_list):
 def disable_intf_list(sw, intf_list):
     for intf in intf_list:
         sw_set_intf_user_config(sw, intf, ['admin=down'])
+
+
+def sw_wait_until_one_sm_ready(sws, intfs, ready, max_retries=30):
+    """Verify that one 'intfs' reaches 'ready'.
+
+    We need to verify that at least one interface in 'intf' has the status
+    'read'. The interface number will be returned
+    """
+    all_intfs = []
+    retries = 0
+    intf_fallback_enabled = 0
+
+    for sw in sws:
+        all_intfs += [[sw, intf, False] for intf in intfs]
+
+    # One interface shall be True
+    while not any(intf[2] for intf in all_intfs):
+        # Retrieve all arrays that have False
+        not_ready = filter(lambda intf: not intf[2], all_intfs)
+
+        assert retries is not max_retries, \
+            "Exceeded max retries. SM never achieved status: %s" % ready
+
+        for sm in not_ready:
+            cmd = 'get interface %s lacp_status:actor_state' % sm[1]
+
+            """
+            If you want to print the output remove or set 'silent' to False
+
+            It was removed because of the frequency of 'ovs-vsctl' calls to
+            validate SM status and constant prints will make test output
+            ilegible
+            """
+            out = sm[0](cmd, shell='vsctl', silent=False)
+            sm[2] = bool(re.match(ready, out))
+
+            if sm[2]:
+                intf_fallback_enabled = sm[1]
+
+        retries +=1
+        sleep(1)
+
+    return intf_fallback_enabled

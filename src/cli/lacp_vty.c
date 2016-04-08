@@ -612,63 +612,60 @@ DEFUN (cli_lacp_set_l4_hash,
 }
 
 static int
-lacp_set_fallback(const char *lag_name, const char *fallback_status)
+lacp_set_fallback(const char *lag_name, bool fallback_enabled)
 {
-  const struct ovsrec_port *port_row = NULL;
-  bool port_found = false;
-  struct smap smap = SMAP_INITIALIZER(&smap);
-  struct ovsdb_idl_txn* txn = NULL;
-  enum ovsdb_idl_txn_status status;
+    const struct ovsrec_port *port_row = NULL;
+    bool port_found = false;
+    struct smap smap = SMAP_INITIALIZER(&smap);
+    struct ovsdb_idl_txn* txn = NULL;
+    enum ovsdb_idl_txn_status status;
 
-  txn = cli_do_config_start();
-  if(txn == NULL)
-  {
-    VLOG_ERR(LACP_OVSDB_TXN_CREATE_ERROR,__func__,__LINE__);
-    cli_do_config_abort(txn);
-    return CMD_OVSDB_FAILURE;
-  }
-
-  OVSREC_PORT_FOR_EACH(port_row, idl)
-  {
-    if (strcmp(port_row->name, lag_name) == 0)
-    {
-      port_found = true;
-      break;
+    txn = cli_do_config_start();
+    if (txn == NULL) {
+        VLOG_ERR(LACP_OVSDB_TXN_CREATE_ERROR,__func__,__LINE__);
+        cli_do_config_abort(txn);
+        return CMD_OVSDB_FAILURE;
     }
-  }
 
-  if(!port_found)
-  {
-    /* assert - as LAG port should be present in DB. */
-    assert(0);
-    VLOG_ERR("Port table entry not found in DB.Function=%s Line=%d",__func__,__LINE__);
-    cli_do_config_abort(txn);
-    return CMD_OVSDB_FAILURE;
-  }
+    OVSREC_PORT_FOR_EACH(port_row, idl) {
+        if (strncmp(lag_name,
+                    port_row->name,
+                    strlen(lag_name)) == 0) {
+            port_found = true;
+            break;
+        }
+    }
 
-  smap_clone(&smap, &port_row->other_config);
+    if (!port_found) {
+        /* assert - as LAG port should be present in DB. */
+        assert(0);
+        VLOG_ERR("Port table entry not found in DB.Function=%s Line=%d",
+                 __func__,__LINE__);
+        cli_do_config_abort(txn);
+        return CMD_OVSDB_FAILURE;
+    }
 
-  if(strcmp("false", fallback_status) == 0)
-  {
-    smap_remove(&smap, "lacp-fallback-ab");
-  }
-  else
-  {
-    smap_replace(&smap, "lacp-fallback-ab", fallback_status);
-  }
+    smap_clone(&smap, &port_row->other_config);
 
-  ovsrec_port_set_other_config(port_row, &smap);
-  smap_destroy(&smap);
-  status = cli_do_config_finish(txn);
-  if(status == TXN_SUCCESS || status == TXN_UNCHANGED)
-  {
-    return CMD_SUCCESS;
-  }
-  else
-  {
-    VLOG_ERR("Transaction commit failed.Function=%s Line=%d",__func__,__LINE__);
-    return CMD_OVSDB_FAILURE;
-  }
+    if (fallback_enabled) {
+        smap_replace(&smap,
+                     PORT_OTHER_CONFIG_LACP_FALLBACK,
+                     PORT_OTHER_CONFIG_LACP_FALLBACK_ENABLED);
+    } else {
+        smap_remove(&smap, PORT_OTHER_CONFIG_LACP_FALLBACK);
+    }
+
+    ovsrec_port_set_other_config(port_row, &smap);
+    smap_destroy(&smap);
+    status = cli_do_config_finish(txn);
+
+    if(status == TXN_SUCCESS || status == TXN_UNCHANGED) {
+        return CMD_SUCCESS;
+    } else {
+        VLOG_ERR("Transaction commit failed.Function=%s Line=%d",
+                 __func__,__LINE__);
+        return CMD_OVSDB_FAILURE;
+    }
 }
 
 DEFUN (cli_lacp_set_fallback,
@@ -677,7 +674,7 @@ DEFUN (cli_lacp_set_fallback,
        LACP_STR
        "Enable LACP fallback mode\n")
 {
-  return lacp_set_fallback((char*) vty->index, "true");
+    return lacp_set_fallback((char*) vty->index, true);
 }
 
 DEFUN (cli_lacp_set_no_fallback,
@@ -687,7 +684,7 @@ DEFUN (cli_lacp_set_no_fallback,
        LACP_STR
        "Enable LACP fallback mode\n")
 {
-  return lacp_set_fallback((char*) vty->index, "false");
+    return lacp_set_fallback((char*) vty->index, false);
 }
 
 static int

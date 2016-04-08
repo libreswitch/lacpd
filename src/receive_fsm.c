@@ -368,21 +368,24 @@ defaulted_state_action(lacp_per_port_variables_t *plpinfo)
     update_Default_Selected(plpinfo);
     recordDefault(plpinfo);
 
-    // OpenSwitch - We enter defaulted state when we time out waiting for LACPDU
-    // on this port.  This probably means far end does not support LACP.  We
-    // need to default partner to be in-sync & collecting/distributing so that
-    // we'll form a single LAG & pass traffic.  This could also be done by
-    // changing the "partner_admin_port_state" default values, but ANVL doesn't
-    // like that.  So we make the change to oper_state here. */
-    plpinfo->partner_oper_port_state.synchronization = TRUE;
-    plpinfo->partner_oper_port_state.collecting      = TRUE;
-    plpinfo->partner_oper_port_state.distributing    = TRUE;
-    plpinfo->partner_oper_port_state.defaulted       = FALSE;
-    plpinfo->partner_oper_port_state.expired         = FALSE;
+    if (plpinfo->fallback_enabled) {
+        // OpenSwitch - We enter defaulted state when we time out waiting for
+        // LACPDU on this port.  This probably means far end does not support
+        // LACP. We need to default partner to be in-sync &
+        // collecting/distributing so that we'll form a single LAG & pass
+        // traffic. This could also be done by changing the
+        // "partner_admin_port_state" default values, but ANVL doesn't like
+        // that. So we make the change to oper_state here.
+        plpinfo->partner_oper_port_state.synchronization = TRUE;
+        plpinfo->partner_oper_port_state.collecting      = TRUE;
+        plpinfo->partner_oper_port_state.distributing    = TRUE;
+        plpinfo->partner_oper_port_state.defaulted       = FALSE;
+        plpinfo->partner_oper_port_state.expired         = FALSE;
 
-    plpinfo->actor_oper_port_state.expired = FALSE;
+        plpinfo->actor_oper_port_state.expired = FALSE;
 
-    LAG_selection(plpinfo); // OPS_TODO: Check if this is ok
+        LAG_selection(plpinfo); // OPS_TODO: Check if this is ok
+    }
 
     // OpenSwitch - If selected is SELECTED && partner.sync = TRUE
     // generate E5.  This will trigger a transition to coll/dist
