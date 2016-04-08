@@ -106,6 +106,7 @@ extern void LAG_detach_aggregator(LAG_t *const);
 extern void LACP_poll_link_state(lacp_per_port_variables_t *);
 extern void LACPPutPortUp(ulong);
 extern void set_all_port_system_priority(void);
+extern void set_lport_fallback_status(port_handle_t, int);
 extern void set_all_port_system_mac_addr(void);
 extern void set_lport_overrides(port_handle_t, int, unsigned char *);
 

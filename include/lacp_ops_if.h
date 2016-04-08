@@ -157,6 +157,7 @@ struct iface_data {
     int                 timeout_mode;       /*!< 0=long, 1=short */
     int                 collecting_ready;   /*!< hardware is ready to collect */
     int                 port_id;            /*!< port id */
+    bool                fallback_enabled;   /*!< Default = false */
 
     /* LACPDU send/receive related. */
     int                 pdu_sockfd;         /*!< Socket FD for LACPDU rx/tx */

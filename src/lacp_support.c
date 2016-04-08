@@ -1180,6 +1180,28 @@ set_all_port_system_priority(void)
 
 } /* set_all_port_system_priority */
 
+/******************************************************************************
+ * Function : set_lport_fallback_status
+ *
+ * We need to set new fallback status to all ports that belongs to an specific
+ * LAG using 'sport_handle'.
+ *****************************************************************************/
+void
+set_lport_fallback_status(port_handle_t lport_handle, int status)
+{
+    lacp_per_port_variables_t *plpinfo = NULL;
+
+    plpinfo = LACP_AVL_FIND(lacp_per_port_vars_tree, &lport_handle);
+
+    if (plpinfo != NULL) {
+        plpinfo->fallback_enabled = status;
+    } else {
+        VLOG_ERR("Set lport fallback status: lport_handle 0x%llx not found",
+                 lport_handle);
+    }
+
+} /* set_lport_fallback_status */
+
 //*****************************************************************
 // Function : set_lport_overrides
 //*****************************************************************

@@ -54,6 +54,7 @@ struct MLt_lacp_api__set_lport_overrides {
 #define MLm_vpm_api__set_lacp_sport_params            16
 #define MLm_vpm_api__unset_lacp_sport_params          17
 #define MLm_vpm_api__set_lacp_lport_params_event      18
+#define MLm_vpm_api__set_lport_fallback_status        19
 
 struct MLt_vpm_api__create_sport {
     short type;                       //  The type of super port
@@ -117,6 +118,11 @@ struct MLt_vpm_api__lport_state_change {
     unsigned long long lport_handle;
     unsigned long      lport_flags;
     int                link_speed;
+};
+
+struct MLt_vpm_api__lport_fallback_status {
+    unsigned long long lport_handle;   // The lport to be updated
+    int status;                        // Fallback new status
 };
 
 // The message give by the LACP module to match the

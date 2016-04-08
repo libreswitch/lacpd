@@ -138,6 +138,18 @@ mlacp_process_vlan_msg(ML_event *pevent)
         }
         break;
 
+        case MLm_vpm_api__set_lport_fallback_status:
+        {
+            struct MLt_vpm_api__lport_fallback_status *pMsg = pevent->msg;
+
+            RDEBUG(DL_LACP_RCV,
+                   "Lport fallback new status=%d\n",
+                   pMsg->status);
+
+            set_lport_fallback_status(pMsg->lport_handle, pMsg->status);
+        }
+        break;
+
         default:
         {
             VLOG_ERR("%s : Unknown req (%d)", __FUNCTION__, pevent->msgnum);

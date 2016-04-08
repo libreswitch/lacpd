@@ -404,6 +404,7 @@ typedef struct lacp_per_port_variables {
     u_int aggregation_state;
     int selecting_lag;  /* LAG_selection() in progress */
     int lacp_up;
+    bool fallback_enabled;
 
     /********************************************************************
      *  AVL tree related variables
