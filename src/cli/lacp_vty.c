@@ -2284,6 +2284,8 @@ lag_intf_config_ip (const char *if_name, const char *ip4, bool secondary)
       return CMD_SUCCESS;
     }
 
+    port_row = port_check_and_add (if_name, true, true, status_txn);
+
     status_txn = cli_do_config_start ();
     if (status_txn == NULL) {
       VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
