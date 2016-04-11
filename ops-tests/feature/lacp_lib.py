@@ -29,7 +29,8 @@ OpenSwitch Test Library for LACP
 
 # from pytest import set_trace
 import re
-import time
+from time import sleep
+from functools import wraps
 
 LOCAL_STATE = 'local_state'
 REMOTE_STATE = 'remote_state'
@@ -61,7 +62,7 @@ def create_lag(sw, lag_id, lag_mode):
         elif(lag_mode == 'passive'):
             ctx.lacp_mode_passive()
         elif(lag_mode == 'off'):
-            ctx.routing()
+            pass
         else:
             assert False, 'Invalid mode %s for LAG' % (lag_mode)
     lag_name = "lag" + lag_id
@@ -73,6 +74,10 @@ def create_lag(sw, lag_id, lag_mode):
 def delete_lag(sw, lag_id):
     with sw.libs.vtysh.Configure() as ctx:
         ctx.no_interface_lag(lag_id)
+    lag_name = "lag" + lag_id
+    output = sw.libs.vtysh.show_lacp_aggregates()
+    assert lag_name not in output,\
+        "Unable to delete LAG"
 
 
 def associate_interface_to_lag(sw, interface, lag_id):
@@ -98,10 +103,11 @@ def disassociate_interface_to_lag(sw, interface, lag_id):
         ctx.no_lag(lag_id)
 
 
-def associate_vlan_to_lag(sw, vlan_id, lag_id):
+def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access'):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         ctx.no_routing()
-        ctx.vlan_access(vlan_id)
+        if vlan_type == 'access':
+            ctx.vlan_access(vlan_id)
     output = sw.libs.vtysh.show_vlan(vlan_id)
     lag_name = 'lag' + lag_id
     assert lag_name in output[vlan_id]['ports'],\
@@ -147,9 +153,9 @@ def validate_lag_name(map_lacp, lag_id):
         "LAG ID should be " + lag_id
 
 
-def validate_lag_state_sync(map_lacp, state):
-    assert map_lacp[state]['active'] is True,\
-        "LAG state should be active"
+def validate_lag_state_sync(map_lacp, state, lacp_mode='active'):
+    assert map_lacp[state][lacp_mode] is True,\
+        "LAG state should be {}".format(lacp_mode)
     assert map_lacp[state]['aggregable'] is True,\
         "LAG state should have aggregable enabled"
     assert map_lacp[state]['in_sync'] is True,\
@@ -188,6 +194,12 @@ def validate_lag_state_afn(map_lacp, state):
         "LAG state should not be in distributing"
 
 
+def validate_lag_state_static(map_lacp, state):
+    for key in map_lacp[state]:
+        assert map_lacp[state][key] is False,\
+            "LAG state for {} should be False".format(key)
+
+
 def validate_lag_state_default_neighbor(map_lacp, state):
     assert map_lacp[state]['neighbor_state'] is True,\
         "LAG state should have default neighbor state"
@@ -201,6 +213,14 @@ def set_lag_lb_hash(sw, lag_id, lb_hash):
             ctx.hash_l3_src_dst()
         elif lb_hash == 'l4-src-dst':
             ctx.hash_l4_src_dst()
+
+
+def set_lag_rate(sw, lag_id, rate):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        if rate == 'fast':
+            ctx.lacp_rate_fast()
+        elif rate == 'slow':
+            ctx.lacp_rate_slow()
 
 
 def check_lag_lb_hash(sw, lag_id, lb_hash):
@@ -238,7 +258,7 @@ def tcpdump_capture_interface(sw, interface_id, wait_time):
         '> /tmp/interface.cap 2>&1 &'.format(**locals()),
         shell='bash_swns')
 
-    time.sleep(wait_time)
+    sleep(wait_time)
 
     sw('killall tcpdump'.format(**locals()),
         shell='bash_swns')
@@ -350,10 +370,16 @@ def delete_vlan(sw, vlan):
             'Vlan was not deleted'
 
 
-def associate_vlan_to_l2_interface(sw, vlan_id, interface):
+def associate_vlan_to_l2_interface(
+    sw,
+    vlan_id,
+    interface,
+    vlan_type='access'
+):
     with sw.libs.vtysh.ConfigInterface(interface) as ctx:
         ctx.no_routing()
-        ctx.vlan_access(vlan_id)
+        if vlan_type == 'access':
+            ctx.vlan_access(vlan_id)
     output = sw.libs.vtysh.show_vlan(vlan_id)
     assert interface in output[vlan_id]['ports'],\
         'Vlan was not properly associated with Interface'
@@ -452,3 +478,304 @@ def config_lacp_rate(sw, lag_id, lacp_rate_fast=False):
 def set_lacp_rate_fast(sw, lag_id):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         ctx.lacp_rate_fast()
+
+
+def verify_lag_config(
+    sw,
+    lag_id,
+    interfaces,
+    heartbeat_rate='slow',
+    fallback=False,
+    hashing='l3-src-dst',
+    mode='off'
+):
+    lag_name = 'lag{lag_id}'.format(**locals())
+    lag_config = sw.libs.vtysh.show_lacp_aggregates(lag=lag_name)
+    assert len(interfaces) == len(lag_config[lag_name]['interfaces']),\
+        ' '.join(
+        [
+            "{} interfaces in LAG is different".format(
+                len(lag_config[lag_name]['interfaces'])
+            ),
+            "than the expected number of {}".format(len(interfaces))
+        ]
+    )
+    for interface in interfaces:
+        assert interface in lag_config[lag_name]['interfaces'],\
+            "Interface {} is not in LAG".format(interface)
+    assert heartbeat_rate == lag_config[lag_name]['heartbeat_rate'],\
+        "Heartbeat rate {} is not expected. Expected {}".format(
+            lag_config[lag_name]['heartbeat_rate'],
+            heartbeat_rate
+    )
+    assert fallback == lag_config[lag_name]['fallback'],\
+        "Fallback setting of {} is not expected. Expected {}".format(
+        lag_config[lag_name]['fallback'],
+        fallback
+    )
+    assert hashing == lag_config[lag_name]['hash'],\
+        "Hash setting of {} is not expected. Expected {}".format(
+        lag_config[lag_name]['hash'],
+        hashing
+    )
+    assert mode == lag_config[lag_name]['mode'],\
+        "LAG mode setting of {} is not expected. Expected {}".format(
+        lag_config[lag_name]['mode'],
+        mode
+    )
+
+
+def verify_vlan_full_state(sw, vlan_id, interfaces=None, status='up'):
+    vlan_status = sw.libs.vtysh.show_vlan()
+    vlan_str_id = str(vlan_id)
+    assert vlan_str_id in vlan_status,\
+        'VLAN not found, Expected: {}'.format(vlan_str_id)
+    assert vlan_status[vlan_str_id]['status'] == status,\
+        'Unexpected VLAN status, Expected: {}'.format(status)
+    if interfaces is None:
+        assert len(vlan_status[vlan_str_id]['ports']) == 0,\
+            ''.join(['Unexpected number of interfaces in VLAN',
+                     '{}, Expected: 0'.format(vlan_id)])
+    else:
+        assert len(vlan_status[vlan_str_id]['ports']) == len(interfaces),\
+            'Unexpected number of interfaces in VLAN {}, Expected: {}'.format(
+            vlan_id,
+            len(interfaces)
+        )
+        for interface in interfaces:
+            assert interface not in vlan_status[vlan_str_id],\
+                'Interface not found in VLAN {}, Expected {}'.format(
+                vlan_id,
+                interface
+            )
+
+
+def verify_lag_interface_key(
+    sw1_int_map_lacp,
+    sw2_int_map_lacp=None,
+    key='1',
+    value_check=True,
+    cross_check=False
+):
+    if cross_check and sw2_int_map_lacp is None:
+        print(' '.join(
+            ['validate_lag_interface_key skipped',
+             'because of invalid settings']
+        ))
+        return
+    if value_check is True:
+        assert key == sw1_int_map_lacp['local_key'],\
+            'Unexpected key value of {}, Expected {}'.format(
+            sw1_int_map_lacp['local_key'],
+            key
+        )
+    if cross_check is True:
+        assert sw1_int_map_lacp['local_key'] ==\
+            sw2_int_map_lacp['remote_key'],\
+            'Remote key {} on partner does not match, Expected {}'.format(
+            sw2_int_map_lacp['remote_key'],
+            sw1_int_map_lacp['local_key']
+        )
+
+
+def verify_lag_interface_priority(
+    sw1_int_map_lacp,
+    sw2_int_map_lacp=None,
+    priority='1',
+    value_check=True,
+    cross_check=False
+):
+    if cross_check and sw2_int_map_lacp is None:
+        print(' '.join(
+            ['validate_lag_interface_priority skipped',
+             'because of invalid settings']
+        ))
+        return
+    if value_check is True:
+        assert priority == sw1_int_map_lacp['local_port_priority'],\
+            'Unexpected priority value of {}, Expected {}'.format(
+            sw1_int_map_lacp['local_port_priority'],
+            priority
+        )
+    if cross_check is True:
+        assert sw1_int_map_lacp['local_port_priority'] ==\
+            sw2_int_map_lacp['remote_port_priority'],\
+            ' '.join(
+            [
+                'Remote priority {} on partner does not match,'.format(
+                    sw2_int_map_lacp['remote_port_priority']
+                ),
+                'Expected {}'.format(
+                    sw1_int_map_lacp['local_port_priority'])
+            ]
+        )
+
+
+def verify_lag_interface_id(
+    sw1_int_map_lacp,
+    sw2_int_map_lacp=None,
+    id='1',
+    value_check=True,
+    cross_check=False
+):
+    if cross_check and sw2_int_map_lacp is None:
+        print(' '.join(
+            ['validate_lag_interface_id skipped',
+             'because of invalid settings']
+        ))
+        return
+    if value_check is True:
+        assert id == sw1_int_map_lacp['local_port_id'],\
+            'Unexpected key value of {}, Expected {}'.format(
+            sw1_int_map_lacp['local_port_id'],
+            id
+        )
+    if cross_check is True:
+        assert sw1_int_map_lacp['local_port_id'] ==\
+            sw2_int_map_lacp['remote_port_id'],\
+            'Remote id {} on partner does not match, Expected {}'.format(
+            sw2_int_map_lacp['remote_port_id'],
+            sw1_int_map_lacp['local_port_id']
+        )
+
+
+def verify_lag_interface_system_id(
+    sw1_int_map_lacp,
+    sw2_int_map_lacp=None,
+    system_id='00:00:00:00:00:00',
+    value_check=True,
+    cross_check=False
+):
+    if cross_check and sw2_int_map_lacp is None:
+        print(' '.join(
+            ['validate_lag_interface_system_id skipped',
+             'because of invalid settings']
+        ))
+    if value_check is True:
+        assert system_id ==\
+            sw1_int_map_lacp['local_system_id'],\
+            'Unexpected local system id {}, Expected: {}'.format(
+                sw1_int_map_lacp['local_system_id'],
+                system_id
+            )
+    if cross_check is True:
+        assert sw1_int_map_lacp['local_system_id'] ==\
+            sw2_int_map_lacp['remote_system_id'],\
+            ' '.join(
+            ['Remote system id',
+             sw2_int_map_lacp['remote_system_id'],
+             'on partner does not match local system id, Expected',
+             sw1_int_map_lacp['local_system_id']]
+        )
+
+
+def verify_lag_interface_system_priority(
+    sw1_int_map_lacp,
+    sw2_int_map_lacp=None,
+    system_priority='65534',
+    value_check=True,
+    cross_check=False
+):
+    if cross_check and sw2_int_map_lacp is None:
+        print(' '.join(
+            ['validate_lag_interface_system_priority skipped',
+             'because of invalid settings']
+        ))
+    if value_check is True:
+        assert system_priority ==\
+            sw1_int_map_lacp['local_system_priority'],\
+            'Unexpected local system priority {}, Expected: {}'.format(
+                sw1_int_map_lacp['local_system_priority'],
+                system_priority
+            )
+    if cross_check is True:
+        assert sw1_int_map_lacp['local_system_priority'] ==\
+            sw2_int_map_lacp['remote_system_priority'],\
+            ' '.join(
+            ['Remote system priority',
+             sw2_int_map_lacp['remote_system_priority'],
+             'on partner does not match local system priority, Expected',
+             sw1_int_map_lacp['local_system_priority']]
+        )
+
+
+def verify_lag_interface_lag_id(map_lacp, lag_id='1'):
+    assert map_lacp['lag_id'] == lag_id,\
+        'Unexpected value for LAG id {}, Expected {}'.format(
+        map_lacp['lag_id'],
+        lag_id
+    )
+
+
+def retry_wrapper(
+    init_msg,
+    soft_err_msg,
+    time_steps,
+    timeout,
+    err_condition=None
+):
+    if err_condition is None:
+        err_condition = AssertionError
+
+    def actual_retry_wrapper(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            print(init_msg)
+            cont = 0
+            while cont <= timeout:
+                try:
+                    func(*args, **kwargs)
+                    return
+                except err_condition:
+                    print(soft_err_msg)
+                    if cont < timeout:
+                        print('Waiting {} seconds to retry'.format(
+                            time_steps
+                        ))
+                        sleep(time_steps)
+                        cont += time_steps
+                        continue
+                    print('Retry time of {} seconds expired'.format(
+                        timeout
+                    ))
+                    raise
+        return wrapper
+    return actual_retry_wrapper
+
+
+def compare_lag_interface_basic_settings(
+    lag_stats,
+    lag_id,
+    members,
+    agg_key=1,
+    mode='off'
+):
+    assert lag_stats['lag_name'] == 'lag{}'.format(lag_id),\
+        'Unexpected LAG name, Expected lag{}'.format(lag_id)
+    assert lag_stats['agg_key'] == agg_key,\
+        'Unexpected LAG aggregation key {}, Expected {}'.format(
+        lag_stats['agg_key'],
+        agg_key
+    )
+    if mode == 'off':
+        assert lag_stats['agg_mode'] is None,\
+            'Found aggregate mode for static LAG in LAG statistics'
+    else:
+        assert lag_stats['agg_mode'] is not None,\
+            'Could not find aggregate mode for static LAG in LAG statistics'
+        assert mode == lag_stats['agg_mode'],\
+            'Unexpected value for aggregate mode {}, Expected {}'.format(
+            lag_stats['agg_mode'],
+            mode
+        )
+    aggregated_interfaces = lag_stats['aggregated_interfaces'].strip(
+    ).split(' ')
+    if len(aggregated_interfaces) == 1 and aggregated_interfaces[0] == '':
+        aggregated_interfaces = []
+    assert len(members) == len(aggregated_interfaces),\
+        'Unexpected number of aggregated interfaces, Expected {}'.format(
+        len(members)
+    )
+    for member in members:
+        assert member in aggregated_interfaces,\
+            'Unable to find LAG member {} in LAG interface'.format(member)
