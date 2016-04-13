@@ -41,8 +41,14 @@ from lacp_lib import validate_lag_state_sync
 from lacp_lib import validate_lag_state_out_of_sync
 from lacp_lib import validate_lag_state_afn
 from lacp_lib import validate_lag_state_default_neighbor
+from lacp_lib import validate_diagdump_lag_state_sync
+from lacp_lib import validate_diagdump_lag_state_out_sync
+from lacp_lib import validate_diagdump_lag_state_afn
+from lacp_lib import validate_diagdump_lacp_interfaces
 from lacp_lib import LOCAL_STATE
 from lacp_lib import REMOTE_STATE
+from lacp_lib import DIAG_DUMP_LOCAL_STATE
+from lacp_lib import DIAG_DUMP_REMOTE_STATE
 from lacp_lib import set_lacp_rate_fast
 from lacp_lib import validate_turn_on_interfaces
 
@@ -64,6 +70,18 @@ sw1:5 -- sw2:6
 sw1:6 -- sw2:7
 sw1:7 -- sw2:5
 """
+
+
+# Executes diag-dump lacp basic command and gets the LACP state
+def get_diagdump_lacp_state(sw):
+    output = sw.libs.vtysh.diag_dump_lacp_basic()
+    return output['State']
+
+
+# Executes diag-dump lacp basic command and gets the LAG interfaces
+def get_diagdump_lacp_interfaces(sw):
+    output = sw.libs.vtysh.diag_dump_lacp_basic()
+    return output['Interfaces']
 
 
 def test_lacp_agg_key_move_interface(topology):
@@ -143,18 +161,43 @@ def test_lacp_agg_key_move_interface(topology):
     map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(p11)
     map_lacp_sw2 = sw2.libs.vtysh.show_lacp_interface(p21)
 
+    print("Get the state of LAGs using diag-dump lacp basic in both switches")
+    sw1_lacp_state = get_diagdump_lacp_state(sw1)
+    sw2_lacp_state = get_diagdump_lacp_state(sw2)
+    map_diagdump_lacp_sw1_p11 = sw1_lacp_state[str(sw1_lag_id)][int(p11)]
+    map_diagdump_lacp_sw2_p21 = sw2_lacp_state[str(sw2_lag_id)][int(p21)]
+
+    print("Get the configured interfaces for each LAG using diag-dump " +
+          "lacp basic in both switches")
+    sw1_lacp_interfaces = get_diagdump_lacp_interfaces(sw1)
+    sw2_lacp_interfaces = get_diagdump_lacp_interfaces(sw2)
+    validate_diagdump_lacp_interfaces(sw1_lacp_interfaces, sw1_lag_id,
+                                      [p11, p12], [p11, p12], [p11, p12])
+    validate_diagdump_lacp_interfaces(sw2_lacp_interfaces, sw2_lag_id,
+                                      [p21, p22], [p21, p22], [p21, p22])
+
     print("Validate the LAG was created in both switches")
     validate_lag_name(map_lacp_sw1, sw1_lag_id)
     validate_local_key(map_lacp_sw1, sw1_lag_id)
     validate_remote_key(map_lacp_sw1, sw2_lag_id)
     validate_lag_state_sync(map_lacp_sw1, LOCAL_STATE)
     validate_lag_state_sync(map_lacp_sw1, REMOTE_STATE)
+    # Validate diag-dump results
+    validate_diagdump_lag_state_sync(map_diagdump_lacp_sw1_p11,
+                                     DIAG_DUMP_LOCAL_STATE)
+    validate_diagdump_lag_state_sync(map_diagdump_lacp_sw1_p11,
+                                     DIAG_DUMP_REMOTE_STATE)
 
     validate_lag_name(map_lacp_sw2, sw2_lag_id)
     validate_local_key(map_lacp_sw2, sw2_lag_id)
     validate_remote_key(map_lacp_sw2, sw1_lag_id)
     validate_lag_state_sync(map_lacp_sw2, LOCAL_STATE)
     validate_lag_state_sync(map_lacp_sw2, REMOTE_STATE)
+    # Validate diag-dump results
+    validate_diagdump_lag_state_sync(map_diagdump_lacp_sw2_p21,
+                                     DIAG_DUMP_LOCAL_STATE)
+    validate_diagdump_lag_state_sync(map_diagdump_lacp_sw2_p21,
+                                     DIAG_DUMP_REMOTE_STATE)
 
     print("Changing interface 1 to lag 200 in switch 1")
     create_lag_active(sw1, sw1_lag_id_2)
@@ -175,6 +218,25 @@ def test_lacp_agg_key_move_interface(topology):
     map_lacp_sw2_p21 = sw2.libs.vtysh.show_lacp_interface(p21)
     map_lacp_sw2_p22 = sw2.libs.vtysh.show_lacp_interface(p22)
 
+    print("Get the state of LAGs using diag-dump lacp basic in both switches")
+    sw1_lacp_state = get_diagdump_lacp_state(sw1)
+    sw2_lacp_state = get_diagdump_lacp_state(sw2)
+    map_diagdump_lacp_sw1_p11 = sw1_lacp_state[str(sw1_lag_id_2)][int(p11)]
+    map_diagdump_lacp_sw1_p12 = sw1_lacp_state[str(sw1_lag_id)][int(p12)]
+    map_diagdump_lacp_sw2_p21 = sw2_lacp_state[str(sw2_lag_id)][int(p21)]
+    map_diagdump_lacp_sw2_p22 = sw2_lacp_state[str(sw2_lag_id)][int(p22)]
+
+    print("Get the configured interfaces for each LAG using diagdump " +
+          "getlacpinterfaces in both switches")
+    sw1_lacp_interfaces = get_diagdump_lacp_interfaces(sw1)
+    sw2_lacp_interfaces = get_diagdump_lacp_interfaces(sw2)
+    validate_diagdump_lacp_interfaces(sw1_lacp_interfaces, sw1_lag_id,
+                                      [p12, p24], [p12, p24], [p12])
+    validate_diagdump_lacp_interfaces(sw1_lacp_interfaces, sw1_lag_id_2,
+                                      [p11, p13], [p11, p13], [])
+    validate_diagdump_lacp_interfaces(sw2_lacp_interfaces, sw2_lag_id,
+                                      [p21, p22], [p21, p22], [p22])
+
     print("Validate lag is out of sync in interface 1 in both switches")
     validate_lag_name(map_lacp_sw1_p11, sw1_lag_id_2)
     validate_local_key(map_lacp_sw1_p11, sw1_lag_id_2)
@@ -185,6 +247,11 @@ def test_lacp_agg_key_move_interface(topology):
                                         LOCAL_STATE)
     validate_lag_state_default_neighbor(map_lacp_sw1_p14,
                                         LOCAL_STATE)
+    # Validate diag-dump results
+    validate_diagdump_lag_state_afn(map_diagdump_lacp_sw1_p11,
+                                    DIAG_DUMP_LOCAL_STATE)
+    validate_diagdump_lag_state_sync(map_diagdump_lacp_sw1_p12,
+                                     DIAG_DUMP_LOCAL_STATE)
 
     validate_lag_name(map_lacp_sw2_p21, sw2_lag_id)
     validate_local_key(map_lacp_sw2_p21, sw2_lag_id)
@@ -193,3 +260,8 @@ def test_lacp_agg_key_move_interface(topology):
                                    LOCAL_STATE)
     validate_lag_state_sync(map_lacp_sw2_p22,
                             LOCAL_STATE)
+    # Validate diag-dump results
+    validate_diagdump_lag_state_out_sync(map_diagdump_lacp_sw2_p21,
+                                         DIAG_DUMP_LOCAL_STATE)
+    validate_diagdump_lag_state_sync(map_diagdump_lacp_sw2_p22,
+                                     DIAG_DUMP_LOCAL_STATE)

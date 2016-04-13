@@ -32,6 +32,8 @@ import re
 from time import sleep
 from functools import wraps
 
+DIAG_DUMP_LOCAL_STATE = 'actor_oper_port_state'
+DIAG_DUMP_REMOTE_STATE = 'partner_oper_port_state'
 LOCAL_STATE = 'local_state'
 REMOTE_STATE = 'remote_state'
 ACTOR = 'Actor'
@@ -779,3 +781,75 @@ def compare_lag_interface_basic_settings(
     for member in members:
         assert member in aggregated_interfaces,\
             'Unable to find LAG member {} in LAG interface'.format(member)
+
+
+def validate_diagdump_lag_state_sync(map_diagdump_lacpstate, state):
+    assert map_diagdump_lacpstate[state]['lacp_activity'] == 1,\
+        "diagdump LAG state should be active"
+    assert map_diagdump_lacpstate[state]['time_out'] == 1,\
+        "diagdump LAG state should have short timeout"
+    assert map_diagdump_lacpstate[state]['aggregation'] == 1,\
+        "diagdump LAG state should have aggregable enabled"
+    assert map_diagdump_lacpstate[state]['sync'] == 1,\
+        "diagdump LAG state should be In Sync"
+    assert map_diagdump_lacpstate[state]['collecting'] == 1,\
+        "diagdump LAG state should be in collecting"
+    assert map_diagdump_lacpstate[state]['distributing'] == 1,\
+        "diagdump LAG state should be in distributing"
+
+
+def validate_diagdump_lag_state_out_sync(map_diagdump_lacpstate, state):
+    assert map_diagdump_lacpstate[state]['lacp_activity'] == 1,\
+        "diagdump LAG state should be active"
+    assert map_diagdump_lacpstate[state]['sync'] == 0,\
+        "diagdump LAG state should be out of sync"
+    assert map_diagdump_lacpstate[state]['aggregation'] == 1,\
+        "diagdump LAG state should have aggregable enabled"
+    assert map_diagdump_lacpstate[state]['collecting'] == 0,\
+        "diagdump LAG state should not be in collecting"
+    assert map_diagdump_lacpstate[state]['distributing'] == 0,\
+        "diagdump LAG state should not be in distributing"
+
+
+def validate_diagdump_lag_state_afn(map_diagdump_lacpstate, state):
+    assert map_diagdump_lacpstate[state]['lacp_activity'] == 1,\
+        "diagdump LAG state should be active"
+    assert map_diagdump_lacpstate[state]['time_out'] == 1,\
+        "diagdump LAG state should have short timeout"
+    assert map_diagdump_lacpstate[state]['aggregation'] == 1,\
+        "diagdump LAG state should have aggregable enabled"
+    assert map_diagdump_lacpstate[state]['sync'] == 1,\
+        "diagdump LAG state should be In Sync"
+    assert map_diagdump_lacpstate[state]['collecting'] == 0,\
+        "diagdump LAG state should not be in collecting"
+    assert map_diagdump_lacpstate[state]['distributing'] == 0,\
+        "diagdump LAG state should not be in distributing"
+
+
+def validate_diagdump_lacp_interfaces(diagdump_output, lag_id,
+                                      expected_configured, expected_eligible,
+                                      expected_participant):
+    for interface in expected_configured:
+        assert interface in diagdump_output[lag_id]['configured_interfaces'],\
+            ('Interface %s is not in configured interfaces for LAG %s'
+             % (interface, lag_id))
+    for interface in diagdump_output[lag_id]['configured_interfaces']:
+        assert interface in expected_configured,\
+            ('Interface %s should not be in configured interfaces for LAG %s'
+             % (interface, lag_id))
+    for interface in expected_eligible:
+        assert interface in diagdump_output[lag_id]['eligible_interfaces'],\
+            ('Interface %s is not in eligible interfaces for LAG %s'
+             % (interface, lag_id))
+    for interface in diagdump_output[lag_id]['eligible_interfaces']:
+        assert interface in expected_eligible,\
+            ('Interface %s should not be in eligible interfaces for LAG %s'
+             % (interface, lag_id))
+    for interface in expected_participant:
+        assert interface in diagdump_output[lag_id]['participant_interfaces'],\
+            ('Interface %s is not in participant interfaces for LAG %s'
+             % (interface, lag_id))
+    for interface in diagdump_output[lag_id]['participant_interfaces']:
+        assert interface in expected_participant,\
+            ('Interface %s should not be in participant interfaces for LAG %s'
+             % (interface, lag_id))

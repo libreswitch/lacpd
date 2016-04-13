@@ -58,6 +58,19 @@ hs2:1 -- ops2:4
 """
 
 
+# Runs the diag-dump lacp basic command and gets the average of pdus sent
+# through all the interfaces of the lag.
+def get_average_lacpd_sent_pdus(sw, lag_id):
+    output = sw.libs.vtysh.diag_dump_lacp_basic()
+    pdu_dict = output['Counters']
+    sent_pdus_sum = 0
+    count = 0
+    for interface_number in pdu_dict[lag_id]:
+        sent_pdus_sum += pdu_dict[lag_id][interface_number]['lacp_pdus_sent']
+        count += 1
+    return sent_pdus_sum/count
+
+
 def test_lacpd_heartbeat(topology):
     """
     Tests LACP heartbeat average rate (slow/fast)
@@ -183,7 +196,18 @@ def test_lacpd_heartbeat(topology):
         assert tcp_dump_ops1 > 0, 'Could not start tcpdump on ops1'
         assert tcp_dump_ops2 > 0, 'Could not start tcpdump on ops2'
 
+        # Get the initial amount of pdus sent through the interfaces of the lag
+        # using diag-dump lacp basic command in order to calculate the
+        # difference when the sleep has finished.
+        ops1_initial_diagdump_pdu = get_average_lacpd_sent_pdus(ops1, test_lag)
+        ops2_initial_diagdump_pdu = get_average_lacpd_sent_pdus(ops2, test_lag)
+
         sleep(hb_info[lag_rate_mode]['wait_time'] + 2)
+
+        # Get the final amount of pdus sent through the interfaces of the lag
+        # using diag-dump lacp basic command.
+        ops1_final_diagdump_pdu = get_average_lacpd_sent_pdus(ops1, test_lag)
+        ops2_final_diagdump_pdu = get_average_lacpd_sent_pdus(ops2, test_lag)
 
         tcp_data_ops1 = tcpdump_capture_interface_stop(
             ops1, test_lag_if, tcp_dump_ops1
@@ -205,3 +229,15 @@ def test_lacpd_heartbeat(topology):
                 and packets_avg <= hb_info[lag_rate_mode]['max_percent'],\
                 'Packet average for {lag_rate_mode} mode'\
                 ' is out of bounds'.format(**locals())
+
+        # Validate the average of pdus obtained using diag-dump lacp basic
+        # command
+        for diagdump_data in [ops1_final_diagdump_pdu -
+                              ops1_initial_diagdump_pdu,
+                              ops2_final_diagdump_pdu -
+                              ops2_initial_diagdump_pdu]:
+            diagdump_pkt_avg = (float(diagdump_data) / heartbeats)
+
+            assert diagdump_pkt_avg >= hb_info[lag_rate_mode]['min_percent']\
+                and diagdump_pkt_avg <= hb_info[lag_rate_mode]['max_percent'],\
+                'Diag dump packet average is out of bounds'
