@@ -111,6 +111,13 @@ def sw_create_bond(s1, bond_name, intf_list, lacp_mode="off"):
     return s1.ovscmd(c)
 
 
+def sw_rate_bond(s1, bond_name):
+    info("LAG with lacp rate fast\n")
+    c = OVS_VSCTL + "set port " + bond_name + " lacp rate fast"
+    debug(c)
+    return s1.ovscmd(c)
+
+
 # Set interface:other_config parameter(s)
 def set_intf_other_config(sw, intf, config):
     c = OVS_VSCTL + "set interface " + str(intf)
@@ -134,6 +141,25 @@ def verify_intf_lacp_status(sw, intf, verify_values, context=''):
         assert field_vals[i] == verify_values[attrs[i]], context +\
             ": invalid value for " + attrs[i] + ", expected " +\
             verify_values[attrs[i]] + ", got " + field_vals[i]
+
+
+def time_for_lacp_done(sw, intf, verify_values):
+    request = []
+    attrs = []
+    for attr in verify_values:
+        request.append('lacp_status:' + attr)
+        attrs.append(attr)
+    result = timed_compare(sw_get_intf_state,
+                           (sw, intf, request),
+                           verify_compare_complex, verify_values)
+    field_vals = result[1]
+    isdone = 0
+    for i in range(0, len(attrs)):
+        if field_vals[i] != verify_values[attrs[i]]:
+            isdone = 1
+    if isdone == 1:
+        return False
+    return True
 
 
 # Creating lacp state values
@@ -241,13 +267,28 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         self.enable_all_intf()
 
         sw_create_bond(s1, "lag100", sw_intf[0:2], lacp_mode="active")
+        sw_rate_bond(s1, "lag100")
         sw_create_bond(s2, "lag100", sw_intf[0:2], lacp_mode="active")
+        sw_rate_bond(s2, "lag100")
 
         for intf in sw_intf[0:2]:
             set_intf_other_config(s1, intf, ['lacp-aggregation-key=100'])
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=100'])
 
-        time.sleep(30)
+        time.sleep(10)
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s1,
+                                  sw_intf[1],
+                                  create_lacp_state()):
+                break
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s2,
+                                  sw_intf[1],
+                                  create_lacp_state()):
+                break
+
         for intf in sw_intf_str[0:2]:
             verify_intf_lacp_status(s1,
                                     intf,
@@ -275,20 +316,39 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         #   LAG 100:
         #       Interface 1
         #       Interface 2
-
         sw_create_bond(s1, "lag200", [sw_intf[0], sw_intf_not_connected[0]],
                        lacp_mode="active")
+        sw_rate_bond(s1, "lag200")
         set_intf_other_config(s1, sw_intf[0], ['lacp-aggregation-key=200'])
         set_intf_other_config(s1, sw_intf_not_connected[0],
                               ['lacp-aggregation-key=200'])
 
         sw_create_bond(s1, "lag100", [sw_intf[1], sw_intf_not_connected[1]],
                        lacp_mode="active")
+        sw_rate_bond(s1, "lag100")
         set_intf_other_config(s1, sw_intf[1], ['lacp-aggregation-key=100'])
         set_intf_other_config(s1, sw_intf_not_connected[1],
                               ['lacp-aggregation-key=100'])
 
         time.sleep(10)
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s1,
+                                  sw_intf[0],
+                                  create_lacp_state(actor_col="0",
+                                                    actor_dist="0",
+                                                    partner_sync="0",
+                                                    partner_col="0",
+                                                    partner_dist="0")):
+                break
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s2,
+                                  sw_intf[1],
+                                  create_lacp_state()):
+                break
+
+
         verify_intf_lacp_status(s1,
                                 sw_intf[0],
                                 create_lacp_state(actor_col="0",
@@ -340,8 +400,11 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         #       Interface 4
 
         sw_create_bond(s1, "lag50", sw_intf[0:4], lacp_mode="active")
+        sw_rate_bond(s1, "lag50")
         sw_create_bond(s2, "lag50", sw_intf[0:2], lacp_mode="active")
+        sw_rate_bond(s2, "lag50")
         sw_create_bond(s2, "lag60", sw_intf[2:4], lacp_mode="active")
+        sw_rate_bond(s2, "lag60")
 
         for intf in sw_intf[0:4]:
             set_intf_other_config(s1, intf, ['lacp-aggregation-key=50'])
@@ -352,13 +415,25 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         for intf in sw_intf[2:4]:
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=60'])
 
-        time.sleep(40)
+        time.sleep(10)
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s1,
+                                  sw_intf[1],
+                                  create_lacp_state()):
+                break
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s2,
+                                  sw_intf[1],
+                                  create_lacp_state()):
+                break
+
         for intf in sw_intf_str[0:2]:
             verify_intf_lacp_status(s1,
                                     intf,
                                     create_lacp_state(),
                                     "s1:" + intf)
-
             verify_intf_lacp_status(s2,
                                     intf,
                                     create_lacp_state(),
@@ -373,7 +448,6 @@ class LacpdAggregationKeyTest(OpsVsiTest):
                                                       partner_col="0",
                                                       partner_dist="0"),
                                     "s1:" + intf)
-
             verify_intf_lacp_status(s2,
                                     intf,
                                     create_lacp_state(actor_col="0",
@@ -424,12 +498,18 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         #       Interface 3
 
         sw_create_bond(s1, "lag150", [5, 1], lacp_mode="active")
+        sw_rate_bond(s1, "lag150")
         sw_create_bond(s1, "lag250", [6, 2], lacp_mode="active")
+        sw_rate_bond(s1, "lag250")
         sw_create_bond(s1, "lag350", [7, 3], lacp_mode="active")
+        sw_rate_bond(s1, "lag350")
 
         sw_create_bond(s2, "lag150", [6, 1], lacp_mode="active")
+        sw_rate_bond(s2, "lag150")
         sw_create_bond(s2, "lag250", [7, 2], lacp_mode="active")
+        sw_rate_bond(s2, "lag250")
         sw_create_bond(s2, "lag350", [5, 3], lacp_mode="active")
+        sw_rate_bond(s2, "lag350")
 
         set_intf_other_config(s1, 5, ['lacp-aggregation-key=150'])
         set_intf_other_config(s1, 1, ['lacp-aggregation-key=150'])
@@ -444,7 +524,20 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         set_intf_other_config(s2, 5, ['lacp-aggregation-key=350'])
         set_intf_other_config(s2, 3, ['lacp-aggregation-key=350'])
 
-        time.sleep(30)
+        time.sleep(10)
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s1,
+                                  sw_intf[0],
+                                  create_lacp_state()):
+                break
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s2,
+                                  sw_intf[0],
+                                  create_lacp_state()):
+                break
+
         for intf in sw_all_intf[0:3]:
             verify_intf_lacp_status(s1,
                                     intf,
@@ -497,13 +590,27 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         self.enable_all_intf()
 
         sw_create_bond(s1, "lag100", sw_intf[0:2], lacp_mode="active")
+        sw_rate_bond(s1, "lag100")
         sw_create_bond(s2, "lag200", sw_intf[0:2], lacp_mode="active")
+        sw_rate_bond(s2, "lag200")
 
         for intf in sw_intf[0:2]:
             set_intf_other_config(s1, intf, ['lacp-aggregation-key=100'])
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=200'])
+        time.sleep(10)
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s1,
+                                  sw_intf[0],
+                                  create_lacp_state()):
+                break
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s2,
+                                  sw_intf[0],
+                                  create_lacp_state()):
+                break
 
-        time.sleep(30)
         for intf in sw_intf_str[0:2]:
             verify_intf_lacp_status(s1,
                                     intf,
@@ -567,7 +674,28 @@ class LacpdAggregationKeyTest(OpsVsiTest):
             set_intf_other_config(s2, intf, ['lacp-aggregation-key=60'])
             set_intf_other_config(s2, intf, ['lacp-port-priority=1'])
 
-        time.sleep(30)
+        time.sleep(10)
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s1,
+                                  sw_intf[0],
+                                  create_lacp_state(actor_sync="0",
+                                                    actor_col="0",
+                                                    actor_dist="0",
+                                                    partner_col="0",
+                                                    partner_dist="0")):
+                break
+        for i in range(0, 5):
+            time.sleep(10)
+            if time_for_lacp_done(s2,
+                                  sw_intf[0],
+                                  create_lacp_state(actor_sync="0",
+                                                    actor_col="0",
+                                                    actor_dist="0",
+                                                    partner_col="0",
+                                                    partner_dist="0")):
+                break
+
         for intf in sw_intf_str[0:2]:
             verify_intf_lacp_status(s1,
                                     intf,
@@ -602,7 +730,7 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         s2.ovscmd("ovs-vsctl del-port lag50")
         s2.ovscmd("ovs-vsctl del-port lag60")
 
-@pytest.mark.skipif(True, reason="skipped test case due to random gate job failures.")
+
 class TestLacpAggrKey:
 
     def setup(self):
