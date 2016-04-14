@@ -911,6 +911,33 @@ class LACPMaxNumberOfLags(OpsVsiTest):
 
         info("DONE\n")
 
+    def test_lag_qos_config(self):
+        s1 = self.net.switches[0]
+
+        # Set up.
+        s1.cmdCLI('end')
+        s1.cmdCLI('configure terminal')
+        s1.cmdCLI('no interface lag 100')
+
+        # Configure qos on a lag.
+        s1.cmdCLI('interface lag 100')
+        s1.cmdCLI('qos trust none')
+        s1.cmdCLI('qos dscp 1')
+        s1.cmdCLI('apply qos schedule-profile default')
+
+        # Check the running config.
+        out = s1.cmdCLI('do show running-config')
+        assert 'interface lag 100' in out
+        assert 'qos trust none' in out
+        assert 'qos dscp 1' in out
+        assert 'apply qos schedule-profile default' in out
+
+        # Tear down.
+        s1.cmdCLI('end')
+        s1.cmdCLI('configure terminal')
+        s1.cmdCLI('no interface lag 100')
+        s1.cmdCLI('end')
+
 
 class Test_lacp_max_lags:
 
@@ -928,6 +955,9 @@ class Test_lacp_max_lags:
 
     def test_max_number_of_lags(self):
         self.test.test_max_number_of_lags()
+
+    def test_lag_qos_config(self):
+        self.test.test_lag_qos_config()
 
     def setup_method(self, method):
         pass
