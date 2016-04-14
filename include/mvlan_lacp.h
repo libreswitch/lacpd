@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -85,6 +85,8 @@ struct MLt_vpm_api__lacp_sport_params {
     int  partner_system_priority;     // A value between 1- 65535
     char partner_system_id[MAC_BYTEADDR_SIZE];        // The mac addressS
     int  aggr_type;                   // individual or aggregateable
+    int  actor_max_port_priority;     // Max actor port priority in this sport
+    int  partner_max_port_priority;   // Max partner port priority in this sport
     int  negation;                    // whether it's negation : unset cmd is
                                       // used only while negating
     int  cookie;                      // Used by the caller to store
@@ -131,6 +133,8 @@ struct MLt_vpm_api__lacp_match_params {
     char partner_system_id[MAC_BYTEADDR_SIZE];         // The mac addressS
     int  local_port_number;            // LAG's local_port_number : should
                                        // match aggr_type of aggregator
+    u_short actor_oper_port_priority;  // Actor port priority
+    u_short partner_oper_port_priority;// Partner port priority
     int  actor_aggr_type;              // Individual or aggregatable
     int  partner_aggr_type;            // Individual or aggregatable
     unsigned long long sport_handle;   // will be returned if match is successful,
@@ -164,6 +168,8 @@ typedef struct lacp_sport_params_s {
     int      partner_system_priority;   /* A value between 1- 65535 */
     char     partner_system_id[MAC_BYTEADDR_SIZE];      /* The mac address */
     int      aggr_type;                 /* whether aggregateable or indiv */
+    int      actor_max_port_priority;   /* Priority of the actor port with higher priority */
+    int      partner_max_port_priority; /* Priority of the partner port with higher priority */
 } lacp_sport_params_t;
 
 /*********************************************************************

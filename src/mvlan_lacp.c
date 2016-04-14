@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -34,12 +34,14 @@
 #include "lacp_ops_if.h"
 #include "mvlan_sport.h"
 #include "mvlan_lacp.h"
+#include "lacp_fsm.h"
 
 VLOG_DEFINE_THIS_MODULE(mvlan_lacp);
 
 typedef enum match_type {
     EXACT_MATCH,
-    PARTIAL_MATCH
+    PARTIAL_MATCH,
+    PRIORITY_MATCH
 } match_type_t;
 
 static struct NList *placp_params_list;
@@ -321,6 +323,8 @@ mvlan_set_sport_params(struct MLt_vpm_api__lacp_sport_params *pin_lacp_params)
         // As validation has been done, no need for assert etc.
         placp_sport_params->lacp_params.port_type = htons(pin_lacp_params->port_type);
         placp_sport_params->lacp_params.actor_key = htons(pin_lacp_params->actor_key);
+        placp_sport_params->lacp_params.actor_max_port_priority = htons(pin_lacp_params->actor_max_port_priority);
+        placp_sport_params->lacp_params.partner_max_port_priority = htons(pin_lacp_params->partner_max_port_priority);
 
         // Also, by default set the aggr_type as Aggregateable.
         placp_sport_params->lacp_params.aggr_type = LACP_LAG_DEFAULT_AGGR_TYPE;
@@ -347,6 +351,14 @@ mvlan_set_sport_params(struct MLt_vpm_api__lacp_sport_params *pin_lacp_params)
 
         if (pin_lacp_params->flags & LACP_LAG_AGGRTYPE_FIELD_PRESENT) {
             placp_sport_params->lacp_params.aggr_type = pin_lacp_params->aggr_type;
+        }
+
+        if (pin_lacp_params->flags & LACP_LAG_ACTOR_PORT_PRIORITY_FIELD_PRESENT) {
+            placp_sport_params->lacp_params.actor_max_port_priority = pin_lacp_params->actor_max_port_priority;
+        }
+
+        if (pin_lacp_params->flags & LACP_LAG_PARTNER_PORT_PRIORITY_FIELD_PRESENT) {
+            placp_sport_params->lacp_params.partner_max_port_priority = pin_lacp_params->partner_max_port_priority;
         }
 
         if (pin_lacp_params->flags & LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT) {
@@ -485,6 +497,7 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
     struct NList            *plist;
     struct NList            *plist_start = NULL;
     int                     found_match = FALSE;
+    struct  MLt_vpm_api__lacp_sport_params pmsg;
 
     plist_start = plist = placp_params_list;
 
@@ -575,7 +588,11 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
             // By updating the information here as soon as a selection is made,
             // we allow back-to-back selections of the same parameters to end up
             // with the same LAG before any attach is performed.
-            if (PARTIAL_MATCH == match) {
+            //
+            // When a priority match happens we still need to update the values in
+            // the super port in order to replace the old information with the new
+            // one coming from a higher priority port
+            if (PARTIAL_MATCH == match || PRIORITY_MATCH == match) {
                 bcopy(placp_match_params->partner_system_id,
                       ptemp_lacp_sport_params->lacp_params.partner_system_id,
                       sizeof(ptemp_lacp_sport_params->lacp_params.partner_system_id));
@@ -584,9 +601,28 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
                     placp_match_params->partner_system_priority;
                 ptemp_lacp_sport_params->lacp_params.partner_key =
                     placp_match_params->partner_key;
-                ptemp_lacp_sport_params->lacp_params.flags |= (LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT |
-                                                               LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  |
-                                                               LACP_LAG_PARTNER_KEY_FIELD_PRESENT );
+
+                // Set the port with the max priority, we set this even when the match is
+                // PARTIAL_MATCH because that match should happen when the first lport is
+                // attached to a sport
+                ptemp_lacp_sport_params->lacp_params.actor_max_port_priority =
+                                    placp_match_params->actor_oper_port_priority;
+
+                // Check if the partner priority is higher than the current max partner priority
+                // In partial match we always update partner max port priority
+                if (PARTIAL_MATCH == match ||
+                    ptemp_lacp_sport_params->lacp_params.partner_max_port_priority >
+                    placp_match_params->partner_oper_port_priority) {
+                    ptemp_lacp_sport_params->lacp_params.partner_max_port_priority =
+                                    placp_match_params->partner_oper_port_priority;
+                }
+                ptemp_lacp_sport_params->lacp_params.flags |=
+                                    (LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT
+                                     | LACP_LAG_PARTNER_SYSID_FIELD_PRESENT
+                                     | LACP_LAG_PARTNER_KEY_FIELD_PRESENT
+                                     | LACP_LAG_ACTOR_PORT_PRIORITY_FIELD_PRESENT
+                                     | LACP_LAG_PARTNER_PORT_PRIORITY_FIELD_PRESENT
+                                    );
 
                 // Also update port_type and actor_key now that
                 // OpenSwitch's managing these parameters.
@@ -600,6 +636,33 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
 
                 // OpenSwitch: update database with new LAG information when first selected.
                 db_update_lag_partner_info((int)PM_HANDLE2LAG(psport->handle));
+            }
+            // (EXACT_MATCH == match)
+            else{
+                // In exact_match we need to update the max_actor_port_priority and
+                // max_partner_port_priority of the sport only if the matched port
+                // has port_priority field present and has higher priority
+                if ((ptemp_lacp_sport_params->lacp_params.flags & LACP_LAG_ACTOR_PORT_PRIORITY_FIELD_PRESENT) &&
+                    ptemp_lacp_sport_params->lacp_params.actor_max_port_priority >
+                    placp_match_params->actor_oper_port_priority){
+
+                    ptemp_lacp_sport_params->lacp_params.actor_max_port_priority =
+                                                         placp_match_params->actor_oper_port_priority;
+                }
+                if ((ptemp_lacp_sport_params->lacp_params.flags & LACP_LAG_PARTNER_PORT_PRIORITY_FIELD_PRESENT) &&
+                    ptemp_lacp_sport_params->lacp_params.partner_max_port_priority >
+                    placp_match_params->partner_oper_port_priority){
+
+                    ptemp_lacp_sport_params->lacp_params.partner_max_port_priority =
+                                                         placp_match_params->partner_oper_port_priority;
+                }
+            }
+
+            if (PRIORITY_MATCH == match) {
+                // Only necessary to set the flags and the sport handle
+                pmsg.flags = ptemp_lacp_sport_params->lacp_params.flags;
+                pmsg.sport_handle = psport->handle;
+                mlacpVapiSportParamsChange(MLm_vpm_api__set_lacp_sport_params, &pmsg);
             }
 
             break;
@@ -650,10 +713,11 @@ mvlan_api_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_p
     int status = R_SUCCESS;
 
     // First, search for an exact match.  If none, find one that's available.
-    if (mvlan_select_aggregator(placp_match_params, EXACT_MATCH) != R_SUCCESS) {
-        if (mvlan_select_aggregator(placp_match_params, PARTIAL_MATCH) != R_SUCCESS) {
-            status = MVLAN_LACP_SPORT_PARAMS_NOT_FOUND;
-        }
+
+    if (mvlan_select_aggregator(placp_match_params, EXACT_MATCH) != R_SUCCESS   &&
+        mvlan_select_aggregator(placp_match_params, PARTIAL_MATCH) != R_SUCCESS &&
+        mvlan_select_aggregator(placp_match_params, PRIORITY_MATCH) != R_SUCCESS) {
+        status = MVLAN_LACP_SPORT_PARAMS_NOT_FOUND;
     }
 
     return status;
@@ -795,6 +859,7 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
                        match_type_t match)
 {
     int status = FALSE;
+    int is_priority_match = 0;
 
     // First check the port type if present.
     if ((psport_param->port_type != PM_LPORT_INVALID) || (EXACT_MATCH == match)) {
@@ -817,10 +882,29 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
     }
 
     // Check partner key if present.
+    // If PRIORITY_MATCH and the partner key doesn't match, check if this port has more priority
     if ((psport_param->flags & LACP_LAG_PARTNER_KEY_FIELD_PRESENT) || (EXACT_MATCH==match)) {
         if (psport_param->partner_key != plag_param->partner_key) {
-            RDEBUG(DL_VPM, "   match_aggregator: Partner key field does not match.\n");
-            goto end;
+            RDEBUG(DL_VPM,"match_aggregator: Partner key field does not match.");
+            if (PRIORITY_MATCH == match &&
+                (psport_param->flags & LACP_LAG_ACTOR_PORT_PRIORITY_FIELD_PRESENT)) {
+
+                if (psport_param->actor_max_port_priority > plag_param->actor_oper_port_priority) {
+                    RDEBUG(DL_VPM,"match_aggregator: Current actor priority is higher");
+                    RDEBUG(DL_VPM,"match_aggregator: Priority match allows different partner key");
+                }
+                else if ((psport_param->flags & LACP_LAG_PARTNER_PORT_PRIORITY_FIELD_PRESENT) &&
+                         psport_param->actor_max_port_priority == plag_param->actor_oper_port_priority &&
+                         psport_param->partner_max_port_priority > plag_param->partner_oper_port_priority) {
+                    RDEBUG(DL_VPM,"match_aggregator: Current partner priority is higher");
+                    RDEBUG(DL_VPM,"match_aggregator: Priority match allows different partner key");
+                }
+                else {
+                    goto end;
+                }
+            } else {
+                goto end;
+            }
         }
     } else {
         RDEBUG(DL_VPM, "   match_aggregator: Partner key field NOT yet set. Skip check.\n");
@@ -830,11 +914,20 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
     if ((psport_param->flags & LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT) || (EXACT_MATCH==match)) {
         if (psport_param->partner_system_priority != plag_param->partner_system_priority) {
             RDEBUG(DL_VPM, "   match_aggregator: Partner system pri field does not match.\n");
-            goto end;
+            if (PRIORITY_MATCH == match &&
+                psport_param->partner_system_priority > plag_param->partner_system_priority) {
+                RDEBUG(DL_VPM, "match_aggregator: Priority match allows higher partner system priority.");
+                is_priority_match = 1;
+            }
+            else {
+                goto end;
+            }
         }
     }
 
     // If the partner system id is set in the sport, we need to compare with this.
+    // if the partner system id is different, we need to make sure we are choosing the one
+    // with higher priority
     // NOTE: if partner has not responded (e.g. no LACP running on far end), then the
     //       partner system id will be the default value, which should never be used by
     //       any valid system running LACP.  If that's the case, we don't match, which
@@ -845,7 +938,12 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
             (bcmp(psport_param->partner_system_id, default_partner_system_mac,
                   sizeof(macaddr_3_t)) == 0)) {
             RDEBUG(DL_VPM, "PARTNER_SYSID does not match\n");
-            goto end;
+            if (!is_priority_match) {
+                goto end;
+            }
+            else {
+                RDEBUG(DL_VPM, "but sys priority match");
+            }
         }
     } else {
         RDEBUG(DL_VPM, "   match_aggregator PARTNER_SYSID Not yet set and so skip the check\n");
@@ -876,9 +974,10 @@ end:
 int
 mvlan_api_clear_sport_params(unsigned long long sport_handle)
 {
-    int                     status = R_SUCCESS;
-    super_port_t            *psport;
-    lacp_int_sport_params_t *sport_lacp_params = NULL;
+    int                       status = R_SUCCESS;
+    super_port_t              *psport;
+    lacp_int_sport_params_t   *sport_lacp_params = NULL;
+    lacp_per_port_variables_t *plpinfo;
 
     RDEBUG(DL_VPM, "%s: Entry\n", __FUNCTION__);
 
@@ -899,6 +998,24 @@ mvlan_api_clear_sport_params(unsigned long long sport_handle)
         goto end;
     }
 
+    // Make sure we detach every port associated with this sport
+
+    RDEBUG(DL_VPM, "Detaching all lports");
+
+    plpinfo = LACP_AVL_FIRST(lacp_per_port_vars_tree);
+
+    while (plpinfo) {
+        if (plpinfo->sport_handle == sport_handle) {
+            /*
+             * Make selected UNSELECTED, and cause approp. event in
+             * the mux machine.
+             */
+            plpinfo->lacp_control.selected = UNSELECTED;
+            LACP_mux_fsm(E2, plpinfo->mux_fsm_state, plpinfo);
+            plpinfo->lacp_control.ready_n = FALSE;
+        }
+        plpinfo = LACP_AVL_NEXT(plpinfo->avlnode);
+    }
     // All logical ports have been detached from this aggregator (sport).
     // Clean up partner information so that we can reuse this sport
     // for subsequent aggregation.
@@ -912,9 +1029,13 @@ mvlan_api_clear_sport_params(unsigned long long sport_handle)
 
     sport_lacp_params->lacp_params.partner_system_priority = 0;
     sport_lacp_params->lacp_params.partner_key = 0;
-    sport_lacp_params->lacp_params.flags &= ~(LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT |
-                                              LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  |
-                                              LACP_LAG_PARTNER_KEY_FIELD_PRESENT );
+    sport_lacp_params->lacp_params.actor_max_port_priority= 0;
+    sport_lacp_params->lacp_params.partner_max_port_priority= 0;
+    sport_lacp_params->lacp_params.flags &= ~(LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT         |
+                                              LACP_LAG_PARTNER_SYSID_FIELD_PRESENT          |
+                                              LACP_LAG_PARTNER_KEY_FIELD_PRESENT            |
+                                              LACP_LAG_ACTOR_PORT_PRIORITY_FIELD_PRESENT    |
+                                              LACP_LAG_PARTNER_PORT_PRIORITY_FIELD_PRESENT);
 
     // OpenSwitch: do not clear actor key & port type. For OpenSwitch,
     // LAGs & actor keys are specified and bound together until deleted.

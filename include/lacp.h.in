@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -86,6 +86,8 @@
 #define LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT (0x08)
 #define LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  (0x10)
 #define LACP_LAG_AGGRTYPE_FIELD_PRESENT       (0x20)
+#define LACP_LAG_ACTOR_PORT_PRIORITY_FIELD_PRESENT    (0x40)
+#define LACP_LAG_PARTNER_PORT_PRIORITY_FIELD_PRESENT  (0x80)
 
 //*****************************************************************
 // These are the values for these LAG parameters.
@@ -117,6 +119,7 @@
 #define UNSELECTED                      0
 #define SELECTED                        1
 #define STANDBY                         2
+#define MAX_PORT_PRIORITY               65535
 
 /*****************************************************************************
  *                   MACROS REQD FOR LACP

@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -30,6 +30,7 @@
 #include "lacp_support.h"
 #include "mvlan_lacp.h"
 #include "lacp_ops_if.h"
+#include "mvlan_sport.h"
 
 VLOG_DEFINE_THIS_MODULE(receive_fsm);
 
@@ -489,6 +490,12 @@ static void
 update_Selected(lacpdu_payload_t *recvd_lacpdu,
                 lacp_per_port_variables_t *plpinfo)
 {
+    lacp_per_port_variables_t   *plpinfo_priority;
+    super_port_t                *psport;
+    lacp_int_sport_params_t     *placp_sport_params;
+    int                         status = R_SUCCESS;
+    int                         max_port_priority = MAX_PORT_PRIORITY;
+
     RENTRY();
 
     if (plpinfo->debug_level & DBG_RX_FSM) {
@@ -525,6 +532,25 @@ update_Selected(lacpdu_payload_t *recvd_lacpdu,
                  __FUNCTION__,
                  recvd_lacpdu->actor_port_priority,
                  plpinfo->partner_oper_port_priority);
+        }
+
+        status = mvlan_get_sport(plpinfo->sport_handle , &psport,
+                                         MLm_vpm_api__get_sport);
+        if (R_SUCCESS == status) {
+            plpinfo_priority = LACP_AVL_FIRST(lacp_per_port_vars_tree);
+
+            while (plpinfo_priority) {
+                if (plpinfo_priority->lport_handle != plpinfo->lport_handle &&
+                    plpinfo_priority->sport_handle == psport->handle &&
+                    plpinfo_priority->partner_oper_port_priority != 0 &&
+                    max_port_priority > plpinfo_priority->partner_oper_port_priority) {
+                    max_port_priority = plpinfo_priority->partner_oper_port_priority;
+                }
+                plpinfo_priority = LACP_AVL_NEXT(plpinfo_priority->avlnode);
+            }
+
+            placp_sport_params = psport->placp_params;
+            placp_sport_params->lacp_params.partner_max_port_priority = max_port_priority;
         }
 
         plpinfo->lacp_control.selected = UNSELECTED;

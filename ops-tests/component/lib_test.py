@@ -1,3 +1,4 @@
+# Copyright (C) 2016 Hewlett-Packard Development Company, L.P.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -14,7 +15,6 @@
 
 from time import sleep
 
-ovs_vsctl = "/usr/bin/ovs-vsctl "
 
 
 # This method calls a function to retrieve data, then calls another function
@@ -35,32 +35,32 @@ def timed_compare(data_func, params, compare_func,
 
 # Set user_config for an Interface.
 def sw_set_intf_user_config(sw, interface, config):
-    c = ovs_vsctl + "set interface " + str(interface)
+    c = "set interface " + str(interface)
     for s in config:
         c += " user_config:" + s
-    return sw(c, shell='bash')
+    return sw(c, shell='vsctl')
 
 
 # Clear user_config for an Interface.
 def sw_clear_user_config(sw, interface):
-    c = ovs_vsctl + "clear interface " + str(interface) + " user_config"
-    return sw(c, shell='bash')
+    c = "clear interface " + str(interface) + " user_config"
+    return sw(c, shell='vsctl')
 
 
 # Set pm_info for an Interface.
 def sw_set_intf_pm_info(sw, interface, config):
-    c = ovs_vsctl + "set interface " + str(interface)
+    c = "set interface " + str(interface)
     for s in config:
         c += " pm_info:" + s
-    return sw(c, shell='bash')
+    return sw(c, shell='vsctl')
 
 
 # Set open_vsw_lacp_config parameter(s)
 def set_port_parameter(sw, port, config):
-    c = ovs_vsctl + "set port " + str(port)
+    c = "set port " + str(port)
     for s in config:
         c += ' %s' % s
-    return sw(c, shell='bash')
+    return sw(c, shell='vsctl')
 
 
 # Get the values of a set of columns from Interface table.
@@ -68,18 +68,18 @@ def set_port_parameter(sw, port, config):
 # fields are requested, and returns a single value (no list)
 # if only 1 field is requested.
 def sw_get_intf_state(params):
-    c = ovs_vsctl + "get interface " + str(params[1])
+    c = "get interface " + str(params[1])
     for f in params[2]:
         c += " " + f
-    out = params[0](c, shell='bash').replace('"', '').splitlines()
+    out = params[0](c, shell='vsctl').replace('"', '').splitlines()
     return out
 
 
 def sw_get_port_state(params):
-    c = ovs_vsctl + "get port " + str(params[1])
+    c = "get port " + str(params[1])
     for f in params[2]:
         c += " " + f
-    out = params[0](c, shell='bash').splitlines()
+    out = params[0](c, shell='vsctl').splitlines()
     if len(out) == 1:
         out = out[0]
     return out
@@ -89,10 +89,10 @@ def sw_get_port_state(params):
 def sw_create_bond(s1, bond_name, intf_list, lacp_mode="off"):
     print("Creating LAG " + bond_name + " with interfaces: " +
           str(intf_list) + "\n")
-    c = ovs_vsctl + "add-bond bridge_normal " + bond_name +\
+    c = "add-bond bridge_normal " + bond_name +\
         " " + " ".join(map(str, intf_list))
     c += " -- set port " + bond_name + " lacp=" + lacp_mode
-    return s1(c, shell='bash')
+    return s1(c, shell='vsctl')
 
 
 def verify_compare_value(actual, expected, final):
@@ -174,12 +174,12 @@ def remove_intf_from_bond(sw, bond_name, intf_name, fail=True):
     print("Removing interface " + intf_name + " from LAG " + bond_name + "\n")
 
     # Get the UUID of the Interface that has to be removed.
-    c = ovs_vsctl + "get interface " + str(intf_name) + " _uuid"
-    intf_uuid = sw(c, shell='bash').rstrip('\r\n')
+    c = "get interface " + str(intf_name) + " _uuid"
+    intf_uuid = sw(c, shell='vsctl').rstrip('\r\n')
 
     # Get the current list of Interfaces in the bond.
-    c = ovs_vsctl + "get port " + bond_name + " interfaces"
-    out = sw(c, shell='bash')
+    c = "get port " + bond_name + " interfaces"
+    out = sw(c, shell='vsctl')
     intf_list = out.rstrip('\r\n').strip("[]").replace(" ", "").split(',')
 
     if intf_uuid not in intf_list:
@@ -192,8 +192,8 @@ def remove_intf_from_bond(sw, bond_name, intf_name, fail=True):
     # Set the new Interface list in the bond.
     new_intf_str = '[' + ",".join(new_intf_list) + ']'
 
-    c = ovs_vsctl + "set port " + bond_name + " interfaces=" + new_intf_str
-    out = sw(c, shell='bash')
+    c = "set port " + bond_name + " interfaces=" + new_intf_str
+    out = sw(c, shell='vsctl')
 
     return out
 

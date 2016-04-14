@@ -68,7 +68,27 @@
   - [Test Result Criteria](#test-result-criteria)
     - [Test Pass Criteria](#test-pass-criteria)
     - [Test Fail Criteria](#test-fail-criteria)
-- [LAGs created with system priority and port priority different from default](#lags-created-with-system-priority-and-port-priority-different-from-default)
+- [LACP port priority](#LACP-port-priority)
+  - [Objective](#objective)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+    - [Topology Diagram](#topology-diagram)
+  - [Test Setup](#test-setup)
+  - [Description](#description)
+  - [Test Result Criteria](#test-result-criteria)
+    - [Test Pass Criteria](#test-pass-criteria)
+    - [Test Fail Criteria](#test-fail-criteria)
+- [LACP partner priority](#LACP-partner-priority)
+  - [Objective](#objective)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+    - [Topology Diagram](#topology-diagram)
+  - [Test Setup](#test-setup)
+  - [Description](#description)
+  - [Test Result Criteria](#test-result-criteria)
+    - [Test Pass Criteria](#test-pass-criteria)
+    - [Test Fail Criteria](#test-fail-criteria)
+- [LACP system priority](#LACP-system-priority)
   - [Objective](#objective)
   - [Requirements](#requirements)
   - [Setup](#setup)
@@ -499,73 +519,226 @@ When the aggregation key is different on both sides of a LAG, it should be forme
 #### Test Fail Criteria
 * Any interfaces is not In Sync or in Collecting/Distributing state
 
-## LAGs created with system priority and port priority different from default
+## LACP port priority
 ### Objective
-The switch with higher System Priority is the one deciding which LAG interfaces are active despite other configurations. The switch with higher priority needs to decide using the Port Priority what interfaces take precedence when forming the LAG
+The interface with higher Port Priority is the one deciding which LAG interfaces are going to agreggate despite other configurations.
 ### Requirements
  - Virtual Mininet Test Setup
- - Script is in tests/test_ct_aggregation_key.py
+ - Script is in ops-test/component/test_lacpd_ct_port_priority.py
 
 ### Setup
 #### Topology Diagram
 ```
-+------------+
-|            |
-|     s1     |
-|            |
-+-1--2--3--4-+
-  |  |  |  |
-  |  |  |  |
-  |  |  |  |
-  |  |  |  |
-+-1--2--3--4-+
-|            |
-|     s2     |
-|            |
-+------------+
++-------+     +-------+
+|       1-----1       |
+|       |     |       |
+|       2-----2       |
+|       |     |       |
+| sw1   3-----3  sw2  |
+|       |     |       |
+|       4-----4       |
+|       |     |       |
+|       5-----5       |
++-------+     +-------+
 ```
 ### Test Setup
-```
- Switch 1 (System Priority 200)
-   LAG 50:
-       Interface 1 (Port Priority = 100)
-       Interface 2 (Port Priority = 100)
-       Interface 3 (Port Priority = 100)
-       Interface 4 (Port Priority = 100)
-
- Switch 2 (System Priority 1)
-   LAG 50:
-       Interface 1 (Port Priority = 100)
-       Interface 2 (Port Priority = 100)
-   LAG 60:
-       Interface 3 (Port Priority = 1)
-       Interface 4 (Port Priority = 1)
-```
 
 ### Description
 1. Enable all interfaces use for test
-* Apply System Priority 200 to Switch 1
-* Apply System Priority 1 to Switch 2
-* Create LAG 50 with active mode with interfaces 1-4 in switch 1
-  * Apply aggregation key 50 to interfaces 1-4
-  * Apply port priority 100 for interaces 1-4
-* Create LAG 50 with active mode with interfaces 1 and 2 in switch 2
-  * Apply aggregation key 50 to interfaces 1 and 2
-  * Apply port priority 100 to interfaces 1 and 2
-* Create LAG 60 with active mode with interface 3 and 4 in switch 2
-  * Apply aggregation key 60 to interfaces 3 and 4
-  * Apply port priority 1 to interfaces 3 and 4
-* Validate interfaces 1 and 2 in switch 1 and 2 are in state Out of Sync and not in Collecting/Distributing
-* Validate interfaces 3 and 4 in switch 1 and 2 are in state Sync and Collecting/Distributing
-* Clean configuration
+2. Create LAG 1 with active mode in fast rate with interfaces 1-2 in switch 1
+3. Create LAG 2 with active mode in fast rate with interfaces 3-5 in switch 1
+4. Create LAG 1 with active mode in fast rate with interfaces 1-3 in switch 2
+5. Create LAG 2 with active mode in fast rate with interfaces 4-5 in switch 2
+6. Wait for the configuration to apply
+7. Apply verifications
+8. Apply port priority 100 to interfaces 1, 2, 4, 5 in switch 1
+9. Apply port priority 200 to interface 3 in switch 1
+10. Apply port priority 100 to interfaces 1, 2, 4, 5 in switch 2
+11. Apply port priority 200 to interface 3 in switch 2
+12. Wait for the configuration to apply
+13. Apply verifications
+14. Clean configuration
 
 ### Test Result Criteria
 #### Test Pass Criteria
-* Interfaces 1 and 2 in both switches are in state Out of Sync and Collecting/Distributing
-* Interfaces 3 and 4 in both switches are in state In Sync and in Collecting/Distributing
+1. Verifications for step 7
+   - In switch 1:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   * Interface 3 must not be collecting and distributing
+   * Interface 4 must not be collecting and distributing
+   * Interface 5 must not be collecting and distributing
+   - In switch 2:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   * Interface 3 must not be collecting and distributing
+   * Interface 4 must not be collecting and distributing
+   * Interface 5 must not be collecting and distributing
+2. Verifications for step 13
+   - In switch 1:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   * Interface 3 must not be collecting and distributing
+   * Interface 4 must be collecting and distributing
+   * Interface 5 must be collecting and distributing
+   - In switch 2:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   * Interface 3 must not be collecting and distributing
+   * Interface 4 must be collecting and distributing
+   * Interface 5 must be collecting and distributing
 #### Test Fail Criteria
-* Interfaces 1 and 2 in both switches are in state In Sync or Collecting/Distributing
-* Interfaces 3 and 4 in both switches are in state Out of Sync or not in Collecting/Distributing
+1. Verifications for step 7
+   - In switch 1:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   * Interface 3 must be collecting and distributing
+   * Interface 4 must be collecting and distributing
+   * Interface 5 must be collecting and distributing
+   - In switch 2:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   * Interface 3 must be collecting and distributing
+   * Interface 4 must be collecting and distributing
+   * Interface 5 must be collecting and distributing
+2. Verifications for step 13
+   - In switch 1:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   * Interface 3 must be collecting and distributing
+   * Interface 4 must not be collecting and distributing
+   * Interface 5 must not be collecting and distributing
+   - In switch 2:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   * Interface 3 must be collecting and distributing
+   * Interface 4 must not be collecting and distributing
+   * Interface 5 must not be collecting and distributing
+
+## LACP partner priority
+### Objective
+The interface with higher Port Priority is the one deciding which LAG interfaces are going to agreggate despite other configurations, if two interfaces has the same port
+priority, the interfaces with higher partner priority should decide which LAG interfaces are going to agreggate despite other configurations.
+### Requirements
+ - Virtual Mininet Test Setup
+ - Script is in ops-test/component/test_lacpd_ct_port_priority.py
+
+### Setup
+#### Topology Diagram
+```
++-------+     +-------+
+|       1-----1       |
+|       |     |       |
+|       2-----2       |
+|       |     |       |
+| sw1   3-----3  sw2  |
+|       |     |       |
+|       4-----4       |
++-------+     +-------+
+```
+### Test Setup
+
+### Description
+1. Enable all interfaces use for test
+2. Create LAG 1 with active mode in fast rate with interfaces 1-4 in switch 1
+3. Create LAG 1 with active mode in fast rate with interfaces 1-2 in switch 2
+4. Create LAG 2 with active mode in fast rate with interfaces 3-4 in switch 2
+5. Apply port priority 100 to interfaces 1, 2, 3, 4 in switch 1
+6. Apply port priority 100 to interface2 1 and 2 in switch 2
+7. Apply port priority 1 to interfaces 3 and 4 in switch 2
+8. Wait for the configuration to apply
+9. Apply verifications
+10. Clean configuration
+
+### Test Result Criteria
+#### Test Pass Criteria
+1. Verifications for step 9
+   - In switch 1:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   * Interface 3 must be collecting and distributing
+   * Interface 4 must be collecting and distributing
+   - In switch 2:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   * Interface 3 must be collecting and distributing
+   * Interface 4 must be collecting and distributing
+#### Test Fail Criteria
+1. Verifications for step 9
+   - In switch 1:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   * Interface 3 must not be collecting and distributing
+   * Interface 4 must not be collecting and distributing
+   - In switch 2:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   * Interface 3 must not be collecting and distributing
+   * Interface 4 must not be collecting and distributing
+
+## LACP system priority
+### Objective
+The system with higher System Priority is the one deciding which LAG interfaces are going to agreggate despite other configurations
+### Requirements
+ - Virtual Mininet Test Setup
+ - Script is in ops-test/component/test_lacpd_ct_system_priority.py
+
+### Setup
+#### Topology Diagram
+```
++-----+    +-----+
+|     1----1     |
+|     |    | sw2 |
+|     2----2     |
+|     |    +-----+
+| sw1 |
+|     |    +-----+
+|     3----1     |
+|     |    | sw3 |
+|     4----2     |
++-----+    +-----+
+```
+### Test Setup
+
+### Description
+1. Enable all interfaces use for test
+2. Apply system priority 1 to switch 1
+3. Apply system priority 100 to switch 2
+4. Apply system priority 50 to switch 3
+5. Create LAG 1 with active mode in fast rate with interfaces 1-4 in switch 1
+6. Create LAG 1 with active mode in fast rate with interfaces 1-2 in switch 2
+7. Create LAG 1 with active mode in fast rate with interfaces 1-2 in switch 3
+8. Wait for the configuration to apply
+9. Apply verifications
+10. Clean configuration
+
+### Test Result Criteria
+#### Test Pass Criteria
+1. Verifications for step 9
+   - In switch 1:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   * Interface 3 must be collecting and distributing
+   * Interface 4 must be collecting and distributing
+   - In switch 2:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
+   - In switch 3:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+#### Test Fail Criteria
+1. Verifications for step 9
+   - In switch 1:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   * Interface 3 must not be collecting and distributing
+   * Interface 4 must not be collecting and distributing
+   - In switch 2:
+   * Interface 1 must be collecting and distributing
+   * Interface 2 must be collecting and distributing
+   - In switch 3:
+   * Interface 1 must not be collecting and distributing
+   * Interface 2 must not be collecting and distributing
 
 ## dynamic lag created to disable all ports or to fallback
 ### Objective

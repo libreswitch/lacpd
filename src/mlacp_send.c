@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -58,12 +58,14 @@ mlacp_blocking_send_select_aggregator(LAG_t *const lag,
     //********************************************************************
     // All flags are present, because of the default values.
     //********************************************************************
-    match_params.flags = (LACP_LAG_PORT_TYPE_FIELD_PRESENT      |
-                          LACP_LAG_ACTOR_KEY_FIELD_PRESENT      |
-                          LACP_LAG_PARTNER_KEY_FIELD_PRESENT    |
-                          LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT |
-                          LACP_LAG_PARTNER_SYSID_FIELD_PRESENT  |
-                          LACP_LAG_AGGRTYPE_FIELD_PRESENT);
+    match_params.flags = (LACP_LAG_PORT_TYPE_FIELD_PRESENT              |
+                          LACP_LAG_ACTOR_KEY_FIELD_PRESENT              |
+                          LACP_LAG_PARTNER_KEY_FIELD_PRESENT            |
+                          LACP_LAG_PARTNER_SYSPRI_FIELD_PRESENT         |
+                          LACP_LAG_PARTNER_SYSID_FIELD_PRESENT          |
+                          LACP_LAG_AGGRTYPE_FIELD_PRESENT               |
+                          LACP_LAG_ACTOR_PORT_PRIORITY_FIELD_PRESENT    |
+                          LACP_LAG_PARTNER_PORT_PRIORITY_FIELD_PRESENT);
 
     //********************************************************************
     // Send all the params for matching.
@@ -74,6 +76,9 @@ mlacp_blocking_send_select_aggregator(LAG_t *const lag,
     match_params.local_port_number = lag->LAG_Id->local_port_number;
     match_params.actor_aggr_type   = lacp_port->actor_oper_port_state.aggregation;
     match_params.partner_aggr_type = lacp_port->partner_oper_port_state.aggregation;
+
+    match_params.actor_oper_port_priority = lacp_port->actor_admin_port_priority;
+    match_params.partner_oper_port_priority = lacp_port->partner_oper_port_priority;
 
     match_params.partner_system_priority =
         lacp_port->partner_oper_system_variables.system_priority;
