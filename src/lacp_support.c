@@ -36,6 +36,7 @@
 #include "lacp_support.h"
 #include "mlacp_fproto.h"
 #include "mvlan_sport.h"
+#include "lacp_ops_if.h"
 #include <vswitch-idl.h>
 
 VLOG_DEFINE_THIS_MODULE(lacpd_support);
@@ -1170,7 +1171,10 @@ set_all_port_system_priority(void)
                 htons(actor_system_priority);
             plpinfo->actor_oper_system_variables.system_priority =
                 plpinfo->actor_admin_system_variables.system_priority;
+            /* Update interface status when a system setting changes */
+            db_update_interface(plpinfo);
         }
+
         plpinfo = LACP_AVL_NEXT(plpinfo->avlnode);
     }
 

@@ -77,6 +77,8 @@ VLOG_DEFINE_THIS_MODULE(lacpd_ovsdb_if);
  *********************************/
 #define BITS_PER_BYTE           8
 #define MAX_ENTRIES_IN_POOL     256
+/* Wait up to 3 seconds when calling poll_block. */
+#define LACP_POLL_INTERVAL      3000
 
 #define IS_AVAILABLE(a, idx)  ((a[idx/BITS_PER_BYTE] & (1 << (idx % BITS_PER_BYTE))) == 0)
 
@@ -2277,6 +2279,7 @@ void
 lacpd_wait(void)
 {
     ovsdb_idl_wait(idl);
+    poll_timer_wait(LACP_POLL_INTERVAL);
 } /* lacpd_wait */
 
 /**********************************************************************/

@@ -16,7 +16,6 @@
 from time import sleep
 
 
-
 # This method calls a function to retrieve data, then calls another function
 # to compare the data to the expected value(s). If it fails, it sleeps for
 # half a second, then retries, up to a specified retry limit (default 20 = 10
@@ -202,3 +201,29 @@ def remove_intf_from_bond(sw, bond_name, intf_name, fail=True):
 def remove_intf_list_from_bond(sw, bond_name, intf_list):
     for intf in intf_list:
         remove_intf_from_bond(sw, bond_name, intf)
+
+
+# Set system level LACP config
+def set_system_lacp_config(sw, config):
+    c = "set system ."
+    for s in config:
+        c += " lacp_config:" + s
+    return sw(c, shell='vsctl')
+
+
+# Verify LACP interface status
+def verify_intf_lacp_status(sw, intf, verify_values, context=''):
+    request = []
+    attrs = []
+    for attr in verify_values:
+        request.append('lacp_status:' + attr)
+        attrs.append(attr)
+    result = timed_compare(sw_get_intf_state,
+                           (sw, intf, request),
+                           verify_compare_complex, verify_values)
+    field_vals = result[1]
+    for i in range(0, len(attrs)):
+        verify_values[attrs[i]].replace('"', '')
+        assert field_vals[i] == verify_values[attrs[i]], context +\
+            ": invalid value for " + attrs[i] + ", expected " +\
+            verify_values[attrs[i]] + ", got " + field_vals[i]
