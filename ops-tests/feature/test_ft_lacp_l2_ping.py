@@ -181,3 +181,14 @@ def test_l2_dynamic_lag_ping_case_1(topology):
     print("Ping workstation 2 from workstation 1 and viceversa")
     check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
                                      number_pings, True)
+
+    # ops-lacpd is stopped so that it produces the gcov coverage data
+    #
+    # Daemons from both switches will dump the coverage data to the
+    # same file but the data write is done on daemon exit only.
+    # The systemctl command waits until the process exits to return the
+    # prompt and the shell function waits for the command to return,
+    # therefore it is safe to stop the ops-lacpd daemons sequentially
+    # This ensures that data from both processes is captured.
+    sw1("systemctl stop ops-lacpd", shell="bash")
+    sw2("systemctl stop ops-lacpd", shell="bash")
