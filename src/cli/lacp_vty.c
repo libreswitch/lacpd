@@ -2406,6 +2406,14 @@ DEFUN (cli_lag_intf_del_ip4,
         sprintf(ip4,"%s",argv[0]);
     }
 
+    status_txn = cli_do_config_start ();
+
+    if (status_txn == NULL) {
+        VLOG_ERR(OVSDB_TXN_CREATE_ERROR);
+        cli_do_config_abort(status_txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
     OVSREC_PORT_FOR_EACH(port_row, idl) {
         if (strcmp(port_row->name, if_name) == 0) {
             port_found = true;
@@ -2418,9 +2426,13 @@ DEFUN (cli_lag_intf_del_ip4,
         return CMD_OVSDB_FAILURE;
     }
 
+    port_row = port_check_and_add (if_name, false, false, status_txn);
+
     if (!port_row->ip4_address) {
+        vty_out(vty,"No IPv4 address configured on interface %s.%s", if_name, VTY_NEWLINE);
         VLOG_DBG ("%s No IPv4 address configured on interface \"%s\".%s",
                   __func__, if_name, VTY_NEWLINE);
+        cli_do_config_abort (status_txn);
         return CMD_SUCCESS;
     }
     if (!(argv[1] != NULL)) {
@@ -2429,15 +2441,10 @@ DEFUN (cli_lag_intf_del_ip4,
             vty_out (vty, "IPv4 address %s not configured.%s", ip4, VTY_NEWLINE);
             VLOG_DBG ("%s IPv4 address \"%s\" not configured on interface "
                       "\"%s\".%s", __func__, ip4, if_name, VTY_NEWLINE);
+            cli_do_config_abort (status_txn);
             return CMD_SUCCESS;
        }
 
-       status_txn = cli_do_config_start ();
-       if (status_txn == NULL) {
-           VLOG_ERR (OVSDB_TXN_CREATE_ERROR);
-           cli_do_config_abort (status_txn);
-           return CMD_OVSDB_FAILURE;
-       }
        ovsrec_port_set_ip4_address (port_row, NULL);
     } else {
           if (!port_row->n_ip4_address_secondary) {

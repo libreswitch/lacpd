@@ -145,9 +145,7 @@ class vrfCLITest(OpsVsiTest):
 
         s1.cmdCLI('routing')
         ret = s1.cmdCLI('no ip address 10.0.30.2/24')
-        expected_output = \
-            'No IP address configured on interface ' \
-            + first_interface
+        expected_output = 'No IPv4 address configured on interface'
         assert expected_output in ret, \
             'IP address presence validation failed'
         info('### IP address presence validation passed ###\n')
