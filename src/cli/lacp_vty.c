@@ -1198,6 +1198,7 @@ lacp_add_intf_to_lag(const char *if_name, const char *lag_number)
    struct ovsrec_interface **interfaces;
    const struct ovsrec_port *lag_port = NULL;
    int i=0, k=0, n=0;
+   const char* split_state = NULL;
 
    struct smap smap = SMAP_INITIALIZER(&smap);
 
@@ -1253,6 +1254,18 @@ lacp_add_intf_to_lag(const char *if_name, const char *lag_number)
          interface_row = row;
          break;
       }
+   }
+
+   /*
+    * Search if this interface is split or not. A parent split interface
+    * can't be added to a LAG
+    */
+   split_state =  smap_get(&interface_row->user_config, INTERFACE_USER_CONFIG_MAP_LANE_SPLIT);
+   if ((NULL != split_state) &&
+       (strncmp(split_state, INTERFACE_USER_CONFIG_MAP_LANE_SPLIT_SPLIT, strlen(split_state)) == 0)) {
+      vty_out(vty, "Split interface can't be part of a LAG\n");
+      cli_do_config_abort(status_txn);
+      return CMD_SUCCESS;
    }
 
    /* Search if the interface is part of any LAG or not.
