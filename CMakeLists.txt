@@ -51,7 +51,7 @@ set (SOURCES ${SRC_DIR}/avl.c ${SRC_DIR}/dlist.c ${SRC_DIR}/lacpd.c
 add_executable (${OPSLACPD} ${SOURCES})
 
 target_link_libraries (${OPSLACPD} ${OVSCOMMON_LIBRARIES} ${OVSDB_LIBRARIES}
-                       ${OPSUTILS_LIBRARIES}
+                       ${OPSUTILS_LIBRARIES} -lsupportability
 	               -lpthread -lrt)
 
 add_subdirectory(src/cli)

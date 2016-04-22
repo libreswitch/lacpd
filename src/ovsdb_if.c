@@ -47,6 +47,7 @@
 #include <lacp_fsm.h>
 
 #include <ops-utils.h>
+#include <eventlog.h>
 
 #include "lacp_ops_if.h"
 #include "lacp.h"
@@ -119,6 +120,7 @@ static unsigned int idl_seqno;
 static int system_configured = false;
 static char system_id[OPS_MAC_STR_SIZE] = {0};
 static int system_priority = DFLT_SYSTEM_LACP_CONFIG_SYSTEM_PRIORITY;
+static int prev_sys_prio = DFLT_SYSTEM_LACP_CONFIG_SYSTEM_PRIORITY;
 
 /**
  * A hash map of daemon's internal data for all the interfaces maintained by
@@ -1398,6 +1400,13 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
     if ((timeout != -1) && (timeout != portp->timeout_mode)) {
         portp->timeout_mode = timeout;
         timeout_changed = true;
+
+        if (log_event("LACP_RATE_SET",
+                      EV_KV("lag_id", "%s",
+                            portp->name + LAG_PORT_NAME_PREFIX_LENGTH),
+                      EV_KV("lacp_rate", "%s", cp)) < 0) {
+            VLOG_ERR("Could not log event LACP_RATE_SET");
+        }
     }
 
     /* Build a new map for this port's interfaces in idl. */
@@ -1429,7 +1438,15 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                     clear_port_overrides(idp);
                     rc++;
                 }
+
+                if (log_event("LAG_INTERFACE_REMOVE",
+                              EV_KV("lag_id", "%s",
+                                    portp->name + LAG_PORT_NAME_PREFIX_LENGTH),
+                              EV_KV("intf_id", "%s", node->name)) < 0) {
+                    VLOG_ERR("Could not log event LAG_INTERFACE_REMOVE");
+                }
                 shash_delete(&portp->cfg_member_ifs, node);
+
             }
         }
     }
@@ -1452,6 +1469,14 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
         /* LACP mode changed.  In either case, mark all existing interfaces
          * as ineligible to detach them first.  Then the interfaces will be
          * reconfigured based on the new LACP mode. */
+        if (log_event("LACP_MODE_SET",
+                      EV_KV("lag_id", "%s",
+                            portp->name + LAG_PORT_NAME_PREFIX_LENGTH),
+                      EV_KV("lacp_mode", "%s",
+                            lacp_mode_str(lacp_mode))) < 0) {
+            VLOG_ERR("Could not log event LACP_MODE_SET");
+        }
+
         SHASH_FOR_EACH_SAFE(node, next, &portp->eligible_member_ifs) {
             struct iface_data *idp =
                 shash_find_data(&all_interfaces, node->name);
@@ -1478,6 +1503,12 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
 
                 /* Send LAG creation information. */
                 send_lag_create_msg(portp->lag_id);
+
+                if (log_event("LAG_CREATE",
+                              EV_KV("lag_id", "%s", portp->name +
+                                    LAG_PORT_NAME_PREFIX_LENGTH)) < 0) {
+                    VLOG_ERR("Could not log event LAG_CREATE");
+                }
 
                 /* Send LAG configuration information.
                  * We control actor_key and port type parameters,
@@ -1525,6 +1556,12 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                 if (portp->lag_id) {
                     send_unconfig_lag_msg(portp->lag_id);
                     send_lag_delete_msg(portp->lag_id);
+                    if (log_event("LAG_DELETE",
+                                  EV_KV("lag_id", "%s", portp->name +
+                                        LAG_PORT_NAME_PREFIX_LENGTH)) < 0) {
+                        VLOG_ERR("Could not log event LAG_DELETE");
+                    }
+
                     free_lag_id(portp->lag_id);
                     portp->lag_id = 0;
                 }
@@ -1555,6 +1592,13 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
             shash_add(&interfaces_recently_added, node->name, (void *)idp);
             idp->port_datap = portp;
             set_port_overrides(portp, idp);
+            if (log_event("LAG_INTERFACE_ADD",
+                          EV_KV("lag_id", "%s",
+                                portp->name + LAG_PORT_NAME_PREFIX_LENGTH),
+                          EV_KV("intf_id", "%s", node->name)) < 0) {
+                VLOG_ERR("Could not log event LAG_INTERFACE_ADD");
+            }
+
         }
     }
 
@@ -1829,6 +1873,12 @@ update_system_prio_n_id(const struct ovsrec_system *sys, bool lacpd_init)
 
                 /* Only save after we know it is a valid MAC addr */
                 strncpy(system_id, sys_mac, OPS_MAC_STR_SIZE);
+
+                if (log_event("LACP_SYSTEM_ID_SET",
+                              EV_KV("system_id", "%s", system_id)) < 0) {
+                    VLOG_ERR("Could not log event LACP_SYSTEM_ID_SET");
+                }
+
             }
         }
 
@@ -1845,6 +1895,14 @@ update_system_prio_n_id(const struct ovsrec_system *sys, bool lacpd_init)
                 system_priority = sys_prio;
             }
             send_sys_pri_msg(system_priority);
+            if (system_priority != prev_sys_prio) {
+                if (log_event("LACP_SYSTEM_PRIORITY_SET",
+                              EV_KV("system_priority", "%d",
+                                    system_priority)) < 0) {
+                    VLOG_ERR("Could not log event LACP_SYSTEM_PRIORITY_SET");
+                }
+                prev_sys_prio = system_priority;
+            }
         }
     }
 }
@@ -2114,6 +2172,17 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
 
     if (idp->partner.system_id == NULL ||
         strcmp(idp->partner.system_id, system_id) != 0) {
+        if (strncmp(system_id, NO_SYSTEM_ID, strlen(NO_SYSTEM_ID))) {
+            if (log_event("LACP_PARTNER_DETECTED",
+                          EV_KV("intf_id", "%s", idp->name),
+                          EV_KV("lag_id", "%s",
+                                portp->name +
+                                    LAG_PORT_NAME_PREFIX_LENGTH),
+                          EV_KV("partner_sys_id", "%s", system_id)) < 0) {
+                VLOG_ERR("Could not log event LACP_PARTNER_DETECTED");
+            }
+        }
+
         smap_replace(&smap, INTERFACE_LACP_STATUS_MAP_PARTNER_SYSTEM_ID, system_id);
         free(idp->partner.system_id);
         idp->partner.system_id = system_id;

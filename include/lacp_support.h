@@ -31,6 +31,8 @@
 
 #define STATE_STRING_SIZE               32
 
+#define STATE_FLAGS_SIZE                9
+
 #define MAX_ASYNC_TX                    3
 
 /*****************************************************************************
@@ -55,6 +57,8 @@
 #define PORT_SYSTEM_MAC_ADDR_BIT                0x800
 #define PORT_SYSTEM_PRIORITY_BIT                0x1000
 #define ALL_PARAMS                              0xFFFF
+
+#define NO_SYSTEM_ID "0,00:00:00:00:00:00"
 
 /*****************************************************************************/
 /*                   Prototypes for Global routines                          */

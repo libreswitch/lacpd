@@ -24,6 +24,7 @@
 #include <lacp_cmn.h>
 #include <mlacp_debug.h>
 #include <lacp_fsm.h>
+#include <eventlog.h>
 
 #include "lacp.h"
 #include "lacp_stubs.h"
@@ -149,7 +150,7 @@ static void recordDefault(lacp_per_port_variables_t *);
 static void update_Default_Selected(lacp_per_port_variables_t *);
 static void start_current_while_timer(lacp_per_port_variables_t *, int);
 static void generate_mux_event_from_recordPdu(lacp_per_port_variables_t *);
-
+static void format_state(state_parameters_t, char *);
 
 /*----------------------------------------------------------------------
  * Function: LACP_receive_fsm(event, current_state, recvd_lacpdu, plpinfo)
@@ -169,6 +170,10 @@ LACP_receive_fsm(int event, int current_state,
     u_int action;
     char previous_state_string[STATE_STRING_SIZE];
     char current_state_string[STATE_STRING_SIZE];
+    char actor_state_str[STATE_FLAGS_SIZE];
+    char partner_state_str[STATE_FLAGS_SIZE];
+    int port;
+    struct iface_data *idp = NULL;
 
     RENTRY();
     RDEBUG(DL_RX_FSM, "RxFSM: event %d current_state %d\n", event, current_state);
@@ -207,6 +212,9 @@ LACP_receive_fsm(int event, int current_state,
         }
     }
 
+    port = PM_HANDLE2PORT(plpinfo->lport_handle);
+    idp = find_iface_data_by_index(port);
+
     // Call the appropriate action routine.
     switch (action) {
 
@@ -220,6 +228,16 @@ LACP_receive_fsm(int event, int current_state,
 
     case ACTION_DEFAULTED:
         defaulted_state_action(plpinfo);
+        if (log_event("LACP_PARTNER_TIMEOUT",
+                      EV_KV("intf_id", "%s",
+                            idp->name),
+                      EV_KV("lag_id", "sport: %d",
+                            idp->cfg_lag_id),
+                      EV_KV("fsm_state", "%s -> %s",
+                            previous_state_string,
+                            current_state_string)) < 0) {
+            VLOG_ERR("Could not log event LACP_PARTNER_TIMEOUT");
+        }
         break;
 
     case ACTION_LACP_DISABLED:
@@ -228,6 +246,20 @@ LACP_receive_fsm(int event, int current_state,
 
     case ACTION_PORT_DISABLED:
         port_disabled_state_action(plpinfo);
+        format_state(plpinfo->actor_oper_port_state,
+                     actor_state_str);
+        format_state(plpinfo->partner_oper_port_state,
+                     partner_state_str);
+        if (log_event("LACP_PARTNER_OUT_OF_SYNC",
+                      EV_KV("intf_id", "%s", idp->name),
+                      EV_KV("lag_id", "sport: %d", idp->cfg_lag_id),
+                      EV_KV("actor_state", "%s",
+                            actor_state_str),
+                      EV_KV("partner_state", "%s",
+                            partner_state_str)
+                      ) < 0) {
+            VLOG_ERR("Could not log event LACP_PARTNER_OUT_OF_SYNC");
+        }
         break;
 
     case ACTION_INITIALIZE:
@@ -1346,3 +1378,33 @@ start_current_while_timer(lacp_per_port_variables_t *plpinfo,
         RDBG("%s : exit\n", __FUNCTION__);
     }
 } // start_current_while_timer
+
+/*----------------------------------------------------------------------
+ * Function: format_state(state)
+ * Synopsis:
+ * Input  :
+ *           state = struct with lacp state flags
+ * Returns:  char *
+ *----------------------------------------------------------------------*/
+
+static void
+format_state(state_parameters_t state, char *result)
+{
+    sprintf(result, "%c%c%c%c",
+            state.lacp_activity ? 'A' : 'P',
+            state.lacp_timeout ? 'L' : 'S',
+            state.aggregation ? 'F' : 'I',
+            state.synchronization ? 'N' : 'O');
+    if (state.collecting) {
+        strcat(result, "C");
+    }
+    if (state.distributing) {
+        strcat(result, "D");
+    }
+    if (state.defaulted) {
+        strcat(result, "E");
+    }
+    if (state.expired) {
+        strcat(result,"X");
+    }
+} /* format_state */

@@ -53,6 +53,7 @@
 #include <pm_cmn.h>
 #include <lacp_cmn.h>
 #include <mlacp_debug.h>
+#include <eventlog.h>
 
 #include "lacp.h"
 #include "mlacp_fproto.h"
@@ -290,6 +291,11 @@ lacpd_init(const char *db_path, struct unixctl_server *appctl)
     if (rc) {
         VLOG_ERR("pthread_create for LACDU RX thread failed! rc=%d", rc);
         exit(-rc);
+    }
+
+    /* Init events for LACP. */
+    if (event_log_init("LACP") < 0) {
+        VLOG_ERR("Could not init event log for LACP");
     }
 
 } /* lacpd_init */
