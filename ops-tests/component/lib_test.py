@@ -22,8 +22,9 @@ ovs_vsctl = "/usr/bin/ovs-vsctl "
 def print_header(msg):
     header_length = len(msg)
     print('\n%s\n%s\n%s\n' % ('=' * header_length,
-                               msg,
+                              msg,
                               '=' * header_length))
+
 
 
 def sw_set_system_lacp_config(sw, config):
@@ -93,13 +94,6 @@ def sw_get_intf_state(params):
     return out
 
 
-def set_port_parameter(sw, port, config):
-    """Configure parameters in 'config' from 'port' on 'sw'."""
-
-    cmd = "set port %s %s" % (str(port), ' '.join(map(str, config)))
-    return sw(cmd, shell='vsctl')
-
-
 def clear_port_parameter(sw, port, config):
     """Clears parameters in 'config' from 'port' on 'sw'."""
 
@@ -129,6 +123,14 @@ def sw_get_port_state(params):
     out = params[0](c, shell='vsctl').splitlines()
     if len(out) == 1:
         out = out[0]
+    return out
+
+
+def sw_get_port_state_bs(params):
+    c = "get port " + str(params[1])
+    for f in params[2]:
+        c += " " + f
+    out = params[0](c, shell='vsctl').replace('"', '').splitlines()
     return out
 
 
@@ -256,12 +258,50 @@ def remove_intf_list_from_bond(sw, bond_name, intf_list):
         remove_intf_from_bond(sw, bond_name, intf)
 
 
+# Remove all interfaces from a bond.
+def remove_all_intf_from_bond(sw, bond_name):
+    print("Removing all interfaces from LAG " + bond_name + "\n")
+    c = "set port " + bond_name + " interfaces=[]"
+    out = sw(c, shell='vsctl')
+    return out
+
+
 # Set system level LACP config
 def set_system_lacp_config(sw, config):
     c = "set system ."
     for s in config:
         c += " lacp_config:" + s
     return sw(c, shell='vsctl')
+
+
+# Verify interface bond status
+def verify_intf_bond_status(sw, intf, state, msg):
+    result = timed_compare(sw_get_intf_state,
+                           (sw, intf, ['bond_status:' + state]),
+                           verify_compare_value, ['true'])
+    assert result == (True, ["true"]), msg
+
+
+# Verify interface bond status is empty
+def verify_intf_bond_status_empty(sw, intf, msg):
+    for state in ['up', 'down', 'blocked']:
+        result = timed_compare(sw_get_intf_state,
+                               (sw, intf, ['bond_status:' + state]),
+                               verify_compare_value,
+                               ['ovs-vsctl: no key ' + state +
+                                ' in Interface record ' + intf +
+                                ' column bond_status'])
+        assert result == (True, ['ovs-vsctl: no key ' + state +
+                                 ' in Interface record ' + intf +
+                                 ' column bond_status']), msg
+
+
+# Verify port bond status
+def verify_port_bond_status(sw, lag, state,  msg):
+    result = timed_compare(sw_get_port_state_bs,
+                           (sw, lag, ['bond_status:' + state]),
+                           verify_compare_value, ['true'])
+    assert result == (True, ["true"]), msg
 
 
 # Verify LACP interface status
@@ -321,7 +361,7 @@ def sw_wait_until_all_sm_ready(sws, intfs, ready, max_retries=30):
             out = sm[0](cmd, shell='vsctl', silent=False)
             sm[2] = bool(re.match(ready, out))
 
-        retries +=1
+        retries += 1
         sleep(1)
 
 
@@ -362,7 +402,72 @@ def sw_wait_until_one_sm_ready(sws, intfs, ready, max_retries=30):
             if sm[2]:
                 intf_fallback_enabled = sm[1]
 
-        retries +=1
+        retries += 1
         sleep(1)
 
     return intf_fallback_enabled
+
+
+def sw_wait_until_ready(sws, intfs, max_retries=30):
+    all_intfs = []
+    retries = 0
+
+    for sw in sws:
+        all_intfs += [[sw, intf, False] for intf in intfs]
+
+    # All arrays shall be True
+    while not all(intf[2] for intf in all_intfs):
+        # Retrieve all arrays that have False
+        not_ready = filter(lambda intf: not intf[2], all_intfs)
+
+        assert retries is not max_retries, \
+            "\n%s\nExceeded max retries," % not_ready
+
+        for sm in not_ready:
+            cmd = 'get interface %s hw_bond_config' % sm[1]
+
+            out = sm[0](cmd, shell='vsctl', silent=False)
+
+            sm[2] = 'rx_enabled="true"' in out and 'tx_enabled="true"' in out
+
+        retries += 1
+        sleep(1)
+
+
+# Add a new Interface to the existing bond.
+def add_intf_to_bond(sw, bond_name, intf_name):
+
+    print("Adding interface %s to LAG %s \n" %
+          (intf_name, bond_name))
+    # Get the UUID of the interface that has to be added.
+    c = ("get interface %s _uuid" % (str(intf_name)))
+
+    intf_uuid = sw(c.format(**locals()), shell='vsctl').rstrip('\r\n')
+
+    # Get the current list of Interfaces in the bond.
+    c = ("get port %s interfaces" % (bond_name))
+    out = sw(c.format(**locals()), shell='vsctl')
+    intf_list = out.rstrip('\r\n').strip("[]").replace(" ", "").split(',')
+
+    assert intf_uuid not in intf_list,\
+        print("Interface %s is already part of %s \n" %
+              (intf_name, bond_name))
+
+    # Add the given intf_name's UUID to existing Interfaces.
+    intf_list.append(intf_uuid)
+
+    # Set the new Interface list in the bond.
+    new_intf_str = "[%s]" % (",".join(intf_list))
+
+    c = ("set port %s interfaces=%s" % (bond_name, new_intf_str))
+    sw(c.format(**locals()), shell='vsctl')
+
+
+def enable_intf_list(sw, intf_list):
+    for intf in intf_list:
+        sw_set_intf_user_config(sw, intf, ['admin=up'])
+
+
+def disable_intf_list(sw, intf_list):
+    for intf in intf_list:
+        sw_set_intf_user_config(sw, intf, ['admin=down'])

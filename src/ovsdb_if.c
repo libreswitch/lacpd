@@ -203,6 +203,10 @@ pthread_mutex_t ovsdb_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int update_interface_lag_eligibility(struct iface_data *idp);
 static int update_interface_hw_bond_config_map_entry(struct iface_data *idp,
                                                      const char *key, const char *value);
+static void update_member_interface_bond_status(struct port_data *portp);
+static void update_interface_bond_status_map_entry(struct iface_data *idp);
+static void update_port_bond_status_map_entry(struct port_data *portp);
+
 static char *lacp_mode_str(enum ovsrec_port_lacp_e mode);
 static void db_clear_interface(struct iface_data *idp);
 static void db_update_port_status(struct port_data *portp);
@@ -881,8 +885,10 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_column(idl, &ovsrec_port_col_lacp_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_lacp_status);
     ovsdb_idl_add_column(idl, &ovsrec_port_col_other_config);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_bond_status);
+    ovsdb_idl_omit_alert(idl, &ovsrec_port_col_bond_status);
 
-    /* Cache Inteface table and columns. */
+    /* Cache Interface table and columns. */
     ovsdb_idl_add_table(idl, &ovsrec_table_interface);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_name);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_type);
@@ -897,6 +903,8 @@ lacpd_ovsdb_if_init(const char *db_path)
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_lacp_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_lacp_status);
     ovsdb_idl_add_column(idl, &ovsrec_interface_col_other_config);
+    ovsdb_idl_add_column(idl, &ovsrec_interface_col_bond_status);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_bond_status);
 
     /* Initialize LAG ID pool. */
     /* OPS_TODO: read # of LAGs from somewhere? */
@@ -912,6 +920,7 @@ lacpd_ovsdb_if_exit(void)
     shash_destroy_free_data(&interfaces_recently_added);
     ovsdb_idl_destroy(idl);
 } /* lacpd_ovsdb_if_exit */
+
 
 static void
 del_old_interface(struct shash_node *sh_node)
@@ -1030,7 +1039,6 @@ add_new_interface(const struct ovsrec_interface *ifrow)
             idp,
             INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED,
             INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE);
-
 
         VLOG_DBG("Created local data for interface %s", ifrow->name);
     }
@@ -1187,6 +1195,10 @@ update_interface_cache(void)
                 idp->link_state = new_link_state;
                 idp->link_speed = new_speed;
                 idp->duplex = new_duplex;
+                if (idp->port_datap != NULL) {
+                    update_member_interface_bond_status(idp->port_datap);
+                    rc++;
+                }
 
                 VLOG_DBG("Interface %s link state changed in DB: "
                          "new_speed=%d, new_link=%s, new_duplex=%s, ",
@@ -1306,6 +1318,192 @@ update_port_fallback_flag(const struct ovsrec_port *row,
 }
 
 /**
+ * Update bond_status configuration for the configured member interfaces
+ * of one LAG.
+ *
+ * NOTE: ovsdb_mutex must be taken prior to calling this function.
+ *
+ * @param portp port_data pointer to the port entry.
+ */
+static void
+update_member_interface_bond_status(struct port_data *portp)
+{
+    struct shash_node *node, *next;
+
+    if (!strncmp(portp->name,
+                 LAG_PORT_NAME_PREFIX,
+                 LAG_PORT_NAME_PREFIX_LENGTH)) {
+        SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+            struct iface_data *idp = shash_find_data(&all_interfaces,
+                                                     node->name);
+            update_interface_bond_status_map_entry(idp);
+        }
+    }
+} /* update_member_interface_bond_status */
+
+/**
+ * Update bond_status configuration for a given interface
+ *
+ * NOTE: ovsdb_mutex must be taken prior to calling this function.
+ *
+ * @param idp  iface_data pointer to the interface entry.
+ */
+static void
+update_interface_bond_status_map_entry(struct iface_data *idp)
+{
+    const struct ovsrec_interface *ifrow;
+    struct smap smap;
+    struct smap_node *node;
+    bool rx_enable = false;
+    bool tx_enable = false;
+
+    ifrow = idp->cfg;
+    smap_init(&smap);
+
+    if (idp->link_state == INTERFACE_LINK_STATE_UP) {
+
+        SMAP_FOR_EACH(node, &ifrow->hw_bond_config) {
+
+            if (!strncmp(node->key,
+                         INTERFACE_HW_BOND_CONFIG_MAP_RX_ENABLED,
+                         strlen(INTERFACE_HW_BOND_CONFIG_MAP_RX_ENABLED))
+                && !strncmp(node->value,
+                            INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE,
+                            strlen(INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE))) {
+                rx_enable = true;
+            }
+            else if (!strncmp(node->key,
+                     INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED,
+                     strlen(INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED))
+                     && !strncmp(node->value,
+                                 INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE,
+                                 strlen(INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE))) {
+                tx_enable = true;
+            }
+        }
+
+        if (tx_enable && rx_enable) {
+            smap_replace(&smap,
+                         INTERFACE_BOND_STATUS_UP,
+                         INTERFACE_BOND_STATUS_ENABLED_TRUE);
+        } else {
+            smap_replace(&smap,
+                         INTERFACE_BOND_STATUS_BLOCKED,
+                         INTERFACE_BOND_STATUS_ENABLED_TRUE);
+        }
+    }
+    /* Interface link is down */
+    else {
+        smap_replace(&smap,
+                     INTERFACE_BOND_STATUS_DOWN,
+                     INTERFACE_BOND_STATUS_ENABLED_TRUE);
+    }
+
+    ovsrec_interface_set_bond_status(ifrow, &smap);
+    smap_destroy(&smap);
+} /* update_interface_bond_status_map_entry */
+
+/**
+ * Remove bond_status configuration for a given interface that is
+ * not part of any LAG.
+ *
+ * NOTE: ovsdb_mutex must be taken prior to calling this function.
+ *
+ * @param idp  iface_data pointer to the interface entry.
+ */
+static void
+remove_interface_bond_status_map_entry(struct iface_data *idp)
+{
+    const struct ovsrec_interface *ifrow;
+    struct smap smap;
+
+    ifrow = idp->cfg;
+    smap_init(&smap);
+    smap_remove(&smap, INTERFACE_BOND_STATUS_DOWN);
+    smap_remove(&smap, INTERFACE_BOND_STATUS_BLOCKED);
+    smap_remove(&smap, INTERFACE_BOND_STATUS_UP);
+
+    ovsrec_interface_set_bond_status(ifrow, &smap);
+    smap_destroy(&smap);
+} /* remove_interface_bond_status_map_entry */
+
+/**
+ * Update bond_status configuration for a given LAG port
+ *
+ * NOTE: this function checks the configuration of different interfaces for a
+ * LAG port and determines the global status:
+ *
+ * - Up: At least one member interface is eligible and should be
+ *     forwarding traffic according to LACP
+ * - Blocked:  All member interfaces are either not eligible or should be
+ *     blocked according to LACP.
+ *     If LACP-fallback-ab is enabled, and the <ref column="lacp_status"/> is
+ *     defaulted, then the bond state is forwarding.  If the LACP-fallback-ab
+ *     is disable, then the state is blocked.
+ * - Down:  All member interfaces configured to be a member of a LAG are either
+ *     administratively or operatively down
+ *
+ * @param portp port_data pointer to the port entry.
+ */
+static void
+update_port_bond_status_map_entry(struct port_data *portp)
+{
+    const struct ovsrec_interface *ifrow;
+    struct smap smap;
+    struct shash_node *node, *next;
+    struct smap_node *snode;
+    int total_intf = 0;
+    int blocked_intf = 0;
+    int up_intf = 0;
+    int down_intf = 0;
+
+    smap_init(&smap);
+
+    SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+
+        struct iface_data *idp = shash_find_data(&all_interfaces, node->name);
+        if (idp) {
+            ifrow = idp->cfg;
+            SMAP_FOR_EACH(snode, &ifrow->bond_status) {
+
+                if (!strncmp(snode->key,
+                             INTERFACE_BOND_STATUS_UP,
+                             strlen(INTERFACE_BOND_STATUS_UP))) {
+                    up_intf++;
+                } else if (!strncmp(snode->key,
+                           INTERFACE_BOND_STATUS_BLOCKED,
+                           strlen(INTERFACE_BOND_STATUS_BLOCKED))) {
+                    blocked_intf++;
+                } else if (!strncmp(snode->key,
+                           INTERFACE_BOND_STATUS_DOWN,
+                           strlen(INTERFACE_BOND_STATUS_DOWN))) {
+                    down_intf++;
+                }
+
+                total_intf++;
+            }
+        }
+    }
+
+    if (down_intf == total_intf) {
+           smap_replace(&smap,
+                        PORT_BOND_STATUS_DOWN,
+                        PORT_BOND_STATUS_ENABLED_TRUE);
+    } else if (blocked_intf == total_intf) {
+        smap_replace(&smap,
+                     PORT_BOND_STATUS_BLOCKED,
+                     PORT_BOND_STATUS_ENABLED_TRUE);
+    } else if (up_intf > 0) {
+        smap_replace(&smap,
+                     PORT_BOND_STATUS_UP,
+                     PORT_BOND_STATUS_ENABLED_TRUE);
+    }
+
+    ovsrec_port_set_bond_status(portp->cfg, &smap);
+    smap_destroy(&smap);
+} /* update_port_bond_status_map_entry */
+
+/**
  * Common function to set interface's LAG eligibility status for all LAG types.
  * Depending on the LAG type, this function either updates the DB by writing
  * to interface:hw_bond_config column or initiate LACP protocol on the
@@ -1367,7 +1565,11 @@ set_interface_lag_eligibility(struct port_data *portp, struct iface_data *idp,
     /* update eligible LAG member list. */
     if (eligible) {
         shash_add(&portp->eligible_member_ifs, idp->name, (void *)idp);
+        update_member_interface_bond_status(portp);
+        update_port_bond_status_map_entry(portp);
     } else {
+        update_member_interface_bond_status(portp);
+        update_port_bond_status_map_entry(portp);
         shash_find_and_delete(&portp->eligible_member_ifs, idp->name);
     }
     idp->lag_eligible = eligible;
@@ -1456,6 +1658,7 @@ update_interface_lag_eligibility(struct iface_data *idp)
         set_interface_lag_eligibility(portp, idp, new_eligible);
         rc++;
     }
+
     return rc;
 } /* update_interface_lag_eligibility */
 
@@ -1542,7 +1745,6 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                     VLOG_ERR("Could not log event LAG_INTERFACE_REMOVE");
                 }
                 shash_delete(&portp->cfg_member_ifs, node);
-
             }
         }
     }
@@ -1694,11 +1896,12 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                           EV_KV("intf_id", "%s", node->name)) < 0) {
                 VLOG_ERR("Could not log event LAG_INTERFACE_ADD");
             }
-
+            update_member_interface_bond_status(portp);
+            rc++;
         }
     }
 
-    /* Update LAG member eligibilty for configured member intefaces. */
+    /* Update LAG member eligibility for configured member interfaces. */
     SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
         struct iface_data *idp = shash_find_data(&all_interfaces, node->name);
         if (idp) {
@@ -1779,6 +1982,8 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
         /* Update Fallback flag, it could be toggled on OVSDB */
         update_port_fallback_flag(row, portp);
     }
+
+    update_port_bond_status_map_entry(portp);
 
     /* Destroy the shash of the IDL interfaces. */
     shash_destroy(&sh_idl_port_intfs);
@@ -1864,10 +2069,14 @@ add_new_port(const struct ovsrec_port *port_row)
                      intf->name, portp->name);
 
             shash_add(&portp->cfg_member_ifs, intf->name, (void *)idp);
+            update_member_interface_bond_status(portp);
             idp->port_datap = portp;
             idp->fallback_enabled = false;
         }
         VLOG_DBG("Created local data for Port %s", port_row->name);
+
+        /* update bond status */
+        update_port_bond_status_map_entry(portp);
     }
 } /* add_new_port */
 
@@ -2157,6 +2366,7 @@ db_clear_interface(struct iface_data *idp)
 
     ovsrec_interface_set_lacp_status(ifrow, &smap);
     ovsrec_interface_set_lacp_current(ifrow, bptr, 0);
+    remove_interface_bond_status_map_entry(idp);
 
     idp->lacp_current = false;
     idp->lacp_current_set = false;
@@ -2476,6 +2686,9 @@ lacpd_thread_intf_update_hw_bond_config(struct iface_data *idp,
             (rx_enabled ?
              INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE :
              INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE));
+
+        update_member_interface_bond_status(idp->port_datap);
+        update_port_bond_status_map_entry(idp->port_datap);
     }
     if (update_tx) {
         update_interface_hw_bond_config_map_entry(
@@ -2484,7 +2697,11 @@ lacpd_thread_intf_update_hw_bond_config(struct iface_data *idp,
             (tx_enabled ?
              INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_TRUE :
              INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE));
+
+        update_member_interface_bond_status(idp->port_datap);
+        update_port_bond_status_map_entry(idp->port_datap);
     }
+
     ovsdb_idl_txn_commit_block(txn);
     ovsdb_idl_txn_destroy(txn);
     OVSDB_UNLOCK;
