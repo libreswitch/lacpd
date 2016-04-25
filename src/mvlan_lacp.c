@@ -372,15 +372,15 @@ mvlan_set_sport_params(struct MLt_vpm_api__lacp_sport_params *pin_lacp_params)
         }
 
         if (pin_lacp_params->flags & LACP_LAG_PARTNER_SYSID_FIELD_PRESENT) {
-            if ((bcmp(placp_sport_params->lacp_params.partner_system_id,
-                      pin_lacp_params->partner_system_id,
-                      sizeof(macaddr_3_t)) != 0)) {
+            if ((memcmp(placp_sport_params->lacp_params.partner_system_id,
+                        pin_lacp_params->partner_system_id,
+                        sizeof(macaddr_3_t)) != 0)) {
                 partner_param_changed++;
             }
 
-            bcopy(pin_lacp_params->partner_system_id,
-                  placp_sport_params->lacp_params.partner_system_id,
-                  sizeof(pin_lacp_params->partner_system_id));
+            memcpy(placp_sport_params->lacp_params.partner_system_id,
+                   pin_lacp_params->partner_system_id,
+                   sizeof(pin_lacp_params->partner_system_id));
         }
 
         first_time = FALSE;
@@ -564,9 +564,9 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
             // the super port in order to replace the old information with the new
             // one coming from a higher priority port
             if (PARTIAL_MATCH == match || PRIORITY_MATCH == match) {
-                bcopy(placp_match_params->partner_system_id,
-                      ptemp_lacp_sport_params->lacp_params.partner_system_id,
-                      sizeof(ptemp_lacp_sport_params->lacp_params.partner_system_id));
+                memcpy(ptemp_lacp_sport_params->lacp_params.partner_system_id,
+                       placp_match_params->partner_system_id,
+                       sizeof(ptemp_lacp_sport_params->lacp_params.partner_system_id));
 
                 ptemp_lacp_sport_params->lacp_params.partner_system_priority =
                     placp_match_params->partner_system_priority;
@@ -903,10 +903,10 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
     //       any valid system running LACP.  If that's the case, we don't match, which
     //       forces each port to form its own LAG.
     if ((psport_param->flags & LACP_LAG_PARTNER_SYSID_FIELD_PRESENT) || (EXACT_MATCH==match)) {
-        if ((bcmp(psport_param->partner_system_id, plag_param->partner_system_id,
-                  sizeof(macaddr_3_t)) != 0) ||
-            (bcmp(psport_param->partner_system_id, default_partner_system_mac,
-                  sizeof(macaddr_3_t)) == 0)) {
+        if ((memcmp(psport_param->partner_system_id, plag_param->partner_system_id,
+                    sizeof(macaddr_3_t)) != 0) ||
+            (memcmp(psport_param->partner_system_id, default_partner_system_mac,
+                    sizeof(macaddr_3_t)) == 0)) {
             RDEBUG(DL_VPM, "PARTNER_SYSID does not match\n");
             if (!is_priority_match) {
                 goto end;

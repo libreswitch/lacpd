@@ -186,12 +186,18 @@ pthread_mutex_t ovsdb_mutex = PTHREAD_MUTEX_INITIALIZER;
 /* Macros to lock and unlock mutexes in a verbose manner. */
 #define OVSDB_LOCK { \
                 VLOG_DBG("%s(%d): OVSDB_LOCK: taking lock...", __FUNCTION__, __LINE__); \
-                pthread_mutex_lock(&ovsdb_mutex); \
+                if (!(pthread_mutex_lock(&ovsdb_mutex))) { \
+                    VLOG_WARN("%s(%d): failed to  take OVSDB_LOCK lock...",\
+                              __FUNCTION__, __LINE__); \
+                } \
 }
 
 #define OVSDB_UNLOCK { \
                 VLOG_DBG("%s(%d): OVSDB_UNLOCK: releasing lock...", __FUNCTION__, __LINE__); \
-                pthread_mutex_unlock(&ovsdb_mutex); \
+                if (!(pthread_mutex_unlock(&ovsdb_mutex))) { \
+                    VLOG_WARN("%s(%d): failed to  release OVSDB_LOCK lock...",\
+                              __FUNCTION__, __LINE__); \
+                } \
 }
 
 static int update_interface_lag_eligibility(struct iface_data *idp);
@@ -1693,6 +1699,11 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
     VLOG_DBG("%s: port %s, n_interfaces=%d",
              __FUNCTION__, row->name, (int)row->n_interfaces);
 
+    if (portp == NULL) {
+        VLOG_WARN("Function: handle_port_config parameter portp is NULL");
+        return rc;
+    }
+
     /* Set timeout-mode */
     cp = smap_get(&(row->other_config), PORT_OTHER_CONFIG_MAP_LACP_TIME);
     timeout = valid_lacp_timeout(cp);
@@ -2044,7 +2055,11 @@ add_new_port(const struct ovsrec_port *port_row)
         size_t i;
 
         portp->cfg = port_row;
-        portp->name = xstrdup(port_row->name);
+        if ((portp->name = xstrdup(port_row->name)) == NULL) {
+            free(portp);
+            VLOG_FATAL("%s : out of memory", __FUNCTION__);
+            return;
+        }
         portp->lacp_mode = PORT_LACP_OFF;
 
         shash_init(&portp->cfg_member_ifs);

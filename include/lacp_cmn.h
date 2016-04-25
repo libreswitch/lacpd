@@ -44,6 +44,12 @@ typedef unsigned char         macaddr_6_t[MAC_BYTEADDR_SIZE];
 #define LAG_PORT_NAME_PREFIX "lag"
 #define LAG_PORT_NAME_PREFIX_LENGTH (3)
 
+/* LAG ID String, for debugging purposes, it has the following format: */
+/* [(<local_system_priority>, <local_system_mac_addr>, <local_port_key>,
+ * <local_port_priority>, <local_port_number>),
+ * (<remote_system_priority>, <remote_system_mac_addr>, <remote_port_key>,
+ * <remote_port_priority>, <remote_port_number>)] */
+#define LAG_ID_STRING_SIZE (80)
 
 
 /******************************************************************************************/

@@ -112,7 +112,6 @@ lacpd_unixctl_getlacpinterfaces(struct unixctl_conn *conn, int argc,
                                 const char *argv[], void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-
     lacpd_lag_ports_dump(&ds, argc, argv);
 
     unixctl_command_reply(conn, ds_cstr(&ds));
@@ -424,6 +423,9 @@ main(int argc, char *argv[])
 
     /* Parse command line args and get the name of the OVSDB socket. */
     ovsdb_sock = parse_options(argc, argv, &appctl_path);
+    if (ovsdb_sock == NULL) {
+        exit(EXIT_FAILURE);
+    }
 
     /* Initialize the metadata for the IDL cache. */
     ovsrec_init();
