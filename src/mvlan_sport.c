@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -253,6 +253,7 @@ mvlan_destroy_sport(super_port_t *psport)
 
     LACP_AVL_DELETE(sport_handle_tree, *psport_node);
 
+    free(psport->placp_params);
     free(psport);
 
     return status;

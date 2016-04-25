@@ -83,9 +83,9 @@ mlacp_blocking_send_select_aggregator(LAG_t *const lag,
     match_params.partner_system_priority =
         lacp_port->partner_oper_system_variables.system_priority;
 
-    bcopy(lacp_port->partner_oper_system_variables.system_mac_addr,
-          match_params.partner_system_id,
-          sizeof(macaddr_3_t));
+    memcpy(match_params.partner_system_id,
+           lacp_port->partner_oper_system_variables.system_mac_addr,
+           sizeof(macaddr_3_t));
 
     RDEBUG(DL_LACP_SEND, "sending the following params to VLAN/LAG mgr :\n");
     RDEBUG(DL_LACP_SEND, "port_type %d, actor_key 0x%x, partner_key 0x%x "
@@ -137,9 +137,9 @@ mlacp_blocking_send_attach_aggregator(lacp_per_port_variables_t *lacp_port)
     attach.sport_handle      = lacp_port->sport_handle;
     attach.partner_priority  = lacp_port->partner_oper_system_variables.system_priority;
 
-    bcopy(lacp_port->partner_oper_system_variables.system_mac_addr,
-          attach.partner_mac_addr,
-          sizeof(macaddr_3_t));
+    memcpy(attach.partner_mac_addr,
+           lacp_port->partner_oper_system_variables.system_mac_addr,
+           sizeof(macaddr_3_t));
 
     // OpenSwitch: Change to direct function call.
     status = mvlan_api_attach_lport_to_aggregator(&attach);

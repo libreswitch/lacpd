@@ -227,10 +227,9 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
             if ((lag = (LAG_t *)malloc(sizeof(LAG_t))) == NULL) {
                 free(lagId);
                 VLOG_FATAL("%s : out of memory", __FUNCTION__);
-                exit(-1);
-
                 lacp_port->selecting_lag = FALSE;
                 lacp_unlock(lock);
+                exit(-1);
                 return;
             }
             memset(lag, 0, sizeof(LAG_t));
@@ -264,7 +263,7 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
             // Done.
             //*************************************************************
             if (lacp_port->debug_level & DBG_SELECT) {
-                char lag_id_str[80];
+                char lag_id_str[LAG_ID_STRING_SIZE];
                 LAG_id_string(lag_id_str, lagId);
                 RDBG("%s : Port Added (%llx) to new LAG, ID string = %s",
                      __FUNCTION__, lacp_port->lport_handle, lag_id_str);
@@ -579,7 +578,7 @@ form_lag_id(lacp_per_port_variables_t *lacp_port)
 static void
 print_lag_id(LAG_Id_t *lag_id)
 {
-    char lag_id_str[80];
+    char lag_id_str[LAG_ID_STRING_SIZE];
 
     LAG_id_string(lag_id_str, lag_id);
     RDEBUG(DL_SELECT, "%s\n", lag_id_str);

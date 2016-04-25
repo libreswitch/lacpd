@@ -944,7 +944,7 @@ LAG_id_string(char *const str, LAG_Id_t *const lag_id)
                         remote_system_mac_addr_str,
                         sizeof(remote_system_mac_addr_str),
                         L2_MAC_TWOxSIX);
-    sprintf(str, "[(%d, %s, %d, %d, %d), (%d, %s, %d, %d, %d)]",
+    snprintf(str, LAG_ID_STRING_SIZE, "[(%d, %s, %d, %d, %d), (%d, %s, %d, %d, %d)]",
             ntohs(lag_id->local_system_priority),
             local_system_mac_addr_str,
             ntohs(lag_id->local_port_key),
