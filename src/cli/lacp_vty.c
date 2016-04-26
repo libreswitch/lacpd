@@ -58,6 +58,33 @@
 VLOG_DEFINE_THIS_MODULE(vtysh_lacp_cli);
 extern struct ovsdb_idl *idl;
 
+/**
+ * This function will check if a given port row has any acl
+ * configuration i.e. acl applied in hw or acl configured by
+ * user.
+ *
+ * @param port_row port table row to check for acl configuration
+ *
+ * @return true if acl configuration is detected, otherwise returns
+ *              false.
+ */
+bool
+check_acl_configuration(const struct ovsrec_port *port_row)
+{
+
+  ovs_assert(port_row);
+  /* Check all acl columns,
+   * aclv4_in_applied - indicates currently applied acls
+   * aclv4_in_cfg - indicates acl configuration requested by user
+   */
+  if (port_row->aclv4_in_applied || port_row->aclv4_in_cfg) {
+
+      return true;
+  }
+
+  return false;
+}
+
 bool
 lacp_exceeded_maximum_lag()
 {
@@ -1240,6 +1267,22 @@ lacp_add_intf_to_lag(const char *if_name, const char *lag_number)
    {
      if(strcmp(port_row->name, if_name) == 0)
      {
+        /* check if ACL is configured on this port
+         * if ACL is applied then we don't allow adding
+         * this port to lag
+         */
+        if (check_acl_configuration(port_row))
+        {
+            vty_out(vty, "Unable to add interface %s to lag %s, "
+                         "ACL is configured on interface.\n",if_name, lag_name);
+            cli_do_config_abort(status_txn);
+            /* ovs-appctl return success since this is a business logic
+             * validation and above message should help user
+             * understand the issue.
+             */
+            return CMD_SUCCESS;
+        }
+
         remove_port_reference(port_row);
         ovsrec_port_delete(port_row);
         break;
