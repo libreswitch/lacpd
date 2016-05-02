@@ -75,6 +75,11 @@ port table
       -> "ok", "down", or "defaulted"
     bond_status_reason
       -> string specifying why the bond_status value is "down"
+  port:bond_status
+    -> summarizes the LAG status according to the bond_status of the member
+       interfaces.
+    state
+      -> "up", "blocked" or "down" to specify general LAG status.
   port:other_config
     lacp-system-id
       -> user configuration: override system id for this LAG
@@ -82,6 +87,15 @@ port table
       -> user configuration: override system priority for this LAG
     lacp-time
       -> user configuration: "fast" or "slow" LACP heartbeats
+    lacp-fallback
+      -> user configuration: "true" or "false" to specify whether fallback
+         mode is active or not.
+    lacp_fallback_mode
+      -> user configuration: "priority" or "all\active" to specify fallback
+         mode of operation.
+    lacp_fallback_timeout
+      -> user configuration: specifies the time in seconds during which
+         fallback is active.
 
 interface table
   interface:name
@@ -125,6 +139,10 @@ interface table
       -> peer LAG identifier
     partner_state
       -> peer protocol state values
+  interface:bond_status
+    -> summarizes the bond state of the aggregated link.
+    state
+      -> "up", "blocked" or "down".
   interface:other_config
     lacp-port-id
       -> user configuration: port identifier override
