@@ -1184,7 +1184,7 @@ set_all_port_system_priority(void)
  * Function : set_lport_fallback_status
  *
  * We need to set new fallback status to all ports that belongs to an specific
- * LAG using 'sport_handle'.
+ * LAG. Then we need to send the event "Fallback changed" to the Receive SM
  *****************************************************************************/
 void
 set_lport_fallback_status(port_handle_t lport_handle, int status)
@@ -1195,6 +1195,15 @@ set_lport_fallback_status(port_handle_t lport_handle, int status)
 
     if (plpinfo != NULL) {
         plpinfo->fallback_enabled = status;
+
+        // Send the event "fallback changed", this will call the defaulted
+        // action if the current state is defaulted, this has to be done if
+        // fallback change while the interfaces are defaulted
+        LACP_receive_fsm(E9,
+                         plpinfo->recv_fsm_state,
+                         NULL,
+                         plpinfo);
+
     } else {
         VLOG_ERR("Set lport fallback status: lport_handle 0x%llx not found",
                  lport_handle);

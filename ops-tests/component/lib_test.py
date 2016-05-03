@@ -112,8 +112,12 @@ def remove_port_parameter(sw, port, col, keys):
 def set_intf_parameter(sw, intf, config):
     """Configure parameters in 'config' to 'intf' in 'sw'."""
 
-    cmd = "set interface %s %s" % (str(intf), ' '.join(map(str, config)))
-    return sw(cmd, shell='vsctl')
+    cmd = "set interface %s %s" % (str(intf), ' '.join(config))
+    output = sw(cmd, shell='vsctl')
+
+    assert output == '', 'Error found: %s, aborting!' % output
+
+    return output
 
 
 def sw_get_port_state(params):
@@ -322,11 +326,11 @@ def verify_intf_lacp_status(sw, intf, verify_values, context=''):
             verify_values[attrs[i]] + ", got " + field_vals[i]
 
 
-def sw_wait_until_all_sm_ready(sws, intfs, ready, max_retries=30):
-    """Verify that all 'intfs' SM have status like 'ready'.
+def sw_wait_until_all_sm_ready(sws, intfs, flags, max_retries=30):
+    """Verify that all 'intfs' SMs have 'flags' enabled.
 
-    We need to verify that all interfaces' State Machines have 'ready' within
-    'ovs-vsctl' command output.
+    We need to verify that all interfaces' State Machines have these 'flags'
+    enabled within 'ovs-vsctl' command output.
 
     The main structure is an array of arrays with the format of:
     [ [<switch>, <interfaces number>, <SM ready>], ...]
@@ -345,8 +349,16 @@ def sw_wait_until_all_sm_ready(sws, intfs, ready, max_retries=30):
         # Retrieve all arrays that have False
         not_ready = filter(lambda intf: not intf[2], all_intfs)
 
-        assert retries is not max_retries, \
-            "Exceeded max retries. SM never achieved status: %s" % ready
+        if retries is max_retries:
+            # dump info
+            cmd = 'list system'
+            sm[0](cmd, shell='vsctl', silent=False)
+
+            cmd = 'list interface'
+            sm[0](cmd, shell='vsctl', silent=False)
+
+            assert False, \
+                'Exceeded max retries. SM never achieved status: %s' % flags
 
         for sm in not_ready:
             cmd = 'get interface %s lacp_status:actor_state' % sm[1]
@@ -359,17 +371,17 @@ def sw_wait_until_all_sm_ready(sws, intfs, ready, max_retries=30):
             ilegible
             """
             out = sm[0](cmd, shell='vsctl', silent=False)
-            sm[2] = bool(re.match(ready, out))
+            sm[2] = bool(re.match(flags, out))
 
         retries += 1
         sleep(1)
 
 
-def sw_wait_until_one_sm_ready(sws, intfs, ready, max_retries=30):
-    """Verify that one 'intfs' reaches 'ready'.
+def sw_wait_until_one_sm_ready(sws, intfs, flags, max_retries=30):
+    """Verify that one 'intfs' SM has 'flags' enabled.
 
-    We need to verify that at least one interface in 'intf' has the status
-    'read'. The interface number will be returned
+    We need to verify that at least one interface in 'intf' has 'flags'
+    enabled. The interface number will be returned
     """
     all_intfs = []
     retries = 0
@@ -383,8 +395,16 @@ def sw_wait_until_one_sm_ready(sws, intfs, ready, max_retries=30):
         # Retrieve all arrays that have False
         not_ready = filter(lambda intf: not intf[2], all_intfs)
 
-        assert retries is not max_retries, \
-            "Exceeded max retries. SM never achieved status: %s" % ready
+        if retries is max_retries:
+            # dump info
+            cmd = 'list system'
+            sm[0](cmd, shell='vsctl', silent=False)
+
+            cmd = 'list interface'
+            out = sm[0](cmd, shell='vsctl', silent=False)
+
+            assert False, \
+                'Exceeded max retries. SM never achieved status: %s' % flags
 
         for sm in not_ready:
             cmd = 'get interface %s lacp_status:actor_state' % sm[1]
@@ -397,7 +417,7 @@ def sw_wait_until_one_sm_ready(sws, intfs, ready, max_retries=30):
             ilegible
             """
             out = sm[0](cmd, shell='vsctl', silent=False)
-            sm[2] = bool(re.match(ready, out))
+            sm[2] = bool(re.match(flags, out))
 
             if sm[2]:
                 intf_fallback_enabled = sm[1]
@@ -406,32 +426,6 @@ def sw_wait_until_one_sm_ready(sws, intfs, ready, max_retries=30):
         sleep(1)
 
     return intf_fallback_enabled
-
-
-def sw_wait_until_ready(sws, intfs, max_retries=30):
-    all_intfs = []
-    retries = 0
-
-    for sw in sws:
-        all_intfs += [[sw, intf, False] for intf in intfs]
-
-    # All arrays shall be True
-    while not all(intf[2] for intf in all_intfs):
-        # Retrieve all arrays that have False
-        not_ready = filter(lambda intf: not intf[2], all_intfs)
-
-        assert retries is not max_retries, \
-            "\n%s\nExceeded max retries," % not_ready
-
-        for sm in not_ready:
-            cmd = 'get interface %s hw_bond_config' % sm[1]
-
-            out = sm[0](cmd, shell='vsctl', silent=False)
-
-            sm[2] = 'rx_enabled="true"' in out and 'tx_enabled="true"' in out
-
-        retries += 1
-        sleep(1)
 
 
 # Add a new Interface to the existing bond.
@@ -471,3 +465,45 @@ def enable_intf_list(sw, intf_list):
 def disable_intf_list(sw, intf_list):
     for intf in intf_list:
         sw_set_intf_user_config(sw, intf, ['admin=down'])
+
+
+def sw_wait_until_ready(sws, intfs, max_retries=30):
+    all_intfs = []
+    retries = 0
+
+    for sw in sws:
+        all_intfs += [[sw, intf, False] for intf in intfs]
+
+    # All arrays shall be True
+    while not all(intf[2] for intf in all_intfs):
+        # Retrieve all arrays that have False
+        not_ready = filter(lambda intf: not intf[2], all_intfs)
+
+        assert retries is not max_retries, \
+            "All interfaces are not up, test cannot continue from here!"
+
+        for sm in not_ready:
+            cmd = 'get interface %s link_state' % sm[1]
+
+            out = sm[0](cmd, shell='vsctl', silent=False)
+
+            sm[2] = 'up' in out
+
+        retries +=1
+        sleep(1)
+
+
+def verify_interfaces_mac_uniqueness(sws, intfs):
+    """Verify that all interfaces are unique among all switches used."""
+
+    macs = []
+
+    for sw in sws:
+        for intf in intfs:
+            cmd = 'get interface %s hw_intf_info:mac_addr' % intf
+            mac = sw(cmd, shell='vsctl')
+
+            macs.append(mac)
+
+    assert len(macs) is len(set(macs)), \
+        'MAC Addresses are not unique! Aborting...'

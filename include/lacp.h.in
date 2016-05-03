@@ -167,6 +167,8 @@ typedef struct LAG_Id {
     int remote_port_priority;
     int remote_port_number;
 
+    int fallback;
+
 } LAG_Id_t;
 
 /*****************************************************************************

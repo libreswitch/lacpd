@@ -859,7 +859,7 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
                        match_type_t match)
 {
     int status = FALSE;
-    int is_priority_match = 0;
+    int is_priority_match = FALSE;
 
     // First check the port type if present.
     if ((psport_param->port_type != PM_LPORT_INVALID) || (EXACT_MATCH == match)) {
@@ -917,7 +917,7 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
             if (PRIORITY_MATCH == match &&
                 psport_param->partner_system_priority > plag_param->partner_system_priority) {
                 RDEBUG(DL_VPM, "match_aggregator: Priority match allows higher partner system priority.");
-                is_priority_match = 1;
+                is_priority_match = TRUE;
             }
             else {
                 goto end;

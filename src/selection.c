@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -110,6 +110,11 @@ compare_lag_id(LAG_Id_t *first_lag_id, LAG_Id_t *second_lag_id)
         (first_lag_id->remote_port_number !=
          second_lag_id->remote_port_number)) {
 
+        return FALSE;
+    }
+
+    // Compare local fallback
+    if (first_lag_id->fallback != second_lag_id->fallback) {
         return FALSE;
     }
 
@@ -340,6 +345,9 @@ LAG_selection(lacp_per_port_variables_t *lacp_port)
     // the current partner port and connected to another port on another system.
     //
     // OpenSwitch: LAG id also needs to change if speed (therefore, port_type) changes.
+    // Lag id needs to change if fallback changed so the interfaces can be
+    // removed and the super port cleaned allowing the interface to attach to a
+    // default partner
 
     pdummy = n_list_find_data(lag->pplist,
                               &lacp_lag_port_match,
@@ -566,6 +574,8 @@ form_lag_id(lacp_per_port_variables_t *lacp_port)
         lagId->remote_port_priority = lacp_port->partner_oper_port_priority;
         lagId->remote_port_number = lacp_port->partner_oper_port_number;
     }
+
+    lagId->fallback = lacp_port->fallback_enabled;
 
     REXIT();
 
