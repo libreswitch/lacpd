@@ -1265,6 +1265,52 @@ update_interface_hw_bond_config_map_entry(struct iface_data *idp,
 } /* update_interface_hw_bond_config_map_entry */
 
 /**
+ * Common function to update port's fallback flag status.
+ * When you turn off a LAG, all the interfaces and super port are removed, so
+ * if you turn LAG again fallback flag will be lost and will be reset to
+ * default value, even when OVSDB the key is present and 'true'.
+ *
+ * @param row pointer to port row in IDL.
+ * @param portp pointer to daemon's internal port data struct.
+ */
+static void
+update_port_fallback_flag(const struct ovsrec_port *row,
+                          struct port_data *portp, bool lacp_changed)
+{
+    const char *ovs_fallback = NULL;
+    bool ovs_fallback_enabled = false;
+
+    struct shash_node *node, *next;
+    struct iface_data *idp = NULL;
+
+    /* We need to verify if fallback flag switched value between OVSDB and
+     * local data.
+     *
+     * You can overpass CLI by using 'ovs-vsctl' and toggle fallback flag
+     * manually. Bad user, bad!
+     */
+    ovs_fallback = smap_get(&(row->other_config),
+                            PORT_OTHER_CONFIG_LACP_FALLBACK);
+
+    if (ovs_fallback) {
+        if (strncmp(ovs_fallback,
+                    PORT_OTHER_CONFIG_LACP_FALLBACK_ENABLED,
+                    strlen(PORT_OTHER_CONFIG_LACP_FALLBACK_ENABLED)) == 0) {
+            ovs_fallback_enabled = true;
+        }
+    }
+    if (ovs_fallback_enabled != portp->fallback_enabled || lacp_changed) {
+        portp->fallback_enabled = ovs_fallback_enabled;
+        SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
+            idp = shash_find_data(&all_interfaces, node->name);
+            if (idp) {
+                send_fallback_status_msg(idp, ovs_fallback_enabled);
+            }
+        }
+    }
+}
+
+/**
  * Update bond_status configuration for the configured member interfaces
  * of one LAG.
  *
@@ -1451,53 +1497,6 @@ update_port_bond_status_map_entry(struct port_data *portp)
 } /* update_port_bond_status_map_entry */
 
 /**
- * Common function to update port's fallback flag status.
- * When you turn off a LAG, all the interfaces and super port are removed, so
- * if you turn LAG again fallback flag will be lost and will be reset to
- * default value, even when OVSDB the key is present and 'true'.
- *
- * @param row pointer to port row in IDL.
- * @param portp pointer to daemon's internal port data struct.
- */
-static void
-update_port_fallback_flag(const struct ovsrec_port *row,
-                          struct port_data *portp)
-{
-    const char *ovs_fallback = NULL;
-    bool ovs_fallback_enabled = false;
-
-    struct shash_node *node, *next;
-    struct iface_data *idp = NULL;
-
-    /* We need to verify if fallback flag switched value between OVSDB and
-     * local data.
-     *
-     * You can overpass CLI by using 'ovs-vsctl' and toggle fallback flag
-     * manually. Bad user, bad!
-     */
-    ovs_fallback = smap_get(&(row->other_config),
-                            PORT_OTHER_CONFIG_LACP_FALLBACK);
-
-    if (ovs_fallback) {
-        if (strncmp(ovs_fallback,
-                    PORT_OTHER_CONFIG_LACP_FALLBACK_ENABLED,
-                    strlen(PORT_OTHER_CONFIG_LACP_FALLBACK_ENABLED)) == 0) {
-            ovs_fallback_enabled = true;
-        }
-    }
-
-    if (ovs_fallback_enabled != portp->fallback_enabled) {
-        SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
-            idp = shash_find_data(&all_interfaces, node->name);
-
-            if (idp) {
-                send_fallback_status_msg(idp, ovs_fallback_enabled);
-            }
-        }
-    }
-}
-
-/**
  * Common function to set interface's LAG eligibility status for all LAG types.
  * Depending on the LAG type, this function either updates the DB by writing
  * to interface:hw_bond_config column or initiate LACP protocol on the
@@ -1677,6 +1676,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
     size_t i;
     const char *cp;
     char agg_key[AGG_KEY_MAX_LENGTH];
+    bool lacp_changed = false;
 
     VLOG_DBG("%s: port %s, n_interfaces=%d",
              __FUNCTION__, row->name, (int)row->n_interfaces);
@@ -1753,6 +1753,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                  row->name, lacp_mode_str(portp->lacp_mode),
                  lacp_mode_str(lacp_mode));
 
+        lacp_changed = true;
         /* LACP mode changed.  In either case, mark all existing interfaces
          * as ineligible to detach them first.  Then the interfaces will be
          * reconfigured based on the new LACP mode. */
@@ -1969,7 +1970,7 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
         }
 
         /* Update Fallback flag, it could be toggled on OVSDB */
-        update_port_fallback_flag(row, portp);
+        update_port_fallback_flag(row, portp, lacp_changed);
     }
 
     update_port_bond_status_map_entry(portp);

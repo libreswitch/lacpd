@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+ * (c) Copyright 2015-2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License. You may obtain
@@ -34,7 +34,7 @@
 /*****************************************************************************/
 /*                   MACROS DEFINING ACTIONS FOR RECV FSM                    */
 /*****************************************************************************/
-#define RECV_FSM_NUM_INPUTS  8
+#define RECV_FSM_NUM_INPUTS  9
 #define RECV_FSM_NUM_STATES  7
 
 #define ACTION_CURRENT 1
