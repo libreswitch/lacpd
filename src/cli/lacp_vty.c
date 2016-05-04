@@ -435,7 +435,7 @@ DEFUN (vtysh_remove_lag,
        vtysh_remove_lag_cmd,
        "no interface lag <1-2000>",
         NO_STR
-       "Delete a pseudo interface's configuration\n"
+        INTERFACE_NO_STR
        "Configure link-aggregation parameters\n"
        "LAG number ranges from 1 to 2000\n")
 {
