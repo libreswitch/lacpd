@@ -149,31 +149,49 @@ vtysh_intf_lag_context_clientcallback(void *p_private)
       {
         vtysh_ovsdb_cli_print(p_msg, "%4slacp mode %s"," ",data);
       }
+
       data = NULL;
       data = smap_get(&port_row->other_config, "bond_mode");
-      if(data)
-      {
-        hash_prefix = lacp_remove_lb_hash_suffix(data);
-        if (hash_prefix) {
-            vtysh_ovsdb_cli_print(p_msg, "%4shash %s"," ",hash_prefix);
-            free(hash_prefix);
-            hash_prefix = NULL;
-        }
+      if (data) {
+          hash_prefix = lacp_remove_lb_hash_suffix(data);
+            if (hash_prefix) {
+                vtysh_ovsdb_cli_print(p_msg, "%4shash %s"," ",hash_prefix);
+                free(hash_prefix);
+                hash_prefix = NULL;
+            }
       }
+
       data = NULL;
       data = smap_get(&port_row->other_config, "lacp-fallback-ab");
-      if(data)
-      {
-        if (VTYSH_STR_EQ(data, "true"))
-        {
-          vtysh_ovsdb_cli_print(p_msg, "%4slacp fallback"," ");
-        }
+      if (data) {
+          if (VTYSH_STR_EQ(data, "true")) {
+              vtysh_ovsdb_cli_print(p_msg, "%4slacp fallback"," ");
+          }
       }
+
+      data = NULL;
+      data = smap_get(&port_row->other_config,
+                      PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_MODE);
+      if (data) {
+          if (VTYSH_STR_EQ(data,
+                           PORT_OTHER_CONFIG_LACP_FALLBACK_MODE_ALL_ACTIVE)) {
+              vtysh_ovsdb_cli_print(p_msg,
+                                    "%4slacp fallback mode all_active",
+                                    " ");
+          }
+      }
+
+      data = NULL;
+      data = smap_get(&port_row->other_config,
+                      PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_TIMEOUT);
+      if (data) {
+          vtysh_ovsdb_cli_print(p_msg, "%4slacp fallback timeout %s", " ", data);
+      }
+
       data = NULL;
       data = smap_get(&port_row->other_config, "lacp-time");
-      if(data)
-      {
-        vtysh_ovsdb_cli_print(p_msg, "%4slacp rate %s"," ",data);
+      if (data) {
+          vtysh_ovsdb_cli_print(p_msg, "%4slacp rate %s"," ",data);
       }
 
       data = NULL;

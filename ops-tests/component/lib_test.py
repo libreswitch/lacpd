@@ -507,3 +507,11 @@ def verify_interfaces_mac_uniqueness(sws, intfs):
 
     assert len(macs) is len(set(macs)), \
         'MAC Addresses are not unique! Aborting...'
+
+
+# Verify lag port fallback key
+def verify_port_fallback_key(sw, lag, key, expected,  msg):
+    result = timed_compare(sw_get_port_state_bs,
+                           (sw, lag, ['other_config:' + key]),
+                           verify_compare_value, [expected])
+    assert result == (True, [expected]), msg

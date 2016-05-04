@@ -1557,6 +1557,8 @@ lacp_show_aggregates(const char *lag_name)
    const struct ovsrec_interface *if_row = NULL;
    const char *heartbeat_rate = NULL;
    bool fallback = false;
+   const char *fallback_mode = NULL;
+   const char *fallback_timeout = NULL;
    const char *aggregate_mode = NULL;
    const char *hash = NULL;
    char * tmp_hash = NULL;
@@ -1592,6 +1594,22 @@ lacp_show_aggregates(const char *lag_name)
 
          fallback = smap_get_bool(&lag_port->other_config, "lacp-fallback-ab", false);
          vty_out(vty, "%s%s%s", "Fallback              : ",(fallback)?"true":"false", VTY_NEWLINE);
+
+         fallback_mode = smap_get(&lag_port->other_config,
+                                  PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_MODE);
+         vty_out(vty,
+                 "%s%s%s",
+                 "Fallback mode         : ",
+                 fallback_mode ? fallback_mode : "priority",
+                 VTY_NEWLINE);
+
+         fallback_timeout = smap_get(&lag_port->other_config,
+                                     PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_TIMEOUT);
+         vty_out(vty,
+                 "%s%s%s",
+                 "Fallback timeout      : ",
+                 fallback_timeout ? fallback_timeout : "0",
+                 VTY_NEWLINE);
 
          hash = smap_get(&lag_port->other_config, "bond_mode");
          if(hash) {
@@ -2675,6 +2693,231 @@ DEFUN (cli_lag_intf_del_ipv6,
       }
 }
 
+
+/* Note: Disabling fallback mode CLI commands until all_active mode is implemented */
+/**
+ * This function sets the lacp fallback mode for a given lag port
+ *
+ * @param lag_name name of the lag port
+ * @param fallback_mode name mode to be set (priority or all_active)
+ *
+ * @return the status of the ovsdb transaction
+ */
+//static int
+//lacp_set_fallback_mode(const char *lag_name, const char *fallback_mode)
+//{
+//    const struct ovsrec_port *port_row = NULL;
+//    bool port_found = false;
+//    struct smap smap = SMAP_INITIALIZER(&smap);
+//    struct ovsdb_idl_txn* txn = NULL;
+//    enum ovsdb_idl_txn_status status;
+//
+//    txn = cli_do_config_start();
+//    if (txn == NULL) {
+//        VLOG_ERR(LACP_OVSDB_TXN_CREATE_ERROR,__func__,__LINE__);
+//        cli_do_config_abort(txn);
+//        return CMD_OVSDB_FAILURE;
+//    }
+//
+//    OVSREC_PORT_FOR_EACH (port_row, idl) {
+//        if (strncmp(port_row->name, lag_name, strlen(lag_name)) == 0) {
+//            port_found = true;
+//            break;
+//        }
+//    }
+//
+//    if (!port_found) {
+//        /* assert - as LAG port should be present in DB. */
+//        assert(0);
+//        cli_do_config_abort(txn);
+//        VLOG_ERR("Port table entry not found in DB.Function=%s Line=%d",__func__,__LINE__);
+//        return CMD_OVSDB_FAILURE;
+//    }
+//
+//    smap_clone(&smap, &port_row->other_config);
+//
+//    if (strncmp(fallback_mode,
+//                PORT_OTHER_CONFIG_LACP_FALLBACK_MODE_PRIORITY,
+//                strlen(PORT_OTHER_CONFIG_LACP_FALLBACK_MODE_PRIORITY)) == 0) {
+//        smap_remove(&smap, PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_MODE);
+//    } else {
+//        smap_replace(&smap, PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_MODE, fallback_mode);
+//    }
+//
+//    ovsrec_port_set_other_config(port_row, &smap);
+//    smap_destroy(&smap);
+//    status = cli_do_config_finish(txn);
+//    if (status == TXN_SUCCESS || status == TXN_UNCHANGED) {
+//        return CMD_SUCCESS;
+//    } else {
+//        VLOG_ERR("Transaction commit failed.Function=%s Line=%d",__func__,__LINE__);
+//        return CMD_OVSDB_FAILURE;
+//    }
+//}
+
+//DEFUN(cli_lacp_set_fallback_mode,
+//    cli_lacp_set_fallback_mode_cmd,
+//    "lacp fallback mode (priority | all_active)",
+//    LACP_STR
+//    "Set LACP fallback mode\n"
+//    "Default LACP fallback mode\n"
+//    "Sets LACP fallback mode to all_active\n")
+//{
+//    return lacp_set_fallback_mode((char*) vty->index, argv[0]);
+//}
+//
+//DEFUN(cli_lacp_set_no_fallback_mode,
+//    cli_lacp_set_no_fallback_mode_cmd,
+//    "no lacp fallback mode all_active",
+//    LACP_STR
+//    "Set LACP fallback mode to default value which is priority\n")
+//{
+//    return lacp_set_fallback_mode((char*) vty->index,
+//                                  PORT_OTHER_CONFIG_LACP_FALLBACK_MODE_PRIORITY);
+//}
+
+
+/**
+ * This function sets the lacp fallback timeout for a given lag port
+ *
+ * @param lag_name name of the lag port
+ * @param fallback_timeout timeout to be set
+ *
+ * @return the status of the OVSDB transaction
+ */
+static int
+lacp_set_fallback_timeout(const char *lag_name, const char *fallback_timeout)
+{
+    const struct ovsrec_port *port_row = NULL;
+    bool port_found = false;
+    struct smap smap = SMAP_INITIALIZER(&smap);
+    struct ovsdb_idl_txn* txn = NULL;
+    enum ovsdb_idl_txn_status status;
+
+    txn = cli_do_config_start();
+    if (txn == NULL) {
+        VLOG_ERR(LACP_OVSDB_TXN_CREATE_ERROR,__func__,__LINE__);
+        cli_do_config_abort(txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    OVSREC_PORT_FOR_EACH (port_row, idl) {
+        if (strncmp(port_row->name, lag_name, strlen(lag_name)) == 0) {
+            port_found = true;
+            break;
+        }
+    }
+
+    if (!port_found) {
+        /* LAG port should be present in DB. */
+        cli_do_config_abort(txn);
+        VLOG_ERR("Port table entry not found in DB.Function=%s Line=%d",__func__,__LINE__);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    smap_clone(&smap, &port_row->other_config);
+    smap_replace(&smap, PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_TIMEOUT, fallback_timeout);
+
+
+    ovsrec_port_set_other_config(port_row, &smap);
+    smap_destroy(&smap);
+    status = cli_do_config_finish(txn);
+    if (status == TXN_SUCCESS || status == TXN_UNCHANGED) {
+        return CMD_SUCCESS;
+    } else {
+        VLOG_ERR("Transaction commit failed.Function=%s Line=%d",__func__,__LINE__);
+        return CMD_OVSDB_FAILURE;
+    }
+}
+
+
+DEFUN(cli_lacp_set_fallback_timeout,
+    cli_lacp_set_fallback_timeout_cmd,
+    "lacp fallback timeout <1-900>",
+    LACP_STR
+    "Set LACP fallback timeout (time in seconds during which fallback remains active)\n"
+    "The range is 1 to 900\n")
+{
+    return lacp_set_fallback_timeout((char*) vty->index, argv[0]);
+}
+
+
+/**
+ * This function sets the lacp fallback timeout for a given lag port to the
+ * default value (0)
+ *
+ * @param lag_name name of the lag port
+ * @param fallback_timeout previous fallback timeout
+ *
+ * @return the status of the OVSDB transaction
+ */
+static int
+lacp_set_no_fallback_timeout(const char *lag_name, const char *fallback_timeout)
+{
+    const struct ovsrec_port *port_row = NULL;
+    bool port_found = false;
+    const char* actual_fallback_timeout = NULL;
+    struct smap smap = SMAP_INITIALIZER(&smap);
+    struct ovsdb_idl_txn* txn = NULL;
+    enum ovsdb_idl_txn_status status;
+
+    txn = cli_do_config_start();
+    if (txn == NULL) {
+        VLOG_ERR(LACP_OVSDB_TXN_CREATE_ERROR,__func__,__LINE__);
+        cli_do_config_abort(txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    OVSREC_PORT_FOR_EACH (port_row, idl) {
+        if (strncmp(port_row->name, lag_name, strlen(lag_name)) == 0) {
+            port_found = true;
+            break;
+        }
+    }
+
+    if (!port_found) {
+        /* LAG port should be present in DB. */
+        cli_do_config_abort(txn);
+        VLOG_ERR("Port table entry not found in DB.Function=%s Line=%d",__func__,__LINE__);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    smap_clone(&smap, &port_row->other_config);
+    actual_fallback_timeout = smap_get(&smap,
+            PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_TIMEOUT);
+
+    /* Check if the fallback timeout configured is equal to the one passed as parameter. */
+    if (!actual_fallback_timeout
+        || strncmp(actual_fallback_timeout,
+                   fallback_timeout,
+                   strlen(fallback_timeout)) != 0) {
+        cli_do_config_abort(txn);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    smap_remove(&smap, PORT_OTHER_CONFIG_MAP_LACP_FALLBACK_TIMEOUT);
+
+    ovsrec_port_set_other_config(port_row, &smap);
+    smap_destroy(&smap);
+    status = cli_do_config_finish(txn);
+    if (status == TXN_SUCCESS || status == TXN_UNCHANGED) {
+        return CMD_SUCCESS;
+    } else {
+        VLOG_ERR("Transaction commit failed.Function=%s Line=%d",__func__,__LINE__);
+        return CMD_OVSDB_FAILURE;
+    }
+}
+
+DEFUN(cli_lacp_set_no_fallback_timeout,
+    cli_lacp_set_no_fallback_timeout_cmd,
+    "no lacp fallback timeout <1-900>",
+    LACP_STR
+    "Set LACP fallback timeout to default value which is 0\n")
+{
+    return lacp_set_no_fallback_timeout((char*) vty->index, argv[0]);
+}
+
+
 /*
  * Function: lacp_ovsdb_init
  * Responsibility : Add lacp related column ops-cli idl cache.
@@ -2691,7 +2934,6 @@ lacp_ovsdb_init()
     ovsdb_idl_add_column(idl, &ovsrec_port_col_lacp);
     return;
 }
-
 /*
  * Function: cli_pre_init
  * Responsibility : Initialize LACP cli node.
@@ -2716,7 +2958,6 @@ void cli_pre_init(void)
     return;
   }
 }
-
 /*
  * Function: cli_post_init
  * Responsibility: Initialize LACP cli element.
@@ -2745,6 +2986,11 @@ void cli_post_init(void)
   install_element (LINK_AGGREGATION_NODE, &cli_lag_intf_del_ip4_cmd);
   install_element (LINK_AGGREGATION_NODE, &cli_lag_intf_config_ipv6_cmd);
   install_element (LINK_AGGREGATION_NODE, &cli_lag_intf_del_ipv6_cmd);
+
+  /*install_element (LINK_AGGREGATION_NODE, &cli_lacp_set_fallback_mode_cmd);
+  install_element (LINK_AGGREGATION_NODE, &cli_lacp_set_no_fallback_mode_cmd);*/
+  install_element (LINK_AGGREGATION_NODE, &cli_lacp_set_fallback_timeout_cmd);
+  install_element (LINK_AGGREGATION_NODE, &cli_lacp_set_no_fallback_timeout_cmd);
 
   install_element (CONFIG_NODE, &lacp_set_global_sys_priority_cmd);
   install_element (CONFIG_NODE, &lacp_set_no_global_sys_priority_cmd);
