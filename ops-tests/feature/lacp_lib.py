@@ -457,7 +457,7 @@ def validate_interface_not_in_lag(sw, interface, lag_id):
     port = find_device_label(sw, interface)
     output = sw.libs.vtysh.show_lacp_interface(port)
     print("Came back from show lacp interface")
-    assert output['lag_id'] == "",\
+    assert output['lag_id'] != lag_id,\
         "Unable to associate interface to lag"
 
 
