@@ -756,6 +756,41 @@ def retry_wrapper(
     return actual_retry_wrapper
 
 
+def verify_turn_on_interfaces(sw, intf_list):
+    @retry_wrapper(
+        'Ensure interfaces are turn on',
+        'Interfaces not yet ready',
+        5,
+        60)
+    def check_interfaces(sw):
+        validate_turn_on_interfaces(sw, intf_list)
+    check_interfaces(sw)
+
+
+def verify_state_sync_lag(sw, port_list, state, lacp_mode):
+    @retry_wrapper(
+        'Ensure LAG is synchronized',
+        'LAG not yet ready',
+        5,
+        80)
+    def check_lag(sw, port_list, state, lacp_mode):
+        for port in port_list:
+            map_lacp = sw.libs.vtysh.show_lacp_interface(port)
+            validate_lag_state_sync(map_lacp, state, lacp_mode)
+    check_lag(sw, port_list, state, lacp_mode)
+
+
+def verify_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=True):
+    @retry_wrapper(
+        'Ensure connectivity between hosts',
+        'LAG not yet ready',
+        5,
+        40)
+    def check_ping(h1, h1_ip, h2, h2_ip, success):
+        check_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=success)
+    check_ping(h1, h1_ip, h2, h2_ip, success=success)
+
+
 def compare_lag_interface_basic_settings(
     lag_stats,
     lag_id,
