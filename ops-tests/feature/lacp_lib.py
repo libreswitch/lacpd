@@ -769,6 +769,17 @@ def verify_state_sync_lag(sw, port_list, state, lacp_mode):
     check_lag(sw, port_list, state, lacp_mode)
 
 
+def verify_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=True):
+    @retry_wrapper(
+        'Ensure connectivity between hosts',
+        'LAG not yet ready',
+        5,
+        40)
+    def check_ping(h1, h1_ip, h2, h2_ip, success):
+        check_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=success)
+    check_ping(h1, h1_ip, h2, h2_ip, success=success)
+
+
 def compare_lag_interface_basic_settings(
     lag_stats,
     lag_id,
