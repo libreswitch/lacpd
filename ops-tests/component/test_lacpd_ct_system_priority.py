@@ -13,29 +13,27 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-##########################################################################
-# Name:        test_lacpd_ct_system_priority.py
-#
-# Objective:   Verify test cases for system priority functionality
-#
-# Topology:    3 switch (DUT running OpenSwitch)
-#
-##########################################################################
+"""System Priority Test Suite.
 
-"""
-OpenSwitch Tests for LACP System priority functionality
+Name:        test_lacpd_ct_system_priority.py
+
+Objective:   Verify test cases for system priority functionality
+
+Topology:    3 switch (DUT running OpenSwitch)
 """
 
-from time import sleep
+from lib_test import (
+    print_header,
+    set_port_parameter,
+    sw_clear_user_config,
+    sw_create_bond,
+    sw_delete_lag,
+    sw_set_intf_user_config,
+    sw_set_system_lacp_config,
+    sw_wait_until_all_sm_ready
+)
+
 import pytest
-
-from lib_test import sw_set_intf_user_config
-from lib_test import sw_clear_user_config
-from lib_test import sw_set_intf_pm_info
-from lib_test import set_port_parameter
-from lib_test import sw_get_intf_state
-from lib_test import sw_create_bond
-from lib_test import timed_compare
 
 TOPOLOGY = """
 #
@@ -57,91 +55,40 @@ TOPOLOGY = """
 [type=openswitch name="Switch 3"] sw3
 
 # Links
-sw1:if01 -- sw2:if01
-sw1:if02 -- sw2:if02
-sw1:if03 -- sw3:if01
-sw1:if04 -- sw3:if02
+sw1:1 -- sw2:1
+sw1:2 -- sw2:2
+sw1:3 -- sw3:1
+sw1:4 -- sw3:2
 """
 
 
-ovs_vsctl = "/usr/bin/ovs-vsctl "
+sw1_intf_start = 1
+sw1_intf_end = 4
 
-sw_1g_intf_start = 1
-sw_1g_intf_end = 4
-port_labels_1G = ['if01', 'if02', 'if03', 'if04']
-sw2_port_labels_1G = ['if01', 'if02']
-sw3_port_labels_1G = ['if01', 'if02']
-sw_1g_intf = []
-sw2_1g_intf = []
-sw3_1g_intf = []
+sw2_intf_start = 1
+sw2_intf_end = 2
 
-# Set open_vsw_lacp_config parameter(s)
-def set_open_vsw_lacp_config(sw, config):
-    c = ovs_vsctl + "set system ."
-    for s in config:
-        c += " lacp_config:" + s
-    return sw(c, shell='bash')
+sw3_intf_start = 1
+sw3_intf_end = 2
 
+sw1_port_labels = ['1', '2', '3', '4']
+sw2_port_labels = ['1', '2']
+sw3_port_labels = ['1', '2']
 
-# Set interface:other_config parameter(s)
-def set_intf_other_config(sw, intf, config):
-    c = "set interface " + str(intf)
-    for s in config:
-        c += ' other_config:%s' % s
-    return sw(c, shell='vsctl')
+sw1_intfs = []
+sw2_intfs = []
+sw3_intfs = []
+
+test_lag_id = 'lag1'
+
+sm_col_and_dist = '"Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,Dist:1,Def:0,Exp:0"'
+sm_out_sync = '"Activ:1,TmOut:1,Aggr:1,Sync:0,Col:0,Dist:0,Def:0,Exp:0"'
+sm_in_sync = '"Activ:1,TmOut:1,Aggr:1,Sync:1,Col:0,Dist:0,Def:0,Exp:0"'
 
 
-# Delete a bond/lag/trunk from OVS-DB.
-def sw_delete_bond(sw, bond_name):
-    print("Deleting the bond " + bond_name + "\n")
-    c = ovs_vsctl + "del-port bridge_normal " + bond_name
-    return sw(c, shell='bash')
-
-
-def verify_compare_complex(actual, expected, unused):
-    attrs = []
-    for attr in expected:
-        attrs.append(attr)
-    if len(actual) != len(expected):
-        return False
-    for i in range(0, len(attrs)):
-        if actual[i] != expected[attrs[i]]:
-            return False
-    return True
-
-
-def verify_intf_lacp_status(sw, intf, verify_values, context=''):
-    request = []
-    attrs = []
-    for attr in verify_values:
-        request.append('lacp_status:' + attr)
-        attrs.append(attr)
-    result = timed_compare(sw_get_intf_state,
-                           (sw, intf, request),
-                           verify_compare_complex, verify_values)
-    field_vals = result[1]
-    for i in range(0, len(attrs)):
-        verify_values[attrs[i]].replace('"', '')
-        assert field_vals[i] == verify_values[attrs[i]], context +\
-            ": invalid value for " + attrs[i] + ", expected " +\
-            verify_values[attrs[i]] + ", got " + field_vals[i]
-
-
-def lacpd_switch_pre_setup(sw, start, end):
-    for intf in range(start, end):
-        if intf > 9:
-            port = "if"
-        else:
-            port = "if0"
-        port = "{}{}".format(port, intf)
-        sw_set_intf_pm_info(sw, sw.ports[port], ('connector="SFP_RJ45"',
-                                                 'connector_status=supported',
-                                                 'max_speed="1000"',
-                                                 'supported_speeds="1000"'))
-
-
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def main_setup(request, topology):
+    """Test Suite Setup."""
     sw1 = topology.get('sw1')
     sw2 = topology.get('sw2')
     sw3 = topology.get('sw3')
@@ -150,18 +97,19 @@ def main_setup(request, topology):
     assert sw2 is not None
     assert sw3 is not None
 
-    global sw_1g_intf, port_labels_1G, sw2_port_labels_1G, sw3_port_labels_1G
-    for lbl in port_labels_1G:
-        sw_1g_intf.append(sw1.ports[lbl])
-    for lbl in sw2_port_labels_1G:
-        sw2_1g_intf.append(sw2.ports[lbl])
-    for lbl in sw3_port_labels_1G:
-        sw3_1g_intf.append(sw3.ports[lbl])
+    for port in sw1_port_labels:
+        sw1_intfs.append(sw1.ports[port])
+
+    for port in sw2_port_labels:
+        sw2_intfs.append(sw2.ports[port])
+
+    for port in sw3_port_labels:
+        sw3_intfs.append(sw3.ports[port])
 
 
-# Simulate valid pluggable modules in all the modules.
 @pytest.fixture()
 def setup(request, topology):
+    """Test Case Setup."""
     sw1 = topology.get('sw1')
     sw2 = topology.get('sw2')
     sw3 = topology.get('sw3')
@@ -169,37 +117,32 @@ def setup(request, topology):
     assert sw1 is not None
     assert sw2 is not None
     assert sw3 is not None
-
-    print('Simulate valid pluggable modules in all the modules.')
-    lacpd_switch_pre_setup(sw1, sw_1g_intf_start, sw_1g_intf_end)
-    lacpd_switch_pre_setup(sw2, 1, 2)
-    lacpd_switch_pre_setup(sw3, 1, 2)
 
     def cleanup():
         print('Clear the user_config of all the Interfaces.\n'
               'Reset the pm_info to default values.')
-        for intf in range(1, 54):
+
+        for intf in range(sw1_intf_start, sw1_intf_end):
             sw_clear_user_config(sw1, intf)
+
+        for intf in range(sw2_intf_start, sw2_intf_end):
             sw_clear_user_config(sw2, intf)
+
+        for intf in range(sw3_intf_start, sw3_intf_end):
             sw_clear_user_config(sw3, intf)
-            sw_set_intf_pm_info(sw1, intf, ('connector=absent',
-                                'connector_status=unsupported'))
-            sw_set_intf_pm_info(sw2, intf, ('connector=absent',
-                                'connector_status=unsupported'))
-            sw_set_intf_pm_info(sw3, intf, ('connector=absent',
-                                'connector_status=unsupported'))
 
     request.addfinalizer(cleanup)
 
 
 def test_lacpd_lag_dynamic_system_priority(topology, step, main_setup, setup):
+    """Dynamic System Priority Test Case.
+
+    If two switches (sw2 and sw3) are connected to a switch (sw1) using the
+    same dynamic LAG, the resolution of the LAG should be in favor of the
+    switch with the higher system priority
     """
-    Case 1:
-        If two switches (sw2 and sw3) are connected to a switch (sw1) using
-        the same dynamic LAG, the resolution of the LAG should be in favor of
-        the switch with the higher system priority
-    """
-    step("\n============= Dynamic LAG system priority test==========\n")
+    print_header('Dynamic LAG system priority test')
+
     sw1 = topology.get('sw1')
     sw2 = topology.get('sw2')
     sw3 = topology.get('sw3')
@@ -209,87 +152,74 @@ def test_lacpd_lag_dynamic_system_priority(topology, step, main_setup, setup):
     assert sw3 is not None
 
     # Enable all the interfaces under test.
-    step("Enabling interfaces [1, 2, 3, 4] in all switches\n")
-    for intf in sw_1g_intf[0:4]:
+    step('Enabling interfaces on switch 1')
+    for intf in sw1_intfs:
         sw_set_intf_user_config(sw1, intf, ['admin=up'])
+
+    for intf in sw2_intfs:
         sw_set_intf_user_config(sw2, intf, ['admin=up'])
+
+    for intf in sw3_intfs:
         sw_set_intf_user_config(sw3, intf, ['admin=up'])
 
-    step("Setting system priorities in switches\n")
-    set_open_vsw_lacp_config(sw1, ['lacp-system-priority=1'])
-    set_open_vsw_lacp_config(sw2, ['lacp-system-priority=100'])
-    set_open_vsw_lacp_config(sw3, ['lacp-system-priority=50'])
+    ###########################################################################
+    #
+    #                           Switch 3 has more priority
+    #
+    ###########################################################################
+    step('Setting system priorities in switches')
+    sw_set_system_lacp_config(sw1, ['lacp-system-priority=1'])
+    sw_set_system_lacp_config(sw2, ['lacp-system-priority=100'])
+    sw_set_system_lacp_config(sw3, ['lacp-system-priority=50'])
 
-    step("Creating active LAGs in switches\n")
-    sw_create_bond(sw1, "lag1", sw_1g_intf[0:4], lacp_mode="active")
-    sw_create_bond(sw2, "lag1", sw2_1g_intf[0:2], lacp_mode="active")
-    sw_create_bond(sw3, "lag1", sw3_1g_intf[0:2], lacp_mode="active")
+    step('Creating active LAGs in switches')
+    sw_create_bond(sw1, test_lag_id, sw1_intfs, lacp_mode='active')
+    sw_create_bond(sw2, test_lag_id, sw2_intfs, lacp_mode='active')
+    sw_create_bond(sw3, test_lag_id, sw3_intfs, lacp_mode='active')
 
-    step("Setting LAGs lacp rate as fast in switches\n")
-    set_port_parameter(sw1, "lag1", ['other_config:lacp-time=fast'])
-    set_port_parameter(sw2, "lag1", ['other_config:lacp-time=fast'])
-    set_port_parameter(sw3, "lag1", ['other_config:lacp-time=fast'])
+    step('Setting LAGs lacp rate as fast in switches')
+    set_port_parameter(sw1, test_lag_id, ['other_config:lacp-time=fast'])
+    set_port_parameter(sw2, test_lag_id, ['other_config:lacp-time=fast'])
+    set_port_parameter(sw3, test_lag_id, ['other_config:lacp-time=fast'])
 
-    step("Waiting for LACP to complete negotiation\n")
-    sleep(40)
+    step('Verify state machines in all switches')
 
-    step("Verify state machines in all switches\n")
-    """
-    The interface 3 and 4 of sw1 must be collecting and distributing
-    """
-    for intf in sw_1g_intf[2:4]:
-        verify_intf_lacp_status(sw1,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0"},
-                                "s1:" + intf)
+    step('Verify state machines from interfaces on Switch 1')
+    sw_wait_until_all_sm_ready([sw1], sw1_intfs[0:2], sm_out_sync)
+    sw_wait_until_all_sm_ready([sw1], sw1_intfs[2:4], sm_col_and_dist)
 
-    """
-    The interface 1 and 2 of sw3 must be collecting and distributing since
-    this is the switch with higher system priority between sw2 and sw3
-    """
-    for intf in sw2_1g_intf[0:2]:
-        verify_intf_lacp_status(sw3,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0"},
-                                "s3:" + intf)
+    step('Verify state machines from interfaces on Switch 2')
+    sw_wait_until_all_sm_ready([sw2], sw2_intfs, sm_in_sync)
 
-    """
-    The interface 1 and 2 of sw1 must not be collecting and distributing
-    The interface 1 and 2 of sw2 must not be collecting and distributing since
-    this is the switch with lower system priority between sw2 and sw3
-    """
-    for intf in sw_1g_intf[0:2]:
-        verify_intf_lacp_status(sw1,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:0,"
-                                 "Dist:0,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:0,Col:0,"
-                                 "Dist:0,Def:0,Exp:0"},
-                                "s1:" + intf)
+    step('Verify state machines from interfaces on Switch 3')
+    sw_wait_until_all_sm_ready([sw3], sw3_intfs, sm_col_and_dist)
 
-        verify_intf_lacp_status(sw2,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:0,Col:0,"
-                                 "Dist:0,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:0,"
-                                 "Dist:0,Def:0,Exp:0"},
-                                "s2:" + intf)
+    ###########################################################################
+    #
+    #                           Switch 2 has more priority
+    #
+    ###########################################################################
+    step('Setting system priorities in switches')
+    sw_set_system_lacp_config(sw2, ['lacp-system-priority=50'])
+    sw_set_system_lacp_config(sw3, ['lacp-system-priority=100'])
 
-    # finish testing
-    sw1("ovs-vsctl del-port lag1", shell='bash')
-    sw2("ovs-vsctl del-port lag1", shell='bash')
-    sw3("ovs-vsctl del-port lag1", shell='bash')
+    step('Verify state machines in all switches')
+
+    step('Verify state machines from interfaces on Switch 1')
+    sw_wait_until_all_sm_ready([sw1], sw1_intfs[0:2], sm_col_and_dist)
+    sw_wait_until_all_sm_ready([sw1], sw1_intfs[2:4], sm_out_sync)
+
+    step('Verify state machines from interfaces on Switch 2')
+    sw_wait_until_all_sm_ready([sw2], sw2_intfs, sm_col_and_dist)
+
+    step('Verify state machines from interfaces on Switch 3')
+    sw_wait_until_all_sm_ready([sw3], sw3_intfs, sm_in_sync)
+
+    ###########################################################################
+    #
+    #                                   Cleanup
+    #
+    ###########################################################################
+    sw_delete_lag(sw1, test_lag_id)
+    sw_delete_lag(sw2, test_lag_id)
+    sw_delete_lag(sw3, test_lag_id)

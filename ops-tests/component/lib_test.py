@@ -25,6 +25,16 @@ def print_header(msg):
                                msg,
                               '=' * header_length))
 
+
+def sw_set_system_lacp_config(sw, config):
+    cmd = 'set system .'
+
+    for c in config:
+       cmd += " lacp_config:" + c
+
+    return sw(cmd, shell='vsctl')
+
+
 # This method calls a function to retrieve data, then calls another function
 # to compare the data to the expected value(s). If it fails, it sleeps for
 # half a second, then retries, up to a specified retry limit (default 20 = 10
@@ -131,6 +141,11 @@ def sw_create_bond(s1, bond_name, intf_list, lacp_mode="off"):
     c += " -- set port " + bond_name + " lacp=" + lacp_mode
     return s1(c, shell='vsctl')
 
+
+def sw_delete_lag(sw, lag_name):
+    """Deletes LAG from OVSDB."""
+    cmd = 'del-port ' + lag_name
+    return sw(cmd, shell='vsctl')
 
 def verify_compare_value(actual, expected, final):
     if actual != expected:
