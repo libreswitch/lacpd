@@ -42,6 +42,7 @@ from lacp_lib import LOCAL_STATE
 from lacp_lib import validate_turn_on_interfaces
 from lacp_lib import set_lacp_rate_fast
 from lacp_lib import validate_vlan_state
+import pytest
 
 TOPOLOGY = """
 # +-------+              +-------+
@@ -87,6 +88,7 @@ sw3:4 -- hs3:1
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacp_aggregation_key_with_hosts(topology):
     """
     Case 1:

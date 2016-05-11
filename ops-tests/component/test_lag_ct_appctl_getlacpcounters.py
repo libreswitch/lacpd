@@ -28,6 +28,7 @@
 
 from lib_test import sw_create_bond
 from lib_test import sw_set_intf_user_config
+import pytest
 
 
 TOPOLOGY = """
@@ -62,6 +63,7 @@ def enable_intf_list(sw, intf_list):
         sw_set_intf_user_config(sw, intf, ['admin=up'])
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_ovs_appctl_getlacpcounters(topology):
     """
         Verify the correct format output of the ovs-appctl command

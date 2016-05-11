@@ -34,6 +34,7 @@ from lacp_lib import check_connectivity_between_hosts
 from lacp_lib import tcpdump_capture_interface_start
 from lacp_lib import tcpdump_capture_interface_stop
 from lacp_lib import get_counters_from_packet_capture
+import pytest
 
 TOPOLOGY = """
 # +-------+                                  +-------+
@@ -71,6 +72,7 @@ def get_average_lacpd_sent_pdus(sw, lag_id):
     return sent_pdus_sum/count
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacpd_heartbeat(topology):
     """
     Tests LACP heartbeat average rate (slow/fast)

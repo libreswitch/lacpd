@@ -881,6 +881,7 @@ class lacpdTest(OpsVsiTest):
                                     "s2:" + intf)
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 class Test_lacpd:
 
     def setup(self):

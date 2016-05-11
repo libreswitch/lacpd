@@ -37,6 +37,7 @@ from lacp_lib import validate_lag_state_sync
 from lacp_lib import validate_lag_name
 from lacp_lib import LOCAL_STATE
 from lacp_lib import set_lacp_rate_fast
+import pytest
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -57,7 +58,7 @@ sw1:6 -- sw2:7
 sw1:7 -- sw2:5
 """
 
-
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacp_agg_key_cross_links(topology):
     """
     Case 3:

@@ -40,6 +40,7 @@ from lacp_lib import ACTOR
 from lacp_lib import PARTNER
 from lacp_lib import set_lacp_rate_fast
 from lacp_lib import validate_turn_on_interfaces
+import pytest
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -61,6 +62,7 @@ sw1:7 -- sw2:5
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def lacp_aggregation_key_packet_validation(topology):
     """
     Aggregation Key packet validation:

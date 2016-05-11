@@ -39,6 +39,7 @@ from lacp_lib import LOCAL_STATE
 from lacp_lib import REMOTE_STATE
 from lacp_lib import set_lacp_rate_fast
 from lacp_lib import validate_turn_on_interfaces
+import pytest
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -60,6 +61,7 @@ sw1:7 -- sw2:5
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacp_different_aggregation_keys(topology):
     """
     Case 4:

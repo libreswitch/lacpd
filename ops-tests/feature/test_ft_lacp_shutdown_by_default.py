@@ -33,6 +33,7 @@ from lacp_lib import associate_vlan_to_lag
 from lacp_lib import associate_vlan_to_l2_interface
 from lacp_lib import check_connectivity_between_hosts
 from lacp_lib import validate_turn_on_interfaces
+import pytest
 
 TOPOLOGY = """
 # +-------+                                 +-------+
@@ -55,6 +56,7 @@ sw2:3 -- hs2:1
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lag_shutdown_by_default(topology):
     """Test LAG with shutdown by default ('no shutdown').
 

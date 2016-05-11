@@ -41,6 +41,7 @@ from lacp_lib import validate_lag_state_sync
 from lacp_lib import check_connectivity_between_hosts
 from lacp_lib import LOCAL_STATE
 from lacp_lib import REMOTE_STATE
+import pytest
 
 
 TOPOLOGY = """
@@ -86,6 +87,7 @@ sw2:1 -- hs2:1
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_l2_dynamic_lag_ping_case_1(topology):
     """
     Case 1:

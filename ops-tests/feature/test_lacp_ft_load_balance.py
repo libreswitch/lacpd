@@ -38,6 +38,7 @@ from lacp_lib import check_lag_lb_hash
 from lacp_lib import check_connectivity_between_hosts
 from lacp_lib import turn_on_interface
 from lacp_lib import validate_turn_on_interfaces
+import pytest
 
 TOPOLOGY = """
 # +-------+                                   +-------+
@@ -109,6 +110,7 @@ def chg_ip_address(hs, interface, new_ip, old_ip):
        shell='bash')
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 @mark.platform_incompatible(['docker'])
 def test_lacpd_load_balance(topology):
     """

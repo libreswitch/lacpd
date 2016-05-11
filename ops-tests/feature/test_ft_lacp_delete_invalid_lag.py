@@ -47,6 +47,7 @@ from lacp_lib import check_connectivity_between_hosts
 from lacp_lib import delete_lag
 from topology_lib_vtysh.exceptions import UnknownCommandException
 from topology_lib_vtysh.exceptions import UnknownVtyshException
+import pytest
 
 TOPOLOGY = """
 
@@ -82,6 +83,7 @@ sw2:1 -- hs2:1
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_delete_invalid_lag(topology):
 
     sw1 = topology.get('sw1')

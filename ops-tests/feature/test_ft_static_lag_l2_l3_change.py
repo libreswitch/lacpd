@@ -37,6 +37,7 @@ from lacp_lib import associate_vlan_to_l2_interface
 from lacp_lib import assign_ip_to_lag
 from lacp_lib import check_connectivity_between_hosts
 from lacp_lib import check_connectivity_between_switches
+import pytest
 
 
 TOPOLOGY = """
@@ -82,6 +83,7 @@ sw2:1 -- hs2:1
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_l2_l3_switch_case_1(topology):
     """
     Case 1:
