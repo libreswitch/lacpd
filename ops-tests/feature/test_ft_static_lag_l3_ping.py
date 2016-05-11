@@ -32,6 +32,7 @@ from lacp_lib import turn_on_interface
 from lacp_lib import validate_turn_on_interfaces
 from lacp_lib import assign_ip_to_lag
 from lacp_lib import check_connectivity_between_switches
+import pytest
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -49,6 +50,7 @@ sw1:3 -- sw2:3
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_l3_static_lag_ping_case_1(topology):
     """
     Case 1:

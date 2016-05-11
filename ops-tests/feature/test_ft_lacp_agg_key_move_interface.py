@@ -51,6 +51,7 @@ from lacp_lib import DIAG_DUMP_LOCAL_STATE
 from lacp_lib import DIAG_DUMP_REMOTE_STATE
 from lacp_lib import set_lacp_rate_fast
 from lacp_lib import validate_turn_on_interfaces
+import pytest
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -84,6 +85,7 @@ def get_diagdump_lacp_interfaces(sw):
     return output['Interfaces']
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacp_agg_key_move_interface(topology):
     """
     Case 1:

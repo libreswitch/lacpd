@@ -20,6 +20,7 @@
 from opsvsi.docker import *
 from opsvsi.opsvsitest import *
 import re
+import pytest
 
 
 class LACPCliTest(OpsVsiTest):
@@ -745,6 +746,7 @@ class LACPCliTest(OpsVsiTest):
 
         return True
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 class Test_lacp_cli:
 
     def setup(self):
@@ -939,6 +941,7 @@ class LACPMaxNumberOfLags(OpsVsiTest):
         s1.cmdCLI('end')
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 class Test_lacp_max_lags:
 
     def setup(self):

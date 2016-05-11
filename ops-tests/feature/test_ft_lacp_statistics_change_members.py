@@ -48,6 +48,7 @@ from lacp_lib import associate_vlan_to_l2_interface
 from lacp_lib import retry_wrapper
 from lacp_lib import remove_interface_from_lag
 from lacp_lib import compare_lag_interface_basic_settings
+import pytest
 
 TOPOLOGY = """
 #            +-----------------+
@@ -415,6 +416,7 @@ def validate_connectivity(hs_list, vlan_id, wait, step):
         )
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_ft_lacp_statistics_change_members(topology, step):
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
