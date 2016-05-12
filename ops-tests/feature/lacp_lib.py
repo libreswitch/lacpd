@@ -52,6 +52,16 @@ def create_lag_passive(sw, lag_id):
         ctx.lacp_mode_passive()
 
 
+def lag_no_passive(sw, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_lacp_mode_passive()
+
+
+def lag_no_active(sw, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_lacp_mode_active()
+
+
 def lag_no_routing(sw, lag_id):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         ctx.no_routing()
