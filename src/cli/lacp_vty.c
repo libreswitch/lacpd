@@ -49,11 +49,9 @@
 #include "vtysh/utils/lacp_vtysh_utils.h"
 #include "vtysh/utils/vrf_vtysh_utils.h"
 #include "vtysh/utils/vlan_vtysh_utils.h"
+#include "vtysh/utils/l3_vtysh_utils.h"
 #include "vtysh_ovsdb_intf_lag_context.h"
 #include "vrf-utils.h"
-
-#define IP_ADDRESS_LENGTH    18
-#define IPV6_ADDRESS_LENGTH  49
 
 VLOG_DEFINE_THIS_MODULE(vtysh_lacp_cli);
 extern struct ovsdb_idl *idl;
@@ -100,69 +98,6 @@ lacp_exceeded_maximum_lag()
   }
 
   return lags_found >= MAX_LAG_INTERFACES;
-}
-
-/*
- * This function will check if a given IPv4/IPv6 address
- * is already present as a primary or secondary IPv4/IPv6 address.
- */
-bool
-check_ip_addr_duplicate (const char *ip_address,
-                         const struct ovsrec_port *port_row, bool ipv6,
-                         bool *secondary)
-{
-  size_t i;
-  if (ipv6) {
-      if (port_row->ip6_address && !strcmp (port_row->ip6_address, ip_address)) {
-          *secondary = false;
-          return true;
-      }
-      for (i = 0; i < port_row->n_ip6_address_secondary; i++) {
-          if (!strcmp (port_row->ip6_address_secondary[i], ip_address)) {
-              *secondary = true;
-              return true;
-          }
-      }
-  } else {
-      if (port_row->ip4_address && !strcmp (port_row->ip4_address, ip_address)) {
-          *secondary = false;
-          return true;
-      }
-      for (i = 0; i < port_row->n_ip4_address_secondary; i++) {
-          if (!strcmp (port_row->ip4_address_secondary[i], ip_address)) {
-              *secondary = true;
-              return true;
-          }
-      }
-    }
-  return false;
-}
-
-/*
- * This function mask subnet from the entered IP address
- * using subnet bits.
- * Parameter 1 : IPv4 address
- * Return      : subnet_mask for the ip4 address
- */
-static int
-mask_ip4_subnet(const char* ip4)
-{
-   char ipAddressString[IP_ADDRESS_LENGTH];
-   int mask_bits = 0, addr = 0;
-   unsigned int i = 0;
-   unsigned int subnet_bits = 0;
-
-   strncpy(ipAddressString, ip4, IP_ADDRESS_LENGTH);
-   strcpy(strchr(ipAddressString, '/'), "\0");
-   mask_bits = atoi(strchr(ip4,'/') + 1);
-
-   inet_pton(AF_INET, ipAddressString, &addr);
-
-   while(i < mask_bits) {
-       subnet_bits |= (1 << i++);
-   }
-
-   return (addr & subnet_bits);
 }
 
 char *
@@ -2272,7 +2207,6 @@ lag_intf_config_ip (const char *if_name, const char *ip4, bool secondary)
     struct ovsdb_idl_txn *status_txn = NULL;
     enum ovsdb_idl_txn_status status;
     bool port_found;
-    int input_ip_subnet, port_ip_subnet;
     char **secondary_ip4_addresses;
     size_t i;
 
@@ -2281,28 +2215,12 @@ lag_intf_config_ip (const char *if_name, const char *ip4, bool secondary)
       return CMD_SUCCESS;
     }
 
-    input_ip_subnet = mask_ip4_subnet(ip4);
-    OVSREC_PORT_FOR_EACH(port_row, idl) {
-        if (port_row->ip4_address != NULL ) {
-          port_ip_subnet = mask_ip4_subnet(port_row->ip4_address);
-
-          if (input_ip_subnet == port_ip_subnet) {
-            if (strncmp(port_row->name, if_name, strlen(if_name)) == 0) {
-              break;
-            } else {
-                vty_out(vty, "Duplicate IP Address.%s",VTY_NEWLINE);
-                return CMD_SUCCESS;
-              }
-          }
-        }
-        else if (port_row->ip4_address_secondary != NULL ) {
-            port_ip_subnet = mask_ip4_subnet(*port_row->ip4_address_secondary);
-
-            if (input_ip_subnet == port_ip_subnet) {
-                vty_out(vty, "Duplicate IP Address.%s",VTY_NEWLINE);
-                return CMD_SUCCESS;
-            }
-        }
+    if (!is_ip_configurable(vty, ip4, if_name, AF_INET, secondary))
+    {
+        VLOG_DBG("%s  An interface with the same IP address or "
+                 "subnet or an overlapping network%s"
+                 "%s already exists.", __func__, VTY_NEWLINE, ip4);
+        return CMD_SUCCESS;
     }
 
     OVSREC_PORT_FOR_EACH(port_row, idl) {
@@ -2488,7 +2406,7 @@ DEFUN (cli_lag_intf_config_ipv6,
     const struct ovsrec_port *port_row = NULL;
     struct ovsdb_idl_txn *status_txn = NULL;
     enum ovsdb_idl_txn_status status;
-    bool is_secondary = false;
+    bool secondary = false;
     const char *if_name = (char*) vty->index;
     const char *ipv6 = argv[0];
     char **secondary_ipv6_addresses;
@@ -2498,6 +2416,9 @@ DEFUN (cli_lag_intf_config_ipv6,
         vty_out(vty, "Invalid IP address.%s", VTY_NEWLINE);
         return CMD_SUCCESS;
     }
+
+    if (argv[1] != NULL)
+        secondary = true;
 
     status_txn = cli_do_config_start ();
     if (status_txn == NULL) {
@@ -2513,17 +2434,15 @@ DEFUN (cli_lag_intf_config_ipv6,
         return CMD_SUCCESS;
     }
 
-    if (check_ip_addr_duplicate(ipv6, port_row, true, &is_secondary)) {
-        vty_out(vty, "IPv6 address is already assigned to interface %s"
-                " as %s.%s",
-                if_name, is_secondary ? "secondary" : "primary", VTY_NEWLINE);
-        VLOG_DBG("%s Interface \"%s\" already has the IP address \"%s\""
-                 " assigned to it as \"%s\".%s",
-                 __func__, if_name, ipv6,
-                 is_secondary ? "secondary" : "primary", VTY_NEWLINE);
+    if (!is_ip_configurable(vty, ipv6, if_name, AF_INET6, secondary))
+    {
+        VLOG_DBG("%s  An interface with the same IP address or "
+                 "subnet or an overlapping network%s"
+                 "%s already exists.", __func__,  VTY_NEWLINE, ipv6);
         cli_do_config_abort(status_txn);
         return CMD_SUCCESS;
     }
+
     if (!(argv[1] != NULL)) {
       ovsrec_port_set_ip6_address(port_row, ipv6);
     } else {
