@@ -69,7 +69,7 @@ extern struct ovsdb_idl *idl;
  *              false.
  */
 bool
-check_acl_configuration(const struct ovsrec_port *port_row)
+is_acl_configured(const struct ovsrec_port *port_row)
 {
 
   ovs_assert(port_row);
@@ -1271,7 +1271,7 @@ lacp_add_intf_to_lag(const char *if_name, const char *lag_number)
          * if ACL is applied then we don't allow adding
          * this port to lag
          */
-        if (check_acl_configuration(port_row))
+        if (is_acl_configured(port_row))
         {
             vty_out(vty, "Unable to add interface %s to lag %s, "
                          "ACL is configured on interface.\n",if_name, lag_name);
