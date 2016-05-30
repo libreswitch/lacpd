@@ -57,6 +57,13 @@ def lag_no_routing(sw, lag_id):
         ctx.no_routing()
 
 
+def find_device_label(sw, interface):
+    assert interface in sw.ports.values()
+    for key, value in sw.ports.items():
+        if value == interface:
+            return key
+
+
 def create_lag(sw, lag_id, lag_mode):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         if(lag_mode == 'active'):
@@ -83,7 +90,8 @@ def delete_lag(sw, lag_id):
 
 
 def associate_interface_to_lag(sw, interface, lag_id):
-    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
+    port = find_device_label(sw, interface)
+    with sw.libs.vtysh.ConfigInterface(port) as ctx:
         ctx.lag(lag_id)
     lag_name = "lag" + lag_id
     output = sw.libs.vtysh.show_lacp_aggregates(lag_name)
@@ -92,7 +100,8 @@ def associate_interface_to_lag(sw, interface, lag_id):
 
 
 def remove_interface_from_lag(sw, interface, lag_id):
-    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
+    port = find_device_label(sw, interface)
+    with sw.libs.vtysh.ConfigInterface(port) as ctx:
         ctx.no_lag(lag_id)
     lag_name = "lag" + lag_id
     output = sw.libs.vtysh.show_lacp_aggregates(lag_name)
@@ -101,7 +110,8 @@ def remove_interface_from_lag(sw, interface, lag_id):
 
 
 def disassociate_interface_to_lag(sw, interface, lag_id):
-    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
+    port = find_device_label(sw, interface)
+    with sw.libs.vtysh.ConfigInterface(port) as ctx:
         ctx.no_lag(lag_id)
 
 
@@ -378,7 +388,8 @@ def associate_vlan_to_l2_interface(
     interface,
     vlan_type='access'
 ):
-    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
+    port = find_device_label(sw, interface)
+    with sw.libs.vtysh.ConfigInterface(port) as ctx:
         ctx.no_routing()
         if vlan_type == 'access':
             ctx.vlan_access(vlan_id)
