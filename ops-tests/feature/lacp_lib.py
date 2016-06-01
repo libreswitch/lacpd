@@ -136,6 +136,19 @@ def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access'):
         "Vlan was not properly associated to lag"
 
 
+def tagged_vlan_to_lag(sw, vlan_id, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_routing()
+        for vlan in vlan_id:
+            ctx.vlan_trunk_allowed(vlan)
+
+    for vlan in vlan_id:
+        output = sw.libs.vtysh.show_vlan(vlan)
+        lag_name = 'lag' + lag_id
+        assert lag_name in output[vlan]['ports'],\
+            "Vlan was not properly tagged to lag"
+
+
 def turn_on_interface(sw, interface):
     port = find_device_label(sw, interface)
     with sw.libs.vtysh.ConfigInterface(port) as ctx:
