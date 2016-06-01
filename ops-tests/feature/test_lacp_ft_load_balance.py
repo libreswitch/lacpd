@@ -24,27 +24,29 @@ in both LAG interfaces.
 For l2 and l3, source addresses change to simulate different hosts
 """
 
-from time import sleep
 from random import randint
+from time import sleep
+from lacp_lib import (
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    check_lag_lb_hash,
+    create_lag,
+    create_vlan,
+    set_lag_lb_hash,
+    turn_on_interface,
+    verify_connectivity_between_hosts,
+    verify_turn_on_interfaces
+)
+
 from pytest import mark
 
-from lacp_lib import create_lag
-from lacp_lib import create_vlan
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import set_lag_lb_hash
-from lacp_lib import check_lag_lb_hash
-from lacp_lib import check_connectivity_between_hosts
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-import pytest
 
 TOPOLOGY = """
 # +-------+                                   +-------+
 # |       |    +--------+  LAG  +--------+    |       |
 # |  hs1  <---->        <------->        <---->  hs2  |
-# |       |    |  ops1  <------->  ops2  |    |       |
+# |       |    |  sw1   <------->  sw2   |    |       |
 # +-------+    |        |       |        <-+  +-------+
 #              +--------+       +--------+ |
 #                                          |  +-------+
@@ -54,22 +56,23 @@ TOPOLOGY = """
 #                                             +-------+
 
 # Nodes
-[type=openswitch name="OpenSwitch 1"] ops1
-[type=openswitch name="OpenSwitch 2"] ops2
+[type=openswitch name="OpenSwitch 1"] sw1
+[type=openswitch name="OpenSwitch 2"] sw2
 [type=host name="Host src 1" image="gdanii/iperf:latest"] hs1
 [type=host name="Host dst 2" image="gdanii/iperf:latest"] hs2
 [type=host name="Host dst 3" image="gdanii/iperf:latest"] hs3
 
 # Links
-hs1:1 -- ops1:1
-hs2:1 -- ops2:1
-hs3:1 -- ops2:4
-ops1:2 -- ops2:2
-ops1:3 -- ops2:3
+hs1:1 -- sw1:1
+hs2:1 -- sw2:1
+hs3:1 -- sw2:4
+sw1:2 -- sw2:2
+sw1:3 -- sw2:3
 """
 
 
 def generate_mac_addresses(counter):
+    """Generate MAC address."""
     m_list = []
     while len(m_list) <= counter:
         # using docker mac addresses to avoid
@@ -81,6 +84,7 @@ def generate_mac_addresses(counter):
 
 
 def generate_ip_addresses(counter):
+    """Generate IP address."""
     ip_list = []
     while len(ip_list) <= counter:
         ip_digit = randint(15, 254)
@@ -90,6 +94,7 @@ def generate_ip_addresses(counter):
 
 
 def chg_mac_address(hs, interface, new_mac):
+    """Change MAC address."""
     hs('ip link set dev {interface} down'.format(**locals()),
        shell='bash')
     hs('ip link set dev {interface} address {new_mac}'
@@ -100,6 +105,7 @@ def chg_mac_address(hs, interface, new_mac):
 
 
 def chg_ip_address(hs, interface, new_ip, old_ip):
+    """Change IP address."""
     hs('ip link set dev {interface} down'.format(**locals()),
        shell='bash')
     hs('ip addr del {old_ip} dev {interface}'.format(**locals()),
@@ -110,13 +116,9 @@ def chg_ip_address(hs, interface, new_ip, old_ip):
        shell='bash')
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
 @mark.platform_incompatible(['docker'])
-def test_lacpd_load_balance(topology):
-    """
-    Tests LAG load balance with l2, l3 and l4 hash algorithms
-    """
-
+def test_lacpd_load_balance(topology, step):
+    """Test LAG load balance with l2, l3 and l4 hash algorithms."""
     # VID for testing
     test_vlan = '256'
     # LAG ID for testing
@@ -144,62 +146,76 @@ def test_lacpd_load_balance(topology):
     host2_addr = '10.0.11.11'
     host3_addr = '10.0.11.12'
 
-    ops1 = topology.get('ops1')
-    ops2 = topology.get('ops2')
+    sw1 = topology.get('sw1')
+    sw2 = topology.get('sw2')
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
     hs3 = topology.get('hs3')
 
-    assert ops1 is not None, 'Topology failed getting object ops1'
-    assert ops2 is not None, 'Topology failed getting object ops2'
+    step('Verifying switches are not None')
+    assert sw1 is not None, 'Topology failed getting object sw1'
+    assert sw2 is not None, 'Topology failed getting object sw2'
+
+    step('Verifying hosts are not None')
     assert hs1 is not None, 'Topology failed getting object hs1'
     assert hs2 is not None, 'Topology failed getting object hs2'
     assert hs3 is not None, 'Topology failed getting object hs3'
 
-    # Turn on interfaces
-    for curr_if in lag_interfaces + sw1_host_interfaces:
-        turn_on_interface(ops1, curr_if)
+    step('Turning interfaces ON on Switch 1')
+    for intf in lag_interfaces + sw1_host_interfaces:
+        turn_on_interface(sw1, intf)
 
-    for curr_if in lag_interfaces + sw2_host_interfaces:
-        turn_on_interface(ops2, curr_if)
+    step('Turning interfaces ON on Switch 1')
+    for intf in lag_interfaces + sw2_host_interfaces:
+        turn_on_interface(sw2, intf)
 
-    # Wait for interface become up
-    sleep(5)
-    validate_turn_on_interfaces(ops1, lag_interfaces + sw1_host_interfaces)
-    validate_turn_on_interfaces(ops2, lag_interfaces + sw2_host_interfaces)
+    step('Verifying interfaces are Up on Switch 1')
+    verify_turn_on_interfaces(sw1, lag_interfaces + sw1_host_interfaces)
+
+    step('Verifying interfaces are Up on Switch 1')
+    verify_turn_on_interfaces(sw2, lag_interfaces + sw2_host_interfaces)
 
     # Configure switches
-    for curr_ops in [ops1, ops2]:
-        create_vlan(curr_ops, test_vlan)
-        create_lag(curr_ops, test_lag, 'off')
-        associate_vlan_to_lag(curr_ops, test_vlan, test_lag)
-        for curr_if in lag_interfaces:
-            associate_interface_to_lag(curr_ops, curr_if, test_lag)
+    for switch in [sw1, sw2]:
+        step('Creating VLAN %s' % test_vlan)
+        create_vlan(switch, test_vlan)
 
-    for curr_p in sw1_host_interfaces:
-        associate_vlan_to_l2_interface(ops1, test_vlan, curr_p)
+        step('Creating LAG %s' % test_lag)
+        create_lag(switch, test_lag, 'off')
 
-    for curr_p in sw2_host_interfaces:
-        associate_vlan_to_l2_interface(ops2, test_vlan, curr_p)
+        step('Associating VLAN %s to LAG %s' % test_vlan, test_lag)
+        associate_vlan_to_lag(switch, test_vlan, test_lag)
+
+        for intf in lag_interfaces:
+            step('Associating interface %s to LAG %s' % (intf, test_lag))
+            associate_interface_to_lag(switch, intf, test_lag)
+
+    for intf in sw1_host_interfaces:
+        step('Associating VLAN %s to interface %s' % (test_vlan, intf))
+        associate_vlan_to_l2_interface(sw1, test_vlan, intf)
+
+    for intf in sw2_host_interfaces:
+        step('Associating VLAN %s to interface %s' % (test_vlan, intf))
+        associate_vlan_to_l2_interface(sw2, test_vlan, intf)
 
     # Configure host interfaces
-    hs1.libs.ip.interface('1', addr='{host1_addr}/24'.format(**locals()),
+    hs1.libs.ip.interface('1',
+                          addr='{host1_addr}/24'.format(**locals()),
                           up=True)
 
-    hs2.libs.ip.interface('1', addr='{host2_addr}/24'.format(**locals()),
+    hs2.libs.ip.interface('1',
+                          addr='{host2_addr}/24'.format(**locals()),
                           up=True)
 
-    hs3.libs.ip.interface('1', addr='{host3_addr}/24'.format(**locals()),
+    hs3.libs.ip.interface('1',
+                          addr='{host3_addr}/24'.format(**locals()),
                           up=True)
 
-    print('Sleep few seconds to wait everything is up')
-    sleep(30)
+    step('Verifying connectivity between Host 1 and Host 2')
+    verify_connectivity_between_hosts(hs1, host1_addr, hs2, host2_addr)
 
-    # Pinging to verify connections are OK
-    check_connectivity_between_hosts(hs1, host1_addr,
-                                     hs2, host2_addr)
-    check_connectivity_between_hosts(hs1, host1_addr,
-                                     hs3, host3_addr)
+    step('Verifying connectivity between Host 1 and Host 3')
+    verify_connectivity_between_hosts(hs1, host1_addr, hs3, host3_addr)
 
     hs2.libs.iperf.server_start(test_port_tcp, 20, False)
     hs2.libs.iperf.server_start(test_port_udp, 20, True)
@@ -209,19 +225,21 @@ def test_lacpd_load_balance(topology):
     for lb_algorithm in lag_lb_algorithms:
         print('========== Testing with {lb_algorithm} =========='
               .format(**locals()))
-        for curr_ops in [ops1, ops2]:
-            set_lag_lb_hash(curr_ops, test_lag, lb_algorithm)
+        for switch in [sw1, sw2]:
+            set_lag_lb_hash(switch, test_lag, lb_algorithm)
             # Check that hash is properly set
-            check_lag_lb_hash(curr_ops, test_lag, lb_algorithm)
+            check_lag_lb_hash(switch, test_lag, lb_algorithm)
+
         sleep(10)
-        for curr_p in lag_interfaces:
-            intf_info = ops1.libs.vtysh.show_interface(curr_p)
-            lag_intf_counter_b[curr_p] = intf_info['tx_packets']
+        for intf in lag_interfaces:
+            intf_info = sw1.libs.vtysh.show_interface(intf)
+            lag_intf_counter_b[intf] = intf_info['tx_packets']
 
         for x in range(0, times_to_send):
             if lb_algorithm == 'l3-src-dst':
                 ip = ip_list[x % num_addresses]
-                chg_ip_address(hs1, '1',
+                chg_ip_address(hs1,
+                               '1',
                                '{ip}/24'.format(**locals()),
                                '{old_ip}/24'.format(**locals()))
                 old_ip = ip
@@ -229,26 +247,28 @@ def test_lacpd_load_balance(topology):
                 mac = mac_list[x % num_addresses]
                 chg_mac_address(hs1, '1', mac)
 
-            hs1.libs.iperf.client_start(host2_addr,
-                                        test_port_tcp,
-                                        1, 2, False)
+            hs1.libs.iperf.client_start(host2_addr, test_port_tcp, 1, 2, False)
 
             if lb_algorithm == 'l4-src-dst':
                 hs1.libs.iperf.client_start(host2_addr,
                                             test_port_udp,
-                                            1, 2, True)
+                                            1,
+                                            2,
+                                            True)
             else:
                 hs1.libs.iperf.client_start(host3_addr,
                                             test_port_tcp,
-                                            1, 2, False)
+                                            1,
+                                            2,
+                                            False)
         sleep(15)
-        for curr_p in lag_interfaces:
-            intf_info = ops1.libs.vtysh.show_interface(curr_p)
-            lag_intf_counter_a[curr_p] = intf_info['tx_packets']
-            delta_tx[lb_algorithm][curr_p] =\
-                lag_intf_counter_a[curr_p] - lag_intf_counter_b[curr_p]
+        for intf in lag_interfaces:
+            intf_info = sw1.libs.vtysh.show_interface(intf)
+            lag_intf_counter_a[intf] = intf_info['tx_packets']
+            delta_tx[lb_algorithm][intf] =\
+                lag_intf_counter_a[intf] - lag_intf_counter_b[intf]
 
-            assert delta_tx[lb_algorithm][curr_p] > 0,\
+            assert delta_tx[lb_algorithm][intf] > 0,\
                 'Just one interface was used with {lb_algorithm}'\
                 .format(**locals())
 
@@ -260,9 +280,9 @@ def test_lacpd_load_balance(topology):
     # Print a summary of counters
     for lb_algorithm in lag_lb_algorithms:
         print('======== {lb_algorithm} ============'.format(**locals()))
-        for curr_p in lag_interfaces:
-            print('Interface: {curr_p}'.format(**locals()))
-            dt = delta_tx[lb_algorithm][curr_p]
+        for intf in lag_interfaces:
+            print('Interface: {intf}'.format(**locals()))
+            dt = delta_tx[lb_algorithm][intf]
             print('TX packets: {dt}'.format(**locals()))
             print('--')
     print('=================================')

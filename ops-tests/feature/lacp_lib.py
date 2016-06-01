@@ -127,27 +127,42 @@ def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access'):
 
 
 def turn_on_interface(sw, interface):
-    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
+    port = find_device_label(sw, interface)
+    with sw.libs.vtysh.ConfigInterface(port) as ctx:
         ctx.no_shutdown()
 
 
 def turn_off_interface(sw, interface):
-    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
+    port = find_device_label(sw, interface)
+    with sw.libs.vtysh.ConfigInterface(port) as ctx:
         ctx.shutdown()
 
 
 def validate_turn_on_interfaces(sw, interfaces):
     for intf in interfaces:
-        output = sw.libs.vtysh.show_interface(intf)
+        port = find_device_label(sw, intf)
+        output = sw.libs.vtysh.show_interface(port)
         assert output['interface_state'] == 'up',\
             "Interface state for " + intf + " is down"
 
 
 def validate_turn_off_interfaces(sw, interfaces):
     for intf in interfaces:
-        output = sw.libs.vtysh.show_interface(intf)
+        port = find_device_label(sw, intf)
+        output = sw.libs.vtysh.show_interface(port)
         assert output['interface_state'] == 'down',\
-            "Interface state for " + intf + "is up"
+            "Interface state for " + port + "is up"
+
+
+def verify_turn_off_interfaces(sw, intf_list):
+    @retry_wrapper(
+        'Ensure interfaces are turn off',
+        'Interfaces not yet ready',
+        5,
+        60)
+    def check_interfaces(sw):
+        validate_turn_off_interfaces(sw, intf_list)
+    check_interfaces(sw)
 
 
 def validate_local_key(map_lacp, lag_id):
@@ -439,7 +454,8 @@ def check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
 
 
 def validate_interface_not_in_lag(sw, interface, lag_id):
-    output = sw.libs.vtysh.show_lacp_interface(interface)
+    port = find_device_label(sw, interface)
+    output = sw.libs.vtysh.show_lacp_interface(port)
     print("Came back from show lacp interface")
     assert output['lag_id'] == "",\
         "Unable to associate interface to lag"
@@ -514,8 +530,9 @@ def verify_lag_config(
         ]
     )
     for interface in interfaces:
-        assert interface in lag_config[lag_name]['interfaces'],\
-            "Interface {} is not in LAG".format(interface)
+        port = find_device_label(sw, interface)
+        assert port in lag_config[lag_name]['interfaces'],\
+            "Interface {} is not in LAG".format(port)
     assert heartbeat_rate == lag_config[lag_name]['heartbeat_rate'],\
         "Heartbeat rate {} is not expected. Expected {}".format(
             lag_config[lag_name]['heartbeat_rate'],
@@ -556,10 +573,11 @@ def verify_vlan_full_state(sw, vlan_id, interfaces=None, status='up'):
             len(interfaces)
         )
         for interface in interfaces:
-            assert interface not in vlan_status[vlan_str_id],\
+            port = find_device_label(sw, interface)
+            assert port not in vlan_status[vlan_str_id],\
                 'Interface not found in VLAN {}, Expected {}'.format(
                 vlan_id,
-                interface
+                port
             )
 
 
@@ -774,7 +792,8 @@ def verify_state_sync_lag(sw, port_list, state, lacp_mode):
         5,
         80)
     def check_lag(sw, port_list, state, lacp_mode):
-        for port in port_list:
+        for interface in port_list:
+            port = find_device_label(sw, interface)
             map_lacp = sw.libs.vtysh.show_lacp_interface(port)
             validate_lag_state_sync(map_lacp, state, lacp_mode)
     check_lag(sw, port_list, state, lacp_mode)
@@ -789,6 +808,24 @@ def verify_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=True):
     def check_ping(h1, h1_ip, h2, h2_ip, success):
         check_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=success)
     check_ping(h1, h1_ip, h2, h2_ip, success=success)
+
+
+def verify_connectivity_between_switches(s1, s1_ip, s2, s2_ip, success=True):
+    @retry_wrapper(
+        'Ensure connectivity between switches',
+        'LAG not yet ready',
+        5,
+        40)
+    def check_ping(s1, s1_ip, s2, s2_ip, success):
+        check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
+                                            success=success)
+    check_ping(s1, s1_ip, s2, s2_ip, success=success)
+
+
+def verify_show_lacp_aggregates(sw, lag_name, lag_mode):
+    lacp_map = sw.libs.vtysh.show_lacp_aggregates()
+    assert lacp_map[lag_name]['mode'] == lag_mode,\
+        'LACP mode is not %s' % lag_mode
 
 
 def compare_lag_interface_basic_settings(

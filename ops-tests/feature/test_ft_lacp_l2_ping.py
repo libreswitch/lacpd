@@ -26,23 +26,26 @@
 #
 ##########################################################################
 
-from time import sleep
-from lacp_lib import create_lag
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import create_vlan
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import validate_local_key
-from lacp_lib import validate_remote_key
-from lacp_lib import validate_lag_name
-from lacp_lib import validate_lag_state_sync
-from lacp_lib import check_connectivity_between_hosts
-from lacp_lib import LOCAL_STATE
-from lacp_lib import REMOTE_STATE
-import pytest
-
+from pytest import mark
+from lacp_lib import (
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    check_connectivity_between_hosts,
+    create_lag,
+    create_vlan,
+    find_device_label,
+    LOCAL_STATE,
+    REMOTE_STATE,
+    turn_on_interface,
+    validate_lag_name,
+    validate_lag_state_sync,
+    validate_local_key,
+    validate_remote_key,
+    verify_lag_config,
+    verify_state_sync_lag,
+    verify_turn_on_interfaces
+)
 
 TOPOLOGY = """
 # +-----------------+
@@ -87,8 +90,8 @@ sw2:1 -- hs2:1
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
-def test_l2_dynamic_lag_ping_case_1(topology):
+@mark.platform_incompatible(['docker'])
+def test_l2_dynamic_lag_ping_case_1(topology, step):
     """
     Case 1:
         Verify a ping between 2 workstations connected by 2 switches configured
@@ -112,54 +115,65 @@ def test_l2_dynamic_lag_ping_case_1(topology):
     assert hs1 is not None
     assert hs2 is not None
 
-    p11 = sw1.ports['1']
-    p12 = sw1.ports['2']
-    p13 = sw1.ports['3']
-    p21 = sw2.ports['1']
-    p22 = sw2.ports['2']
-    p23 = sw2.ports['3']
+    ports_sw1 = list()
+    ports_sw2 = list()
+    port_labels = ['1', '2', '3']
 
-    print("Turning on all interfaces used in this test")
-    ports_sw1 = [p11, p12, p13]
+    step("Mapping interfaces")
+    for port in port_labels:
+        ports_sw1.append(sw1.ports[port])
+        ports_sw2.append(sw2.ports[port])
+
+    step("Turning on all interfaces used in this test")
     for port in ports_sw1:
         turn_on_interface(sw1, port)
 
-    ports_sw2 = [p21, p22, p23]
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
-    print("Waiting some time for the interfaces to be up")
-    sleep(60)
+    step("Validate interfaces are turn on")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw1, ports_sw2)
 
-    print("Verify all interface are up")
-    validate_turn_on_interfaces(sw1, ports_sw1)
-    validate_turn_on_interfaces(sw2, ports_sw2)
-
-    print("Assign an IP address on the same range to each workstation")
+    step("Assign an IP address on the same range to each workstation")
     hs1.libs.ip.interface('1', addr=hs1_ip_address_with_mask, up=True)
     hs2.libs.ip.interface('1', addr=hs2_ip_address_with_mask, up=True)
 
-    print('Creating VLAN in both switches')
+    step('Creating VLAN in both switches')
     create_vlan(sw1, vlan_identifier)
     create_vlan(sw2, vlan_identifier)
 
-    print("Create LAG in both switches")
+    step("Create LAG in both switches")
     create_lag(sw1, sw1_lag_id, 'active')
     create_lag(sw2, sw2_lag_id, 'active')
 
-    print("Associate interfaces [2, 3] to LAG in both switches")
-    associate_interface_to_lag(sw1, p12, sw1_lag_id)
-    associate_interface_to_lag(sw1, p13, sw1_lag_id)
-    associate_interface_to_lag(sw2, p22, sw2_lag_id)
-    associate_interface_to_lag(sw2, p23, sw2_lag_id)
+    step("Associate interfaces [2, 3] to LAG in both switches")
+    for port in ports_sw1[1:3]:
+        associate_interface_to_lag(sw1, port, sw1_lag_id)
+    for port in ports_sw2[1:3]:
+        associate_interface_to_lag(sw2, port, sw2_lag_id)
 
-    print("Waiting for LAG negotations between switches")
-    sleep(100)
-    print("Get information for LAG in interface 2 with both switches")
-    map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(p12)
-    map_lacp_sw2 = sw2.libs.vtysh.show_lacp_interface(p22)
+    step("Verify LAG configuration")
+    verify_lag_config(sw1, sw1_lag_id, ports_sw1[1:3], mode='active')
+    verify_lag_config(sw2, sw2_lag_id, ports_sw2[1:3], mode='active')
 
-    print("Validate the LAG was created in both switches")
+    step("Configure LAGs and workstations interfaces with same VLAN")
+    associate_vlan_to_lag(sw1, vlan_identifier, sw1_lag_id)
+    associate_vlan_to_lag(sw2, vlan_identifier, sw2_lag_id)
+    associate_vlan_to_l2_interface(sw1, vlan_identifier, ports_sw1[0])
+    associate_vlan_to_l2_interface(sw2, vlan_identifier, ports_sw2[0])
+
+    step("Verify if LAG is synchronized")
+    verify_state_sync_lag(sw1, ports_sw1[1:3], LOCAL_STATE, 'active')
+    verify_state_sync_lag(sw1, ports_sw1[1:3], REMOTE_STATE, 'active')
+
+    step("Get information for LAG in interface 2 with both switches")
+    map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(
+                        find_device_label(sw1, ports_sw1[1]))
+    map_lacp_sw2 = sw2.libs.vtysh.show_lacp_interface(
+                        find_device_label(sw2, ports_sw2[1]))
+
+    step("Validate the LAG was created in both switches")
     validate_lag_name(map_lacp_sw1, sw1_lag_id)
     validate_local_key(map_lacp_sw1, sw1_lag_id)
     validate_remote_key(map_lacp_sw1, sw2_lag_id)
@@ -172,15 +186,7 @@ def test_l2_dynamic_lag_ping_case_1(topology):
     validate_lag_state_sync(map_lacp_sw2, LOCAL_STATE)
     validate_lag_state_sync(map_lacp_sw2, REMOTE_STATE)
 
-    print("Configure LAGs and workstations interfaces with same VLAN")
-    associate_vlan_to_lag(sw1, vlan_identifier, sw1_lag_id)
-    associate_vlan_to_lag(sw2, vlan_identifier, sw2_lag_id)
-    associate_vlan_to_l2_interface(sw1, vlan_identifier, p11)
-    associate_vlan_to_l2_interface(sw2, vlan_identifier, p21)
-
-    print("Wait for vlan configuration")
-    sleep(20)
-    print("Ping workstation 2 from workstation 1 and viceversa")
+    step("Ping workstation 2 from workstation 1 and viceversa")
     check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
                                      number_pings, True)
 

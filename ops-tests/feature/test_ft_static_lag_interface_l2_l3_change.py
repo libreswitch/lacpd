@@ -26,20 +26,21 @@
 #
 ##########################################################################
 
-from time import sleep
-from lacp_lib import create_lag
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import remove_interface_from_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import create_vlan
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import assign_ip_to_lag
-from lacp_lib import check_connectivity_between_hosts
-from lacp_lib import check_connectivity_between_switches
-import pytest
-
+from pytest import mark
+from lacp_lib import(
+    assign_ip_to_lag,
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    create_lag,
+    create_vlan,
+    remove_interface_from_lag,
+    turn_on_interface,
+    verify_connectivity_between_hosts,
+    verify_connectivity_between_switches,
+    verify_lag_config,
+    verify_turn_on_interfaces
+)
 
 TOPOLOGY = """
 #  +-----------------+
@@ -85,7 +86,7 @@ sw2:4 -- hs2:1
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
+@mark.platform_incompatible(['docker'])
 def test_l2_l3_interface_switch_case_1(topology):
     """
     Case 1:
@@ -96,6 +97,12 @@ def test_l2_l3_interface_switch_case_1(topology):
     sw2 = topology.get('sw2')
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
+
+    assert sw1 is not None
+    assert sw2 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     ip_address_mask = '24'
     hs1_ip_address = '10.0.10.1'
     hs2_ip_address = '10.0.10.2'
@@ -106,12 +113,6 @@ def test_l2_l3_interface_switch_case_1(topology):
     l2_lag_id = '2'
     l3_lag_id = '3'
     vlan_identifier = '8'
-    number_pings = 5
-
-    assert sw1 is not None
-    assert sw2 is not None
-    assert hs1 is not None
-    assert hs2 is not None
 
     p11 = sw1.ports['1']
     p12 = sw1.ports['2']
@@ -131,12 +132,9 @@ def test_l2_l3_interface_switch_case_1(topology):
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
-    print("Waiting some time for the interfaces to be up")
-    sleep(60)
-
     print("Verify all interface are up")
-    validate_turn_on_interfaces(sw1, ports_sw1)
-    validate_turn_on_interfaces(sw2, ports_sw2)
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
     print("Assign an IP address on the same range to each workstation")
     hs1.libs.ip.interface('1', addr=hs1_ip_address_with_mask, up=True)
@@ -156,6 +154,10 @@ def test_l2_l3_interface_switch_case_1(topology):
     associate_interface_to_lag(sw2, p21, l2_lag_id)
     associate_interface_to_lag(sw2, p22, l2_lag_id)
 
+    print("Verify LAG configuration")
+    verify_lag_config(sw1, l2_lag_id, [p11, p12])
+    verify_lag_config(sw2, l2_lag_id, [p21, p22])
+
     print("Create L3 LAG in both switches")
     create_lag(sw1, l3_lag_id, 'off')
     create_lag(sw2, l3_lag_id, 'off')
@@ -163,6 +165,10 @@ def test_l2_l3_interface_switch_case_1(topology):
     print("Associate interface 3 to L3 LAG in both switches")
     associate_interface_to_lag(sw1, p13, l3_lag_id)
     associate_interface_to_lag(sw2, p23, l3_lag_id)
+
+    print("Verify LAG configuration")
+    verify_lag_config(sw1, l3_lag_id, [p13])
+    verify_lag_config(sw2, l3_lag_id, [p23])
 
     print("Configure LAGs and workstations interfaces with same VLAN")
     associate_vlan_to_lag(sw1, vlan_identifier, l2_lag_id)
@@ -174,43 +180,31 @@ def test_l2_l3_interface_switch_case_1(topology):
     assign_ip_to_lag(sw1, l3_lag_id, sw1_l3_lag_ip_address, ip_address_mask)
     assign_ip_to_lag(sw2, l3_lag_id, sw2_l3_lag_ip_address, ip_address_mask)
 
-    print("Waiting some time for change to apply")
-    sleep(20)
-    # Ping between workstations should succeed
-    check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
-                                     number_pings, True)
-    # Ping between switches should succeed
-    check_connectivity_between_switches(sw1, sw1_l3_lag_ip_address, sw2,
-                                        sw2_l3_lag_ip_address, number_pings,
-                                        True)
+    print("Test ping between clients work")
+    verify_connectivity_between_hosts(hs1, hs1_ip_address,
+                                      hs2, hs2_ip_address)
+    verify_connectivity_between_switches(sw1, sw1_l3_lag_ip_address,
+                                         sw2, sw2_l3_lag_ip_address)
 
     print("Associate interface 2 to L3 LAG in both switches")
     associate_interface_to_lag(sw1, p12, l3_lag_id)
     associate_interface_to_lag(sw2, p22, l3_lag_id)
 
-    print("Waiting some time for change to apply")
-    sleep(20)
-    # Ping between workstations should succeed
-    check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
-                                     number_pings, True)
-    # Ping between switches should succeed
-    check_connectivity_between_switches(sw1, sw1_l3_lag_ip_address, sw2,
-                                        sw2_l3_lag_ip_address, number_pings,
-                                        True)
+    print("Test ping between clients work")
+    verify_connectivity_between_hosts(hs1, hs1_ip_address,
+                                      hs2, hs2_ip_address)
+    verify_connectivity_between_switches(sw1, sw1_l3_lag_ip_address,
+                                         sw2, sw2_l3_lag_ip_address)
 
     print("Associate interface 2 to L2 LAG in both switches")
     associate_interface_to_lag(sw1, p12, l2_lag_id)
     associate_interface_to_lag(sw2, p22, l2_lag_id)
 
-    print("Waiting some time for change to apply")
-    sleep(5)
-    # Ping between workstations should succeed
-    check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
-                                     number_pings, True)
-    # Ping between switches should succeed
-    check_connectivity_between_switches(sw1, sw1_l3_lag_ip_address, sw2,
-                                        sw2_l3_lag_ip_address, number_pings,
-                                        True)
+    print("Test ping between clients work")
+    verify_connectivity_between_hosts(hs1, hs1_ip_address,
+                                      hs2, hs2_ip_address)
+    verify_connectivity_between_switches(sw1, sw1_l3_lag_ip_address,
+                                         sw2, sw2_l3_lag_ip_address)
 
     print("Remove interface 2 from L2 LAG in both switches")
     remove_interface_from_lag(sw1, p12, l2_lag_id)
@@ -220,15 +214,11 @@ def test_l2_l3_interface_switch_case_1(topology):
     associate_interface_to_lag(sw1, p12, l3_lag_id)
     associate_interface_to_lag(sw2, p22, l3_lag_id)
 
-    print("Waiting some time for change to apply")
-    sleep(5)
-    # Ping between workstations should succeed
-    check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
-                                     number_pings, True)
-    # Ping between switches should succeed
-    check_connectivity_between_switches(sw1, sw1_l3_lag_ip_address, sw2,
-                                        sw2_l3_lag_ip_address, number_pings,
-                                        True)
+    print("Test ping between clients work")
+    verify_connectivity_between_hosts(hs1, hs1_ip_address,
+                                      hs2, hs2_ip_address)
+    verify_connectivity_between_switches(sw1, sw1_l3_lag_ip_address,
+                                         sw2, sw2_l3_lag_ip_address)
 
     print("Remove interface 2 from L3 LAG in both switches")
     remove_interface_from_lag(sw1, p12, l3_lag_id)
@@ -238,12 +228,8 @@ def test_l2_l3_interface_switch_case_1(topology):
     associate_interface_to_lag(sw1, p12, l2_lag_id)
     associate_interface_to_lag(sw2, p22, l2_lag_id)
 
-    print("Waiting some time for change to apply")
-    sleep(5)
-    # Ping between workstations should succeed
-    check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
-                                     number_pings, True)
-    # Ping between switches should succeed
-    check_connectivity_between_switches(sw1, sw1_l3_lag_ip_address, sw2,
-                                        sw2_l3_lag_ip_address, number_pings,
-                                        True)
+    print("Test ping between clients work")
+    verify_connectivity_between_hosts(hs1, hs1_ip_address,
+                                      hs2, hs2_ip_address)
+    verify_connectivity_between_switches(sw1, sw1_l3_lag_ip_address,
+                                         sw2, sw2_l3_lag_ip_address)
