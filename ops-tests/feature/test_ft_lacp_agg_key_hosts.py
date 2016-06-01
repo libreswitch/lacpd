@@ -28,6 +28,7 @@
 OpenSwitch Tests for LACP Aggregation Key functionality using hosts
 """
 
+import pytest
 import time
 from lacp_lib import create_lag_active
 from lacp_lib import associate_interface_to_lag
@@ -87,6 +88,7 @@ sw3:4 -- hs3:1
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacp_aggregation_key_with_hosts(topology):
     """
     Case 1:

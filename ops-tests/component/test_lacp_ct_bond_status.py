@@ -25,7 +25,7 @@
 #
 #
 ##########################################################################
-
+import pytest
 from lib_test import (
     add_intf_to_bond,
     disable_intf_list,
@@ -95,6 +95,7 @@ enable_fallback = ['%s:%s="true"' % (other_config_key, fallback_key)]
 disable_fallback = ['%s:%s="false"' % (other_config_key, fallback_key)]
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacp_bond_status(topology, step):
     """
         Verify correct LACP bond_status according to the status of member

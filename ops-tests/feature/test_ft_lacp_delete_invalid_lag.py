@@ -33,18 +33,25 @@
 #
 ###############################################################################
 
-from time import sleep
 from pytest import raises
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import create_lag_active
-from lacp_lib import create_lag_passive
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import create_vlan
-from lacp_lib import check_connectivity_between_hosts
-from lacp_lib import delete_lag
+from pytest import mark
+from lacp_lib import (
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    check_connectivity_between_hosts,
+    create_lag,
+    create_vlan,
+    delete_lag,
+    LOCAL_STATE,
+    REMOTE_STATE,
+    set_lacp_rate_fast,
+    turn_on_interface,
+    verify_connectivity_between_hosts,
+    verify_lag_config,
+    verify_state_sync_lag,
+    verify_turn_on_interfaces
+)
 from topology_lib_vtysh.exceptions import UnknownCommandException
 from topology_lib_vtysh.exceptions import UnknownVtyshException
 import pytest
@@ -83,18 +90,23 @@ sw2:1 -- hs2:1
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
-def test_delete_invalid_lag(topology):
-
+@pytest.fixture(scope='module')
+def main_setup(request, topology):
+    """Test Case common configuration."""
     sw1 = topology.get('sw1')
     sw2 = topology.get('sw2')
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
 
-    assert sw1 is not None
-    assert sw2 is not None
-    assert hs1 is not None
-    assert hs2 is not None
+    assert sw1 is not None, 'Topology failed getting object sw1'
+    assert sw2 is not None, 'Topology failed getting object sw2'
+    assert hs1 is not None, 'Topology failed getting object hs1'
+    assert hs2 is not None, 'Topology failed getting object hs2'
+
+    lag_id = '1'
+    vlan_id = '900'
+    mode_active = 'active'
+    mode_passive = 'passive'
 
     p11h = sw1.ports['1']
     p12 = sw1.ports['2']
@@ -114,191 +126,225 @@ def test_delete_invalid_lag(topology):
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
-    print("#### Wait for interfaces to turn on ####")
-    sleep(60)
+    print("#### Validate interfaces are turned on ####")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
-    print("#### Validate interfaces are turn on ####")
-    validate_turn_on_interfaces(sw1, ports_sw1)
-    validate_turn_on_interfaces(sw2, ports_sw2)
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    assert mac_addr_sw1 != mac_addr_sw2,\
+        'Mac address of interfaces in sw1 is equal to mac address of ' +\
+        'interfaces in sw2. This is a test framework problem. Dynamic ' +\
+        'LAGs cannot work properly under this condition. Refer to Taiga ' +\
+        'issue #1251.'
 
     print("##### Create LAGs ####")
-    create_lag_active(sw1, '1')
-    create_lag_passive(sw2, '1')
+    create_lag(sw1, lag_id, mode_active)
+    create_lag(sw2, lag_id, mode_passive)
+
+    print("### Set LACP rate to fast ###")
+    set_lacp_rate_fast(sw1, lag_id)
+    set_lacp_rate_fast(sw2, lag_id)
 
     print("#### Associate Interfaces to LAG ####")
     for intf in ports_sw1[1:3]:
-        associate_interface_to_lag(sw1, intf, '1')
+        associate_interface_to_lag(sw1, intf, lag_id)
 
     for intf in ports_sw2[1:3]:
-        associate_interface_to_lag(sw2, intf, '1')
+        associate_interface_to_lag(sw2, intf, lag_id)
 
-    print("#### Wait for LAG negotiation ####")
-    sleep(40)
+    print("#### Verify LAG configuration ####")
+    verify_lag_config(sw1, lag_id, ports_sw1[1:3],
+                      heartbeat_rate='fast', mode=mode_active)
+    verify_lag_config(sw2, lag_id, ports_sw2[1:3],
+                      heartbeat_rate='fast', mode=mode_passive)
+
+    print("### Verify if LAG is synchronized")
+    verify_state_sync_lag(sw1, ports_sw1[1:3], LOCAL_STATE, mode_active)
+    verify_state_sync_lag(sw1, ports_sw1[1:3], REMOTE_STATE, mode_passive)
+    verify_state_sync_lag(sw2, ports_sw2[1:3], LOCAL_STATE, mode_passive)
+    verify_state_sync_lag(sw2, ports_sw2[1:3], REMOTE_STATE, mode_active)
 
     print("#### Configure VLANs on switches ####")
-    create_vlan(sw1, '900')
-    create_vlan(sw2, '900')
+    create_vlan(sw1, vlan_id)
+    create_vlan(sw2, vlan_id)
 
-    associate_vlan_to_l2_interface(sw1, '900', p11h)
-    associate_vlan_to_lag(sw1, '900', '1')
+    associate_vlan_to_l2_interface(sw1, vlan_id, p11h)
+    associate_vlan_to_lag(sw1, vlan_id, lag_id)
 
-    associate_vlan_to_l2_interface(sw2, '900', p21h)
-    associate_vlan_to_lag(sw2, '900', '1')
+    associate_vlan_to_l2_interface(sw2, vlan_id, p21h)
+    associate_vlan_to_lag(sw2, vlan_id, lag_id)
 
     print("#### Configure workstations ####")
     hs1.libs.ip.interface('1', addr='140.1.1.10/24', up=True)
     hs2.libs.ip.interface('1', addr='140.1.1.11/24', up=True)
 
-    print("#### Waiting for vlan and interface configuration ####")
-    sleep(100)
-    print("#### Test ping between clients work ####")
-    check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
-                                     5, True)
 
-    print("#### Delete non-existent LAGs on both switches #### ")
+@mark.platform_incompatible(['docker'])
+def test_delete_invalid_lag(topology, main_setup, step):
+    """
+       Test connectivity between hosts persists after trying to delete
+       non-existent LAGs on both switches.
 
-    print("### Attempt to delete LAGs on switch1 ###")
-    print("## With ID XX ##")
+    """
+    sw1 = topology.get('sw1')
+    sw2 = topology.get('sw2')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert sw1 is not None, 'Topology failed getting object sw1'
+    assert sw2 is not None, 'Topology failed getting object sw2'
+    assert hs1 is not None, 'Topology failed getting object hs1'
+    assert hs2 is not None, 'Topology failed getting object hs2'
+
+    step("#### Test ping between clients work ####")
+    verify_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
+                                      True)
+
+    step("#### Delete non-existent LAGs on both switches #### ")
+
+    step("### Attempt to delete LAGs on switch1 ###")
+    step("## With ID XX ##")
     with raises(UnknownCommandException):
         delete_lag(sw1, 'XX')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 0 ##")
+    step("## With ID 0 ##")
     with raises(UnknownCommandException):
         delete_lag(sw1, '0')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID -1 ##")
+    step("## With ID -1 ##")
     with raises(UnknownCommandException):
         delete_lag(sw1, '-1')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 2000 ##")
+    step("## With ID 2000 ##")
     with raises(UnknownVtyshException):
         delete_lag(sw1, '2000')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 2001 ##")
+    step("## With ID 2001 ##")
     with raises(UnknownCommandException):
         delete_lag(sw1, '2001')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID @%&$#() ##")
+    step("## With ID @%&$#() ##")
     with raises(UnknownCommandException):
         delete_lag(sw1, '@%&$#()')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 60000 ##")
+    step("## With ID 60000 ##")
     with raises(UnknownCommandException):
         delete_lag(sw1, '60000')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 600 ##")
+    step("## With ID 600 ##")
     with raises(UnknownVtyshException):
         delete_lag(sw1, '600')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 2 ##")
+    step("## With ID 2 ##")
     with raises(UnknownVtyshException):
         delete_lag(sw1, '2')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("### Attempt to delete LAGs on switch2 ###")
-    print("## With ID XX ##")
+    step("### Attempt to delete LAGs on switch2 ###")
+    step("## With ID XX ##")
     with raises(UnknownCommandException):
         delete_lag(sw2, 'XX')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 0 ##")
+    step("## With ID 0 ##")
     with raises(UnknownCommandException):
         delete_lag(sw2, '0')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID -1 ##")
+    step("## With ID -1 ##")
     with raises(UnknownCommandException):
         delete_lag(sw2, '-1')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 2000 ##")
+    step("## With ID 2000 ##")
     with raises(UnknownVtyshException):
         delete_lag(sw2, '2000')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 2001 ##")
+    step("## With ID 2001 ##")
     with raises(UnknownCommandException):
         delete_lag(sw2, '2001')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID @%&$#() ##")
+    step("## With ID @%&$#() ##")
     with raises(UnknownCommandException):
         delete_lag(sw2, '@%&$#()')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 60000 ##")
+    step("## With ID 60000 ##")
     with raises(UnknownCommandException):
         delete_lag(sw2, '60000')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 600 ##")
+    step("## With ID 600 ##")
     with raises(UnknownVtyshException):
         delete_lag(sw2, '600')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)
 
-    print("## With ID 2 ##")
+    step("## With ID 2 ##")
     with raises(UnknownVtyshException):
         delete_lag(sw2, '2')
 
-    print("#### Test ping between clients work ####")
+    step("#### Test ping between clients work ####")
     check_connectivity_between_hosts(hs1, '140.1.1.10', hs2, '140.1.1.11',
                                      5, True)

@@ -25,7 +25,7 @@
 #
 #
 ##########################################################################
-
+import pytest
 from lib_test import (
     add_intf_to_bond,
     disable_intf_list,
@@ -69,6 +69,7 @@ sw1:4 -- sw2:4
 """
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lag_bond_status(topology, step):
     """
         Verify correct LAG bond_status according to the status of member

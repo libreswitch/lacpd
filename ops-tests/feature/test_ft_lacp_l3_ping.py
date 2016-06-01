@@ -25,19 +25,22 @@
 #
 ##########################################################################
 
-import time
-from lacp_lib import create_lag
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import validate_local_key
-from lacp_lib import validate_remote_key
-from lacp_lib import validate_lag_name
-from lacp_lib import validate_lag_state_sync
-from lacp_lib import assign_ip_to_lag
-from lacp_lib import LOCAL_STATE
-from lacp_lib import REMOTE_STATE
-import pytest
+from pytest import mark
+from lacp_lib import (
+    assign_ip_to_lag,
+    associate_interface_to_lag,
+    create_lag,
+    LOCAL_STATE,
+    REMOTE_STATE,
+    set_lacp_rate_fast,
+    turn_on_interface,
+    validate_local_key,
+    validate_remote_key,
+    verify_connectivity_between_switches,
+    verify_lag_config,
+    verify_state_sync_lag,
+    verify_turn_on_interfaces
+)
 
 
 TOPOLOGY = """
@@ -56,8 +59,8 @@ sw1:3 -- sw2:3
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
-def test_l3_dynamic_lag_ping_case_1(topology):
+@mark.platform_incompatible(['docker'])
+def test_l3_dynamic_lag_ping_case_1(topology, step):
     """
     Case 1:
         Verify a simple ping works properly between 2 switches configured
@@ -65,83 +68,88 @@ def test_l3_dynamic_lag_ping_case_1(topology):
     """
     sw1 = topology.get('sw1')
     sw2 = topology.get('sw2')
-    sw1_lag_id = '100'
-    sw2_lag_id = '200'
+
+    step('### Verifying switches are not None ###')
+    assert sw1 is not None, 'Topology failed getting object sw1'
+    assert sw2 is not None, 'Topology failed getting object sw2'
+
+    lag_id = '1'
     sw1_lag_ip_address = '10.0.0.1'
     sw2_lag_ip_address = '10.0.0.2'
     ip_address_mask = '24'
-    number_pings = 10
+    mode_active = 'active'
+    mode_passive = 'passive'
 
-    assert sw1 is not None
-    assert sw2 is not None
+    ports_sw1 = list()
+    ports_sw2 = list()
+    port_labels = ['1', '2', '3']
 
-    p11 = sw1.ports['1']
-    p12 = sw1.ports['2']
-    p13 = sw1.ports['3']
-    p21 = sw2.ports['1']
-    p22 = sw2.ports['2']
-    p23 = sw2.ports['3']
+    step("### Mapping interfaces from Docker ###")
+    for port in port_labels:
+        ports_sw1.append(sw1.ports[port])
+        ports_sw2.append(sw2.ports[port])
 
-    print("Turning on all interfaces used in this test")
-    ports_sw1 = [p11, p12, p13]
+    step("### Turning on all interfaces used in this test ###")
     for port in ports_sw1:
         turn_on_interface(sw1, port)
 
-    ports_sw2 = [p21, p22, p23]
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
-    print("Wait for interfaces to turn on")
-    time.sleep(40)
+    step("#### Validate interfaces are turned on ####")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
-    print("Verify all interface are up")
-    validate_turn_on_interfaces(sw1, ports_sw1)
-    validate_turn_on_interfaces(sw2, ports_sw2)
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    assert mac_addr_sw1 != mac_addr_sw2,\
+        'Mac address of interfaces in sw1 is equal to mac address of ' +\
+        'interfaces in sw2. This is a test framework problem. Dynamic ' +\
+        'LAGs cannot work properly under this condition. Refer to Taiga ' +\
+        'issue #1251.'
 
-    print("Create LAG in both switches")
-    create_lag(sw1, sw1_lag_id, 'active')
-    create_lag(sw2, sw2_lag_id, 'active')
+    step("### Create LAG in both switches ###")
+    create_lag(sw1, lag_id, 'active')
+    create_lag(sw2, lag_id, 'passive')
 
-    print("Associate interfaces [1,2,3] to lag in both switches")
-    associate_interface_to_lag(sw1, p11, sw1_lag_id)
-    associate_interface_to_lag(sw1, p12, sw1_lag_id)
-    associate_interface_to_lag(sw1, p13, sw1_lag_id)
-    associate_interface_to_lag(sw2, p21, sw2_lag_id)
-    associate_interface_to_lag(sw2, p22, sw2_lag_id)
-    associate_interface_to_lag(sw2, p23, sw2_lag_id)
+    step("### Set LACP rate to fast ###")
+    set_lacp_rate_fast(sw1, lag_id)
+    set_lacp_rate_fast(sw2, lag_id)
 
-    print("Waiting for LAG negotations between switches")
-    time.sleep(100)
+    step("#### Associate Interfaces to LAG ####")
+    for intf in ports_sw1:
+        associate_interface_to_lag(sw1, intf, lag_id)
 
-    print("Get information for LAG in interface 1 with both switches")
-    map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(p11)
-    map_lacp_sw2 = sw2.libs.vtysh.show_lacp_interface(p21)
+    for intf in ports_sw2:
+        associate_interface_to_lag(sw2, intf, lag_id)
 
-    print("Validate the LAG was created in both switches")
-    validate_lag_name(map_lacp_sw1, sw1_lag_id)
-    validate_local_key(map_lacp_sw1, sw1_lag_id)
-    validate_remote_key(map_lacp_sw1, sw2_lag_id)
-    validate_lag_state_sync(map_lacp_sw1, LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1, REMOTE_STATE)
+    step("### Assign IP to LAGs ###")
+    assign_ip_to_lag(sw1, lag_id, sw1_lag_ip_address, ip_address_mask)
+    assign_ip_to_lag(sw2, lag_id, sw2_lag_ip_address, ip_address_mask)
 
-    validate_lag_name(map_lacp_sw2, sw2_lag_id)
-    validate_local_key(map_lacp_sw2, sw2_lag_id)
-    validate_remote_key(map_lacp_sw2, sw1_lag_id)
-    validate_lag_state_sync(map_lacp_sw2, LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2, REMOTE_STATE)
+    step("#### Verify LAG configuration ####")
+    verify_lag_config(sw1, lag_id, ports_sw1,
+                      heartbeat_rate='fast', mode=mode_active)
+    verify_lag_config(sw2, lag_id, ports_sw2,
+                      heartbeat_rate='fast', mode=mode_passive)
 
-    print("Assign IP to LAGs")
-    assign_ip_to_lag(sw1, sw1_lag_id, sw1_lag_ip_address, ip_address_mask)
-    assign_ip_to_lag(sw2, sw2_lag_id, sw2_lag_ip_address, ip_address_mask)
+    step("### Verify if LAG is synchronized")
+    verify_state_sync_lag(sw1, ports_sw1, LOCAL_STATE, mode_active)
+    verify_state_sync_lag(sw1, ports_sw1, REMOTE_STATE, mode_passive)
+    verify_state_sync_lag(sw2, ports_sw2, LOCAL_STATE, mode_passive)
+    verify_state_sync_lag(sw2, ports_sw2, REMOTE_STATE, mode_active)
 
-    print("Ping switch2 from switch1")
-    ping = sw1.libs.vtysh.ping_repetitions(sw2_lag_ip_address, number_pings)
-    assert ping['transmitted'] == ping['received'] == number_pings,\
-        "Number of pings transmitted should be equal to the number" +\
-        " of pings received"
+    step("### Get information for LAG in interface 1 with both switches ###")
+    map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(ports_sw1[0])
+    map_lacp_sw2 = sw2.libs.vtysh.show_lacp_interface(ports_sw2[0])
 
-    print("Ping switch1 from switch2")
-    ping = sw2.libs.vtysh.ping_repetitions(sw1_lag_ip_address, number_pings)
-    assert ping['transmitted'] == ping['received'] == number_pings,\
-        "Number of pings transmitted should be equal to the number" +\
-        " of pings received"
+    step("### Validate the LAG was created in both switches ###")
+    validate_local_key(map_lacp_sw1, lag_id)
+    validate_remote_key(map_lacp_sw1, lag_id)
+    validate_local_key(map_lacp_sw2, lag_id)
+    validate_remote_key(map_lacp_sw2, lag_id)
+
+    step("#### Test ping between switches work ####")
+    verify_connectivity_between_switches(sw1, sw1_lag_ip_address,
+                                         sw2, sw2_lag_ip_address,
+                                         success=True)

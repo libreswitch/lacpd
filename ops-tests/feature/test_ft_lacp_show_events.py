@@ -15,51 +15,50 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""
-OpenSwitch Test for LACP events.
-"""
+"""OpenSwitch Test Suite for LACP events."""
 
-from time import sleep
+from pytest import mark
+from lacp_lib import (
+    config_lacp_rate,
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    create_lag,
+    create_vlan,
+    remove_interface_from_lag,
+    turn_on_interface,
+    verify_connectivity_between_hosts,
+    verify_turn_on_interfaces,
+)
 
-from lacp_lib import create_lag
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import remove_interface_from_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import create_vlan
-from lacp_lib import config_lacp_rate
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import check_connectivity_between_hosts
-import pytest
 
 TOPOLOGY = """
 # +-------+                                  +-------+
 # |       |    +--------+  LAG  +--------+   |       |
-# |  hs1  <---->  ops1  <------->  ops2  <--->  hs2  |
+# |  hs1  <---->  sw1   <------->  sw2  <--->  hs2   |
 # |       |    |   A    <------->    P   |   |       |
 # +-------+    |        <------->        |   +-------+
 #              +--------+       +--------+
 
 # Nodes
-[type=openswitch name="OpenSwitch 1 LAG active"] ops1
-[type=openswitch name="OpenSwitch 2 LAG passive"] ops2
+[type=openswitch name="OpenSwitch 1 LAG active"] sw1
+[type=openswitch name="OpenSwitch 2 LAG passive"] sw2
 [type=host name="Host 1"] hs1
 [type=host name="Host 2"] hs2
 
 # Links
-hs1:1 -- ops1:4
-ops1:1 -- ops2:1
-ops1:2 -- ops2:2
-ops1:3 -- ops2:3
-hs2:1 -- ops2:4
+hs1:1 -- sw1:4
+sw1:1 -- sw2:1
+sw1:2 -- sw2:2
+sw1:3 -- sw2:3
+hs2:1 -- sw2:4
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
-def test_show_lacp_events(topology):
-    """
-    Tests output for show events
+@mark.platform_incompatible(['docker'])
+def test_show_lacp_events(topology, step):
+    """Test output for show events.
+
     Main objective is to configure two switches with
     dynamic LAG (active/passive)
     Add and remove interfaces and turn off one of the LAGs
@@ -68,73 +67,93 @@ def test_show_lacp_events(topology):
 
     # VID for testing
     test_vlan = '2'
+
     # LAG ID for testing
     test_lag = '2'
     test_lag_if = 'lag' + test_lag
+
     # interfaces to be added to LAG
-    lag_interfaces = ['1', '3']
+    lag_intfs = ['1', '3']
+
     # interface connected to host
-    host_interface = '4'
+    host_intf = '4'
+
     # hosts addresses
     hs1_addr = '10.0.11.10'
     hs2_addr = '10.0.11.11'
 
     show_event_lacp_cmd = 'show events category lacp'
-    removed_if = '2'
+    removed_intf = '2'
 
-    ops1 = topology.get('ops1')
-    ops2 = topology.get('ops2')
+    sw1 = topology.get('sw1')
+    sw2 = topology.get('sw2')
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
 
-    assert ops1 is not None, 'Topology failed getting object ops1'
-    assert ops2 is not None, 'Topology failed getting object ops2'
+    step('Verifying switches are not None')
+    assert sw1 is not None, 'Topology failed getting object sw1'
+    assert sw2 is not None, 'Topology failed getting object sw2'
+
+    step('Verifying hosts are not None')
     assert hs1 is not None, 'Topology failed getting object hs1'
     assert hs2 is not None, 'Topology failed getting object hs2'
 
-    for curr_ops in [ops1, ops2]:
-        for curr_p in lag_interfaces + [removed_if, host_interface]:
-            turn_on_interface(curr_ops, curr_p)
+    step('Turning on interfaces')
+    for switch in [sw1, sw2]:
+        for intf in lag_intfs + [removed_intf, host_intf]:
+            turn_on_interface(switch, intf)
 
-    print('Wait for interfaces become up')
-    sleep(60)
-    for curr_ops in [ops1, ops2]:
-        create_vlan(curr_ops, test_vlan)
-        validate_turn_on_interfaces(curr_ops,
-                                    lag_interfaces +
-                                    [removed_if, host_interface])
+    step('Verifying interfaces from Switch 1 are Up')
+    verify_turn_on_interfaces(sw1, lag_intfs + [removed_intf, host_intf])
 
-    create_lag(ops1, test_lag, 'active')
-    config_lacp_rate(ops1, test_lag, True)
-    associate_vlan_to_lag(ops1, test_vlan, test_lag)
+    step('Verifying interfaces from Switch 2 are Up')
+    verify_turn_on_interfaces(sw1, lag_intfs + [removed_intf, host_intf])
 
-    create_lag(ops2, test_lag, 'passive')
-    config_lacp_rate(ops2, test_lag, True)
-    associate_vlan_to_lag(ops2, test_vlan, test_lag)
+    step('Creating VLAN (%s) on Switch 1' % test_vlan)
+    create_vlan(sw1, test_vlan)
 
-    for curr_ops in [ops1, ops2]:
-        # Add interfaces to LAG
-        for curr_if in lag_interfaces + [removed_if]:
-            associate_interface_to_lag(curr_ops, curr_if, test_lag)
-        # Interface 4 is connected to one host
-        associate_vlan_to_l2_interface(curr_ops, test_vlan, host_interface)
+    step('Creating VLAN (%s) on Switch 2' % test_vlan)
+    create_vlan(sw2, test_vlan)
 
-    # Configure host interfaces
-    hs1.libs.ip.interface('1', addr='{hs1_addr}/24'.format(**locals()),
+    step('Creating LAG (%s) on Switch 1' % test_lag)
+    create_lag(sw1, test_lag, 'active')
+    config_lacp_rate(sw1, test_lag, True)
+    associate_vlan_to_lag(sw1, test_vlan, test_lag)
+
+    step('Creating LAG (%s) on Switch 2' % test_lag)
+    create_lag(sw2, test_lag, 'passive')
+    config_lacp_rate(sw2, test_lag, True)
+    associate_vlan_to_lag(sw2, test_vlan, test_lag)
+
+    for switch in [sw1, sw2]:
+        for intf in lag_intfs + [removed_intf]:
+            step('Assigning interface %s to LAG %s' % (intf, test_lag))
+            associate_interface_to_lag(switch, intf, test_lag)
+
+        step('Associating VLAN %s to host interface %s' % (test_vlan,
+                                                           host_intf))
+        associate_vlan_to_l2_interface(switch, test_vlan, host_intf)
+
+    step('Configuring interface on Host 1')
+    hs1.libs.ip.interface('1',
+                          addr='{hs1_addr}/24'.format(**locals()),
                           up=True)
-    hs2.libs.ip.interface('1', addr='{hs2_addr}/24'.format(**locals()),
+
+    step('Configuring interface on Host 2')
+    hs2.libs.ip.interface('1',
+                          addr='{hs2_addr}/24'.format(**locals()),
                           up=True)
 
-    print('Sleep few seconds to wait everything is up')
-    sleep(60)
+    step('Verifying connectivity between hosts (Successful)')
+    verify_connectivity_between_hosts(hs1, hs1_addr, hs2, hs2_addr, True)
 
-    check_connectivity_between_hosts(hs1, hs1_addr, hs2, hs2_addr,
-                                     5, True)
+    step('Removing interface (%s) from LAG (%s)' % (removed_intf, test_lag))
+    remove_interface_from_lag(sw1, removed_intf, test_lag)
 
-    remove_interface_from_lag(ops1, removed_if, test_lag)
-    remove_interface_from_lag(ops2, removed_if, test_lag)
+    step('Removing interface (%s) from LAG (%s)' % (removed_intf, test_lag))
+    remove_interface_from_lag(sw2, removed_intf, test_lag)
 
-    output = ops1(show_event_lacp_cmd, shell='vtysh')
+    output = sw1(show_event_lacp_cmd, shell='vtysh')
 
     assert '|15007|LOG_INFO|LACP system ID set to'\
         and '|15006|LOG_INFO|LACP mode set to active for LAG {test_lag}'\
@@ -143,17 +162,18 @@ def test_show_lacp_events(topology):
         .format(**locals())\
         and '|15008|LOG_INFO|LACP rate set to fast for LAG {test_lag}'\
         .format(**locals())\
-        and '|15004|LOG_INFO|Interface {removed_if} removed from '\
+        and '|15004|LOG_INFO|Interface {removed_intf} removed from '\
         'LAG {test_lag}'.format(**locals())\
         in output
-    for curr_if in lag_interfaces + [removed_if]:
-        assert '|15003|LOG_INFO|Interface {curr_if} added to LAG {test_lag}'\
+
+    for intf in lag_intfs + [removed_intf]:
+        assert '|15003|LOG_INFO|Interface {intf} added to LAG {test_lag}'\
             .format(**locals())\
-            and '|15009|LOG_INFO|Partner is detected for interface {curr_if}'\
+            and '|15009|LOG_INFO|Partner is detected for interface {intf}'\
             ' LAG {test_lag}'.format(**locals())\
             in output
 
-    output = ops2(show_event_lacp_cmd, shell='vtysh')
+    output = sw2(show_event_lacp_cmd, shell='vtysh')
 
     assert '|15007|LOG_INFO|LACP system ID set to'\
         and '|15006|LOG_INFO|LACP mode set to passive for LAG {test_lag}'\
@@ -162,30 +182,31 @@ def test_show_lacp_events(topology):
         .format(**locals())\
         and '|15008|LOG_INFO|LACP rate set to fast for LAG {test_lag}'\
         .format(**locals())\
-        and '|15004|LOG_INFO|Interface {removed_if} removed from '\
+        and '|15004|LOG_INFO|Interface {removed_intf} removed from '\
         'LAG {test_lag}'.format(**locals())\
         in output
-    for curr_if in lag_interfaces + [removed_if]:
-        assert '|15003|LOG_INFO|Interface {curr_if} added to LAG {test_lag}'\
+
+    for intf in lag_intfs + [removed_intf]:
+        assert '|15003|LOG_INFO|Interface {intf} added to LAG {test_lag}'\
             .format(**locals())\
-            and '|15009|LOG_INFO|Partner is detected for interface {curr_if}'\
+            and '|15009|LOG_INFO|Partner is detected for interface {intf}'\
             ' LAG {test_lag}'.format(**locals())\
             in output
 
-    with ops2.libs.vtysh.ConfigInterfaceLag(test_lag) as ctx:
+    with sw2.libs.vtysh.ConfigInterfaceLag(test_lag) as ctx:
         ctx.no_lacp_mode_passive()
 
-    print('Waiting for switch2 is not seen')
-    sleep(60)
+    step('Verifying connectivity between hosts (Unsuccessful)')
+    verify_connectivity_between_hosts(hs1, hs1_addr, hs2, hs2_addr, False)
 
-    output = ops1(show_event_lacp_cmd, shell='vtysh')
+    output = sw1(show_event_lacp_cmd, shell='vtysh')
 
-    for curr_if in lag_interfaces:
+    for intf in lag_intfs:
         assert '|15011|LOG_WARN|Partner is lost (timed out) '\
-            'for interface {curr_if} '.format(**locals())\
+            'for interface {intf} '.format(**locals())\
             in output
 
-    output = ops2(show_event_lacp_cmd, shell='vtysh')
+    output = sw2(show_event_lacp_cmd, shell='vtysh')
     assert '|15006|LOG_INFO|LACP mode set to off for '\
         'LAG {test_lag}'.format(**locals())\
         and '|ops-lacpd|15002|LOG_INFO|Dynamic LAG {test_lag} deleted'\

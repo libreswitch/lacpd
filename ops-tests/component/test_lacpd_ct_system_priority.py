@@ -134,6 +134,7 @@ def setup(request, topology):
     request.addfinalizer(cleanup)
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_lacpd_lag_dynamic_system_priority(topology, step, main_setup, setup):
     """Dynamic System Priority Test Case.
 
