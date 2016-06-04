@@ -1191,6 +1191,7 @@ update_interface_cache(void)
                 idp->duplex = new_duplex;
                 if (idp->port_datap != NULL) {
                     update_member_interface_bond_status(idp->port_datap);
+                    update_port_bond_status_map_entry(idp->port_datap);
                     rc++;
                 }
 
@@ -1449,6 +1450,7 @@ update_port_bond_status_map_entry(struct port_data *portp)
     int blocked_intf = 0;
     int up_intf = 0;
     int down_intf = 0;
+    char* speed_str;
 
     smap_init(&smap);
 
@@ -1490,6 +1492,16 @@ update_port_bond_status_map_entry(struct port_data *portp)
         smap_replace(&smap,
                      PORT_BOND_STATUS_UP,
                      PORT_BOND_STATUS_ENABLED_TRUE);
+    }
+
+    /* Update bond_speed */
+    /* If the LAG has no member interfaces, then bond_speed is empty. */
+    if (total_intf == 0) {
+        smap_remove(&smap, PORT_BOND_STATUS_MAP_BOND_SPEED);
+    } else {
+        long speed_in_bps = (long)portp->lag_member_speed * MEGA_BITS_PER_SEC;
+        asprintf(&speed_str, "%ld", speed_in_bps);
+        smap_replace(&smap, PORT_BOND_STATUS_MAP_BOND_SPEED, speed_str);
     }
 
     ovsrec_port_set_bond_status(portp->cfg, &smap);
@@ -2882,6 +2894,7 @@ db_update_port_status(struct port_data *portp)
         txn = ovsdb_idl_txn_create(idl);
 
         ovsrec_port_set_lacp_status(prow, &smap);
+        update_port_bond_status_map_entry(portp);
 
         ovsdb_idl_txn_commit_block(txn);
         ovsdb_idl_txn_destroy(txn);
