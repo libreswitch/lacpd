@@ -573,11 +573,10 @@ def verify_vlan_full_state(sw, vlan_id, interfaces=None, status='up'):
             len(interfaces)
         )
         for interface in interfaces:
-            port = find_device_label(sw, interface)
-            assert port not in vlan_status[vlan_str_id],\
+            assert interface not in vlan_status[vlan_str_id],\
                 'Interface not found in VLAN {}, Expected {}'.format(
                 vlan_id,
-                port
+                interface
             )
 
 

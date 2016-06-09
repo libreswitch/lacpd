@@ -34,6 +34,7 @@
 ###############################################################################
 
 from pytest import raises
+from pytest import mark
 from lacp_lib import (
     associate_interface_to_lag,
     associate_vlan_to_l2_interface,
@@ -179,6 +180,7 @@ def main_setup(request, topology):
     hs2.libs.ip.interface('1', addr='140.1.1.11/24', up=True)
 
 
+@mark.platform_incompatible(['docker'])
 def test_delete_invalid_lag(topology, main_setup, step):
     """
        Test connectivity between hosts persists after trying to delete
