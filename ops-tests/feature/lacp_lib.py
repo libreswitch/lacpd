@@ -125,9 +125,11 @@ def disassociate_interface_to_lag(sw, interface, lag_id):
         ctx.no_lag(lag_id)
 
 
-def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access'):
+def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access',
+                          no_routing=True):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
-        ctx.no_routing()
+        if no_routing:
+            ctx.no_routing()
         if vlan_type == 'access':
             ctx.vlan_access(vlan_id)
     output = sw.libs.vtysh.show_vlan(vlan_id)
@@ -136,9 +138,10 @@ def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access'):
         "Vlan was not properly associated to lag"
 
 
-def tagged_vlan_to_lag(sw, vlan_id, lag_id):
+def tagged_vlan_to_lag(sw, vlan_id, lag_id, no_routing=True):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
-        ctx.no_routing()
+        if no_routing:
+            ctx.no_routing()
         for vlan in vlan_id:
             ctx.vlan_trunk_allowed(vlan)
 
@@ -147,6 +150,18 @@ def tagged_vlan_to_lag(sw, vlan_id, lag_id):
         lag_name = 'lag' + lag_id
         assert lag_name in output[vlan]['ports'],\
             "Vlan was not properly tagged to lag"
+
+
+def no_tagged_vlan_to_tag(sw, vlan_id, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        for vlan in vlan_id:
+            ctx.no_vlan_trunk_allowed(vlan)
+
+    for vlan in vlan_id:
+        output = sw.libs.vtysh.show_vlan(vlan)
+        lag_name = 'lag' + lag_id
+        assert lag_name not in output[vlan]['ports'], \
+            "Vlan was not properly untagged to lag"
 
 
 def turn_on_interface(sw, interface):
