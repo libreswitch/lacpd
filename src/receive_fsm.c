@@ -1080,16 +1080,6 @@ generate_mux_event_from_recordPdu(lacp_per_port_variables_t *plpinfo)
                      plpinfo);
     }
 
-    // HACK: If the partner's aggregation is set to individual, then set
-    //       selected to UNSELECTED and generate a mux event.  This hack
-    //       is required to make an individual link not Tx/Rx data traffic.
-    if (plpinfo->partner_oper_port_state.aggregation == INDIVIDUAL) {
-        plpinfo->lacp_control.selected = UNSELECTED;
-        LACP_mux_fsm(E2,
-                     plpinfo->mux_fsm_state,
-                     plpinfo);
-    }
-
     if (plpinfo->debug_level & DBG_RX_FSM) {
         RDBG("%s : exit\n", __FUNCTION__);
     }
