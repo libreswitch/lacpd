@@ -26,19 +26,20 @@
 #
 ##########################################################################
 
-from time import sleep
-from lacp_lib import create_lag
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import create_vlan
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import assign_ip_to_lag
-from lacp_lib import check_connectivity_between_hosts
-from lacp_lib import check_connectivity_between_switches
-import pytest
-
+from pytest import mark
+from lacp_lib import (
+    assign_ip_to_lag,
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    check_connectivity_between_hosts,
+    check_connectivity_between_switches,
+    create_lag,
+    create_vlan,
+    turn_on_interface,
+    verify_connectivity_between_hosts,
+    verify_turn_on_interfaces
+)
 
 TOPOLOGY = """
 # +-----------------+
@@ -83,8 +84,8 @@ sw2:1 -- hs2:1
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
-def test_l2_l3_switch_case_1(topology):
+@mark.platform_incompatible(['docker'])
+def test_l2_l3_switch_case_1(topology, step):
     """
     Case 1:
         Verify the correct communication of 2 switches connected first by a
@@ -111,82 +112,75 @@ def test_l2_l3_switch_case_1(topology):
     assert hs1 is not None
     assert hs2 is not None
 
-    p11 = sw1.ports['1']
-    p12 = sw1.ports['2']
-    p13 = sw1.ports['3']
-    p21 = sw2.ports['1']
-    p22 = sw2.ports['2']
-    p23 = sw2.ports['3']
+    ports_sw1 = list()
+    ports_sw2 = list()
+    port_labels = ['1', '2', '3']
 
-    print("Turning on all interfaces used in this test")
-    ports_sw1 = [p11, p12, p13]
+    step("Mapping interfaces")
+    for port in port_labels:
+        ports_sw1.append(sw1.ports[port])
+        ports_sw2.append(sw2.ports[port])
+
+    step("Turning on all interfaces used in this test")
     for port in ports_sw1:
         turn_on_interface(sw1, port)
 
-    ports_sw2 = [p21, p22, p23]
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
-    print("Waiting some time for the interfaces to be up")
-    sleep(60)
+    step("Verify all interface are up")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
-    print("Verify all interface are up")
-    validate_turn_on_interfaces(sw1, ports_sw1)
-    validate_turn_on_interfaces(sw2, ports_sw2)
-
-    print("Assign an IP address on the same range to each workstation")
+    step("Assign an IP address on the same range to each workstation")
     hs1.libs.ip.interface('1', addr=hs1_ip_address_with_mask, up=True)
     hs2.libs.ip.interface('1', addr=hs2_ip_address_with_mask, up=True)
 
-    print('Creating VLAN in both switches')
+    step('Creating VLAN in both switches')
     create_vlan(sw1, vlan_identifier)
     create_vlan(sw2, vlan_identifier)
 
-    print("Create LAG in both switches")
+    step("Create LAG in both switches")
     create_lag(sw1, sw1_lag_id, 'off')
     create_lag(sw2, sw2_lag_id, 'off')
 
-    print("Associate interfaces [2, 3] to LAG in both switches")
-    associate_interface_to_lag(sw1, p12, sw1_lag_id)
-    associate_interface_to_lag(sw1, p13, sw1_lag_id)
-    associate_interface_to_lag(sw2, p22, sw2_lag_id)
-    associate_interface_to_lag(sw2, p23, sw2_lag_id)
+    step("Associate interfaces [2, 3] to LAG in both switches")
+    for intf in ports_sw1[1:3]:
+        associate_interface_to_lag(sw1, intf, sw1_lag_id)
 
-    print("Configure LAGs and workstations interfaces with same VLAN")
+    for intf in ports_sw2[1:3]:
+        associate_interface_to_lag(sw2, intf, sw2_lag_id)
+
+    step("Configure LAGs and workstations interfaces with same VLAN")
     associate_vlan_to_lag(sw1, vlan_identifier, sw1_lag_id)
     associate_vlan_to_lag(sw2, vlan_identifier, sw2_lag_id)
-    associate_vlan_to_l2_interface(sw1, vlan_identifier, p11)
-    associate_vlan_to_l2_interface(sw2, vlan_identifier, p21)
+    associate_vlan_to_l2_interface(sw1, vlan_identifier, ports_sw1[0])
+    associate_vlan_to_l2_interface(sw2, vlan_identifier, ports_sw2[0])
 
-    print("Waiting some time for change to apply")
-    sleep(20)
-    # Ping between workstations should succeed
-    check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
-                                     number_pings, True)
+    step("Test ping between clients")
+    verify_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address)
 
-    print("Assign IP on the same range to LAG in both switches")
+    step("Assign IP on the same range to LAG in both switches")
     assign_ip_to_lag(sw1, sw1_lag_id, sw1_lag_ip_address, ip_address_mask)
     assign_ip_to_lag(sw2, sw2_lag_id, sw2_lag_ip_address, ip_address_mask)
 
-    sleep(20)
-    # Ping between workstations should fail
+    step(" Ping between workstations should fail")
     check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
                                      number_pings, False)
-    # Ping between switches should succeed
+
+    step("Ping between switches should succeed")
     check_connectivity_between_switches(sw1, sw1_lag_ip_address, sw2,
                                         sw2_lag_ip_address, number_pings,
                                         True)
 
-    print("Configure LAGs with VLAN")
+    step("Configure LAGs with VLAN")
     associate_vlan_to_lag(sw1, vlan_identifier, sw1_lag_id)
     associate_vlan_to_lag(sw2, vlan_identifier, sw2_lag_id)
 
-    print("Waiting some time for change to apply")
-    sleep(20)
-    # Ping between workstations should succeed
-    check_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address,
-                                     number_pings, True)
-    # Ping between switches should fail
+    step("Ping between workstations should succeed")
+    verify_connectivity_between_hosts(hs1, hs1_ip_address, hs2, hs2_ip_address)
+
+    step("Ping between switches should fail")
     check_connectivity_between_switches(sw1, sw1_lag_ip_address, sw2,
                                         sw2_lag_ip_address, number_pings,
                                         False)
