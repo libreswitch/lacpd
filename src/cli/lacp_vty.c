@@ -1976,6 +1976,11 @@ static int lag_routing(const char *port_name)
         return CMD_SUCCESS;
     }
 
+    //Clean vlan configuration
+    ovsrec_port_set_vlan_mode(port_row, NULL);
+    ops_port_set_tag(0, port_row, idl);
+    ops_port_set_trunks(NULL, 0, port_row, idl);
+
     default_bridge_row = ovsrec_bridge_first(idl);
     ports = xmalloc(sizeof *default_bridge_row->ports *
         (default_bridge_row->n_ports - 1));
@@ -2036,10 +2041,6 @@ static int lag_no_routing(const char *port_name)
     struct ovsrec_port **vrf_ports;
     struct ovsrec_port **bridge_ports;
     struct smap smap = SMAP_INITIALIZER(&smap);
-    int64_t* trunks = NULL;
-    int trunk_count = 0;
-    int64_t* tag = NULL;
-    int tag_count = 0;
     size_t i, n;
 
     status_txn = cli_do_config_start();
@@ -2075,21 +2076,13 @@ static int lag_no_routing(const char *port_name)
 
     /* assign external vlan */
     ovsrec_port_set_vlan_mode(port_row, OVSREC_PORT_VLAN_MODE_ACCESS);
-
-    ovsrec_port_set_trunks(port_row, trunks, trunk_count);
-
-    tag = xmalloc(sizeof *port_row->tag);
-    tag_count = 1;
-    tag[0] = DEFAULT_VLAN;
-
-    ovsrec_port_set_tag(port_row, tag, tag_count);
+    ops_port_set_tag(DEFAULT_VLAN, port_row, idl);
+    ops_port_set_trunks(NULL, 0, port_row, idl);
 
     smap_clone(&smap, &port_row->other_config);
     smap_remove(&smap, PORT_HW_CONFIG_MAP_INTERNAL_VLAN_ID);
     ovsrec_port_set_hw_config(port_row, &smap);
     smap_destroy(&smap);
-
-    free(tag);
 
     default_bridge_row = ovsrec_bridge_first(idl);
     bridge_ports = xmalloc(sizeof *default_bridge_row->ports

@@ -35,6 +35,7 @@
 #include "vtysh/utils/system_vtysh_utils.h"
 #include "lacp_vty.h"
 #include "qos_lag.h"
+#include "ops-utils.h"
 
 /*-----------------------------------------------------------------------------
 | Function : vtysh_ovsdb_intftable_parse_vlan
@@ -63,45 +64,45 @@ vtysh_ovsdb_porttable_parse_vlan(const char *if_name,
     }
     else if (strcmp(port_row->vlan_mode, OVSREC_PORT_VLAN_MODE_ACCESS) == 0)
     {
-        if(port_row->n_tag == 1)
+        if(port_row->vlan_tag != NULL)
         {
             vtysh_ovsdb_cli_print(p_msg, "%4s%s%d", "", "vlan access ",
-                *port_row->tag);
+                ops_port_get_tag(port_row));
         }
     }
     else if (strcmp(port_row->vlan_mode, OVSREC_PORT_VLAN_MODE_TRUNK) == 0)
     {
-        for (i = 0; i < port_row->n_trunks; i++)
+        for (i = 0; i < port_row->n_vlan_trunks; i++)
         {
             vtysh_ovsdb_cli_print(p_msg, "%4s%s%d", "", "vlan trunk allowed ",
-                port_row->trunks[i]);
+                ops_port_get_trunks(port_row, i));
         }
     }
     else if (strcmp(port_row->vlan_mode, OVSREC_PORT_VLAN_MODE_NATIVE_UNTAGGED) == 0)
     {
-        if (port_row->n_tag == 1)
+        if (port_row->vlan_tag != NULL)
         {
             vtysh_ovsdb_cli_print(p_msg, "%4s%s%d", "", "vlan trunk native ",
-                *port_row->tag);
+                ops_port_get_tag(port_row));
         }
-        for (i = 0; i < port_row->n_trunks; i++)
+        for (i = 0; i < port_row->n_vlan_trunks; i++)
         {
             vtysh_ovsdb_cli_print(p_msg, "%4s%s%d", "", "vlan trunk allowed ",
-                port_row->trunks[i]);
+                ops_port_get_trunks(port_row, i));
         }
     }
     else if (strcmp(port_row->vlan_mode, OVSREC_PORT_VLAN_MODE_NATIVE_TAGGED) == 0)
     {
-        if (port_row->n_tag == 1)
+        if (port_row->vlan_tag != NULL)
         {
             vtysh_ovsdb_cli_print(p_msg, "%4s%s%d", "", "vlan trunk native ",
-                *port_row->tag);
+                ops_port_get_tag(port_row));
         }
         vtysh_ovsdb_cli_print(p_msg, "%4s%s", "", "vlan trunk native tag");
-        for (i = 0; i < port_row->n_trunks; i++)
+        for (i = 0; i < port_row->n_vlan_trunks; i++)
         {
             vtysh_ovsdb_cli_print(p_msg, "%4s%s%d", "", "vlan trunk allowed ",
-                port_row->trunks[i]);
+                ops_port_get_trunks(port_row, i));
         }
     }
 
