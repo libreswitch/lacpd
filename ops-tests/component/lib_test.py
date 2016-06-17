@@ -22,8 +22,9 @@ ovs_vsctl = "/usr/bin/ovs-vsctl "
 def print_header(msg):
     header_length = len(msg)
     print('\n%s\n%s\n%s\n' % ('=' * header_length,
-                               msg,
+                              msg,
                               '=' * header_length))
+
 
 # This method calls a function to retrieve data, then calls another function
 # to compare the data to the expected value(s). If it fails, it sleeps for
@@ -81,13 +82,6 @@ def sw_get_intf_state(params):
         c += " " + f
     out = params[0](c, shell='vsctl').replace('"', '').splitlines()
     return out
-
-
-def set_port_parameter(sw, port, config):
-    """Configure parameters in 'config' from 'port' on 'sw'."""
-
-    cmd = "set port %s %s" % (str(port), ' '.join(map(str, config)))
-    return sw(cmd, shell='vsctl')
 
 
 def clear_port_parameter(sw, port, config):
@@ -330,6 +324,7 @@ def sw_wait_until_all_sm_ready(sws, intfs, flags, max_retries=30):
     verify again.
     """
     all_intfs = []
+    sm = []
     retries = 0
 
     for sw in sws:
@@ -375,6 +370,7 @@ def sw_wait_until_one_sm_ready(sws, intfs, flags, max_retries=30):
     enabled. The interface number will be returned
     """
     all_intfs = []
+    sm = []
     retries = 0
     intf_fallback_enabled = 0
 
@@ -434,9 +430,8 @@ def add_intf_to_bond(sw, bond_name, intf_name):
     out = sw(c.format(**locals()), shell='vsctl')
     intf_list = out.rstrip('\r\n').strip("[]").replace(" ", "").split(',')
 
-    assert intf_uuid not in intf_list,\
-        print("Interface %s is already part of %s \n" %
-              (intf_name, bond_name))
+    assert intf_uuid not in intf_list, "Interface %s is already part of %s"\
+                                       % (intf_name, bond_name)
 
     # Add the given intf_name's UUID to existing Interfaces.
     intf_list.append(intf_uuid)
@@ -480,7 +475,7 @@ def sw_wait_until_ready(sws, intfs, max_retries=30):
 
             sm[2] = 'up' in out
 
-        retries +=1
+        retries += 1
         sleep(1)
 
 

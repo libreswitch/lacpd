@@ -26,16 +26,15 @@
 OpenSwitch Tests for LACP System priority functionality
 """
 
-from time import sleep
 import pytest
-
-from lib_test import sw_set_intf_user_config
-from lib_test import sw_clear_user_config
-from lib_test import sw_set_intf_pm_info
-from lib_test import set_port_parameter
-from lib_test import sw_get_intf_state
-from lib_test import sw_create_bond
-from lib_test import timed_compare
+from lib_test import (
+    set_port_parameter,
+    sw_clear_user_config,
+    sw_create_bond,
+    sw_set_intf_pm_info,
+    sw_set_intf_user_config,
+    sw_wait_until_all_sm_ready
+)
 
 TOPOLOGY = """
 #
@@ -57,10 +56,10 @@ TOPOLOGY = """
 [type=openswitch name="Switch 3"] sw3
 
 # Links
-sw1:if01 -- sw2:if01
-sw1:if02 -- sw2:if02
-sw1:if03 -- sw3:if01
-sw1:if04 -- sw3:if02
+sw1:1 -- sw2:1
+sw1:2 -- sw2:2
+sw1:3 -- sw3:1
+sw1:4 -- sw3:2
 """
 
 
@@ -68,12 +67,24 @@ ovs_vsctl = "/usr/bin/ovs-vsctl "
 
 sw_1g_intf_start = 1
 sw_1g_intf_end = 4
-port_labels_1G = ['if01', 'if02', 'if03', 'if04']
-sw2_port_labels_1G = ['if01', 'if02']
-sw3_port_labels_1G = ['if01', 'if02']
+sw1_intf_labels_1G = ['1', '2', '3', '4']
+sw2_intf_labels_1G = ['1', '2']
+sw3_intf_labels_1G = ['1', '2']
 sw_1g_intf = []
 sw2_1g_intf = []
 sw3_1g_intf = []
+
+###############################################################################
+#
+#                       ACTOR STATE STATE MACHINES VARIABLES
+#
+###############################################################################
+# Everything is working and 'Collecting and Distributing'
+active_ready = '"Activ:1,TmOut:\d,Aggr:1,Sync:1,Col:1,Dist:1,Def:0,Exp:0"'
+# Interfaces configured in different lag
+active_different_lag_intf = \
+    '"Activ:1,TmOut:\d,Aggr:1,Sync:\d,Col:0,Dist:0,Def:0,Exp:0"'
+
 
 # Set open_vsw_lacp_config parameter(s)
 def set_open_vsw_lacp_config(sw, config):
@@ -98,46 +109,12 @@ def sw_delete_bond(sw, bond_name):
     return sw(c, shell='bash')
 
 
-def verify_compare_complex(actual, expected, unused):
-    attrs = []
-    for attr in expected:
-        attrs.append(attr)
-    if len(actual) != len(expected):
-        return False
-    for i in range(0, len(attrs)):
-        if actual[i] != expected[attrs[i]]:
-            return False
-    return True
-
-
-def verify_intf_lacp_status(sw, intf, verify_values, context=''):
-    request = []
-    attrs = []
-    for attr in verify_values:
-        request.append('lacp_status:' + attr)
-        attrs.append(attr)
-    result = timed_compare(sw_get_intf_state,
-                           (sw, intf, request),
-                           verify_compare_complex, verify_values)
-    field_vals = result[1]
-    for i in range(0, len(attrs)):
-        verify_values[attrs[i]].replace('"', '')
-        assert field_vals[i] == verify_values[attrs[i]], context +\
-            ": invalid value for " + attrs[i] + ", expected " +\
-            verify_values[attrs[i]] + ", got " + field_vals[i]
-
-
 def lacpd_switch_pre_setup(sw, start, end):
     for intf in range(start, end):
-        if intf > 9:
-            port = "if"
-        else:
-            port = "if0"
-        port = "{}{}".format(port, intf)
-        sw_set_intf_pm_info(sw, sw.ports[port], ('connector="SFP_RJ45"',
-                                                 'connector_status=supported',
-                                                 'max_speed="1000"',
-                                                 'supported_speeds="1000"'))
+        sw_set_intf_pm_info(sw, intf, ('connector="SFP_RJ45"',
+                                       'connector_status=supported',
+                                       'max_speed="1000"',
+                                       'supported_speeds="1000"'))
 
 
 @pytest.fixture(scope="module")
@@ -150,12 +127,13 @@ def main_setup(request, topology):
     assert sw2 is not None
     assert sw3 is not None
 
-    global sw_1g_intf, port_labels_1G, sw2_port_labels_1G, sw3_port_labels_1G
-    for lbl in port_labels_1G:
+    global sw_1g_intf, sw1_intf_labels_1G, sw2_intf_labels_1G,\
+        sw3_intf_labels_1G
+    for lbl in sw1_intf_labels_1G:
         sw_1g_intf.append(sw1.ports[lbl])
-    for lbl in sw2_port_labels_1G:
+    for lbl in sw2_intf_labels_1G:
         sw2_1g_intf.append(sw2.ports[lbl])
-    for lbl in sw3_port_labels_1G:
+    for lbl in sw3_intf_labels_1G:
         sw3_1g_intf.append(sw3.ports[lbl])
 
 
@@ -174,6 +152,18 @@ def setup(request, topology):
     lacpd_switch_pre_setup(sw1, sw_1g_intf_start, sw_1g_intf_end)
     lacpd_switch_pre_setup(sw2, 1, 2)
     lacpd_switch_pre_setup(sw3, 1, 2)
+
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw3 = sw3.libs.vtysh.show_interface(1)['mac_address']
+    assert (
+        mac_addr_sw1 != mac_addr_sw2 and
+        mac_addr_sw1 != mac_addr_sw3 and
+        mac_addr_sw2 != mac_addr_sw3,
+        'Mac address of interfaces in sw1 is equal to mac address of ' +
+        'interfaces in sw2. This is a test framework problem. Dynamic ' +
+        'LAGs cannot work properly under this condition. Refer to Taiga ' +
+        'issue #1251.')
 
     def cleanup():
         print('Clear the user_config of all the Interfaces.\n'
@@ -232,63 +222,26 @@ def test_lacpd_lag_dynamic_system_priority(topology, step, main_setup, setup):
     set_port_parameter(sw3, "lag1", ['other_config:lacp-time=fast'])
 
     step("Waiting for LACP to complete negotiation\n")
-    sleep(40)
 
     step("Verify state machines in all switches\n")
     """
     The interface 3 and 4 of sw1 must be collecting and distributing
     """
-    for intf in sw_1g_intf[2:4]:
-        verify_intf_lacp_status(sw1,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0"},
-                                "s1:" + intf)
-
+    sw_wait_until_all_sm_ready(
+        [sw1], sw1_intf_labels_1G[2:4], active_ready)
     """
     The interface 1 and 2 of sw3 must be collecting and distributing since
     this is the switch with higher system priority between sw2 and sw3
     """
-    for intf in sw2_1g_intf[0:2]:
-        verify_intf_lacp_status(sw3,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,"
-                                 "Dist:1,Def:0,Exp:0"},
-                                "s3:" + intf)
-
+    sw_wait_until_all_sm_ready(
+        [sw3], sw3_intf_labels_1G[0:2], active_ready)
     """
     The interface 1 and 2 of sw1 must not be collecting and distributing
     The interface 1 and 2 of sw2 must not be collecting and distributing since
     this is the switch with lower system priority between sw2 and sw3
     """
-    for intf in sw_1g_intf[0:2]:
-        verify_intf_lacp_status(sw1,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:0,"
-                                 "Dist:0,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:0,Col:0,"
-                                 "Dist:0,Def:0,Exp:0"},
-                                "s1:" + intf)
-
-        verify_intf_lacp_status(sw2,
-                                intf,
-                                {"partner_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:0,Col:0,"
-                                 "Dist:0,Def:0,Exp:0",
-                                 "actor_state":
-                                 "Activ:1,TmOut:1,Aggr:1,Sync:1,Col:0,"
-                                 "Dist:0,Def:0,Exp:0"},
-                                "s2:" + intf)
+    sw_wait_until_all_sm_ready(
+        [sw1, sw2], sw1_intf_labels_1G[0:2], active_different_lag_intf)
 
     # finish testing
     sw1("ovs-vsctl del-port lag1", shell='bash')
