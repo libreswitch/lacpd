@@ -55,7 +55,6 @@ TOPOLOGY = """
 # Links
 sw1:1 -- sw2:1
 sw1:2 -- sw2:2
-sw1:3 -- sw2:3
 """
 
 
@@ -82,7 +81,7 @@ def test_l3_dynamic_lag_ping_case_1(topology, step):
 
     ports_sw1 = list()
     ports_sw2 = list()
-    port_labels = ['1', '2', '3']
+    port_labels = ['1', '2']
 
     step("### Mapping interfaces from Docker ###")
     for port in port_labels:

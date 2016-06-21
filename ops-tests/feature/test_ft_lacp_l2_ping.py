@@ -83,10 +83,10 @@ TOPOLOGY = """
 [type=host name="Host 2"] hs2
 
 # Links
-hs1:1 -- sw1:1
+hs1:1 -- sw1:3
+sw1:1 -- sw2:1
 sw1:2 -- sw2:2
-sw1:3 -- sw2:3
-sw2:1 -- hs2:1
+sw2:3 -- hs2:1
 """
 
 
@@ -133,7 +133,7 @@ def test_l2_dynamic_lag_ping_case_1(topology, step):
 
     step("Validate interfaces are turn on")
     verify_turn_on_interfaces(sw1, ports_sw1)
-    verify_turn_on_interfaces(sw1, ports_sw2)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
     step("Assign an IP address on the same range to each workstation")
     hs1.libs.ip.interface('1', addr=hs1_ip_address_with_mask, up=True)
@@ -148,30 +148,32 @@ def test_l2_dynamic_lag_ping_case_1(topology, step):
     create_lag(sw2, sw2_lag_id, 'active')
 
     step("Associate interfaces [2, 3] to LAG in both switches")
-    for port in ports_sw1[1:3]:
+    for port in ports_sw1[0:2]:
         associate_interface_to_lag(sw1, port, sw1_lag_id)
-    for port in ports_sw2[1:3]:
+    for port in ports_sw2[0:2]:
         associate_interface_to_lag(sw2, port, sw2_lag_id)
 
     step("Verify LAG configuration")
-    verify_lag_config(sw1, sw1_lag_id, ports_sw1[1:3], mode='active')
-    verify_lag_config(sw2, sw2_lag_id, ports_sw2[1:3], mode='active')
+    verify_lag_config(sw1, sw1_lag_id, ports_sw1[0:2], mode='active')
+    verify_lag_config(sw2, sw2_lag_id, ports_sw2[0:2], mode='active')
 
     step("Configure LAGs and workstations interfaces with same VLAN")
     associate_vlan_to_lag(sw1, vlan_identifier, sw1_lag_id)
     associate_vlan_to_lag(sw2, vlan_identifier, sw2_lag_id)
-    associate_vlan_to_l2_interface(sw1, vlan_identifier, ports_sw1[0])
-    associate_vlan_to_l2_interface(sw2, vlan_identifier, ports_sw2[0])
+    associate_vlan_to_l2_interface(sw1, vlan_identifier, ports_sw1[2])
+    associate_vlan_to_l2_interface(sw2, vlan_identifier, ports_sw2[2])
 
     step("Verify if LAG is synchronized")
-    verify_state_sync_lag(sw1, ports_sw1[1:3], LOCAL_STATE, 'active')
-    verify_state_sync_lag(sw1, ports_sw1[1:3], REMOTE_STATE, 'active')
+    verify_state_sync_lag(sw1, ports_sw1[0:2], LOCAL_STATE, 'active')
+    verify_state_sync_lag(sw1, ports_sw1[0:2], REMOTE_STATE, 'active')
+    verify_state_sync_lag(sw2, ports_sw2[0:2], LOCAL_STATE, 'active')
+    verify_state_sync_lag(sw2, ports_sw2[0:2], REMOTE_STATE, 'active')
 
     step("Get information for LAG in interface 2 with both switches")
     map_lacp_sw1 = sw1.libs.vtysh.show_lacp_interface(
-                        find_device_label(sw1, ports_sw1[1]))
+                        find_device_label(sw1, ports_sw1[0]))
     map_lacp_sw2 = sw2.libs.vtysh.show_lacp_interface(
-                        find_device_label(sw2, ports_sw2[1]))
+                        find_device_label(sw2, ports_sw2[0]))
 
     step("Validate the LAG was created in both switches")
     validate_lag_name(map_lacp_sw1, sw1_lag_id)

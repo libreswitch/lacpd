@@ -530,8 +530,7 @@ def verify_lag_config(
         ]
     )
     for interface in interfaces:
-        port = find_device_label(sw, interface)
-        assert port in lag_config[lag_name]['interfaces'],\
+        assert interface in lag_config[lag_name]['interfaces'],\
             "Interface {} is not in LAG".format(port)
     assert heartbeat_rate == lag_config[lag_name]['heartbeat_rate'],\
         "Heartbeat rate {} is not expected. Expected {}".format(
