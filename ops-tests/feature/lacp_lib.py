@@ -496,6 +496,24 @@ def assign_ip_to_lag(sw, lag_id, ip_address, ip_address_mask):
         ctx.ip_address(ip_address_complete)
 
 
+def assign_secondary_ip_to_lag(sw, lag_id, ip_address, ip_address_mask):
+    ip_address_complete = ip_address + "/" + ip_address_mask
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.ip_address_secondary(ip_address_complete)
+
+
+def delete_ip_from_lag(sw, lag_id, ip_address, ip_address_mask):
+    ip_address_complete = ip_address + "/" + ip_address_mask
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_ip_address(ip_address_complete)
+
+
+def delete_secondary_ip_from_lag(sw, lag_id, ip_address, ip_address_mask):
+    ip_address_complete = ip_address + "/" + ip_address_mask
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_ip_address_secondary(ip_address_complete)
+
+
 def config_lacp_rate(sw, lag_id, lacp_rate_fast=False):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         if lacp_rate_fast:
