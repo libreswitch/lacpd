@@ -1396,6 +1396,12 @@ lacp_remove_intf_from_lag(const char *if_name, const char *lag_number)
    smap_clone(&smap, &interface_row->other_config);
    smap_remove(&smap, INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY);
    ovsrec_interface_set_other_config(interface_row, &smap);
+   smap_clear(&smap);
+
+   /* Remove User config */
+   smap_clone(&smap, &interface_row->user_config);
+   smap_remove(&smap, INTERFACE_USER_CONFIG_MAP_ADMIN);
+   ovsrec_interface_set_user_config(interface_row, &smap);
    smap_destroy(&smap);
 
    /* Unlink the interface from the Port row found*/
