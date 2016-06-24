@@ -531,7 +531,7 @@ def verify_lag_config(
     )
     for interface in interfaces:
         assert interface in lag_config[lag_name]['interfaces'],\
-            "Interface {} is not in LAG".format(port)
+            "Interface {} is not in LAG".format(interface)
     assert heartbeat_rate == lag_config[lag_name]['heartbeat_rate'],\
         "Heartbeat rate {} is not expected. Expected {}".format(
             lag_config[lag_name]['heartbeat_rate'],

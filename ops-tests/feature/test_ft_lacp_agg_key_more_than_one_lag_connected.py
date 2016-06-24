@@ -85,7 +85,7 @@ def test_lacp_agg_key_more_than_one_lag_connected(topology, step):
             SW1>
                 LAG150 -> Interfaces: 1,2,3,4
             SW2>
-                LAG300 -> Interfaces: 1,2
+                LAG150 -> Interfaces: 1,2
                 LAG400 -> Interfaces: 3,4
         Expected behaviour:
             Interfaces 1 and 2 in both switches get state Active, InSync,
@@ -120,6 +120,14 @@ def test_lacp_agg_key_more_than_one_lag_connected(topology, step):
     step("Verify interfaces to turn on")
     verify_turn_on_interfaces(sw1, ports_sw1)
     verify_turn_on_interfaces(sw2, ports_sw2)
+
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    assert mac_addr_sw1 != mac_addr_sw2, \
+        'Mac address of interfaces in sw1 is equal to mac address of ' + \
+        'interfaces in sw2. This is a test framework problem. Dynamic ' + \
+        'LAGs cannot work properly under this condition. Refer to Taiga ' + \
+        'issue #1251.'
 
     step("Create LAG in both switches")
     create_lag_active(sw1, sw1_lag_id)
