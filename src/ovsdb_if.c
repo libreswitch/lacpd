@@ -187,16 +187,16 @@ pthread_mutex_t ovsdb_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define OVSDB_LOCK { \
                 VLOG_DBG("%s(%d): OVSDB_LOCK: taking lock...", __FUNCTION__, __LINE__); \
                 if (!(pthread_mutex_lock(&ovsdb_mutex))) { \
-                    VLOG_WARN("%s(%d): failed to  take OVSDB_LOCK lock...",\
-                              __FUNCTION__, __LINE__); \
+                    VLOG_DBG("%s(%d): failed to  take OVSDB_LOCK lock...",\
+                             __FUNCTION__, __LINE__); \
                 } \
 }
 
 #define OVSDB_UNLOCK { \
                 VLOG_DBG("%s(%d): OVSDB_UNLOCK: releasing lock...", __FUNCTION__, __LINE__); \
                 if (!(pthread_mutex_unlock(&ovsdb_mutex))) { \
-                    VLOG_WARN("%s(%d): failed to  release OVSDB_LOCK lock...",\
-                              __FUNCTION__, __LINE__); \
+                    VLOG_DBG("%s(%d): failed to  release OVSDB_LOCK lock...",\
+                             __FUNCTION__, __LINE__); \
                 } \
 }
 
@@ -1457,6 +1457,11 @@ update_port_bond_status_map_entry(struct port_data *portp)
     int up_intf = 0;
     int down_intf = 0;
     char* speed_str;
+
+    /* If the port is not a LAG then return */
+    if (strncmp(portp->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH)) {
+        return;
+    }
 
     smap_init(&smap);
 
