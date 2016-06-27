@@ -1678,7 +1678,7 @@ lacp_show_interfaces_all()
 
    OVSREC_PORT_FOR_EACH(lag_port, idl)
    {
-      if(strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
+      if (strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
       {
          for (k = 0; k < lag_port->n_interfaces; k++)
          {
@@ -1749,7 +1749,7 @@ lacp_show_interfaces_all()
 
    OVSREC_PORT_FOR_EACH(lag_port, idl)
    {
-      if(strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
+      if (strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
       {
          for (k = 0; k < lag_port->n_interfaces; k++)
          {

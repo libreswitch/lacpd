@@ -1856,15 +1856,11 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
 
                 /* clear interface lacp_status */
                 SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
-                    struct ovsrec_interface *ifrow =
-                        shash_find_data(&sh_idl_port_intfs, node->name);
-                    if (ifrow) {
-                        struct iface_data *idp =
-                            shash_find_data(&all_interfaces, node->name);
-                        if (idp) {
-                            db_clear_interface(idp);
-                            clear_port_overrides(idp);
-                        }
+                    struct iface_data *idp =
+                           shash_find_data(&all_interfaces, node->name);
+                    if (idp) {
+                        db_clear_interface(idp);
+                        clear_port_overrides(idp);
                     }
                 }
 
@@ -2435,6 +2431,10 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
     }
 
     portp = idp->port_datap;
+
+    if (portp->lacp_mode == PORT_LACP_OFF) {
+        goto end;
+    }
 
     idp->local_state = plpinfo->actor_oper_port_state;
 
