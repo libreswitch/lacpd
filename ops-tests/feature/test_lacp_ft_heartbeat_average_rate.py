@@ -53,12 +53,14 @@ TOPOLOGY = """
 [type=host name="Host 2"] hs2
 
 # Links
-hs1:1 -- sw1:4
+sw1:3 -- hs1:1
 sw1:1 -- sw2:1
 sw1:2 -- sw2:2
-sw1:3 -- sw2:3
-hs2:1 -- sw2:4
+hs2:1 -- sw2:3
 """
+
+# Ports
+port_labels = ['1', '2', '3']
 
 # VID for testing
 test_vlan = '2'
@@ -66,12 +68,6 @@ test_vlan = '2'
 # LAG ID for testing
 test_lag = '2'
 test_lag_if = 'lag' + test_lag
-
-# interfaces to be added to LAG
-lag_interfaces = ['1', '2', '3']
-
-# interface connected to host
-host_interface = '4'
 
 # hosts addresses
 hs1_addr = '10.0.11.10'
@@ -131,16 +127,24 @@ def main_setup(request, topology):
     assert hs1 is not None, 'Topology failed getting object hs1'
     assert hs2 is not None, 'Topology failed getting object hs2'
 
-    for switch in [sw1, sw2]:
-        for intf in lag_interfaces + [host_interface]:
-            print('Turning interface %s on switch' % intf)
-            turn_on_interface(switch, intf)
+    ports_sw1 = list()
+    ports_sw2 = list()
 
-    print('Wait for interfaces become up on Switch 1')
-    verify_turn_on_interfaces(sw1, lag_interfaces + [host_interface])
+    print("Mapping interfaces")
+    for port in port_labels:
+        ports_sw1.append(sw1.ports[port])
+        ports_sw2.append(sw2.ports[port])
 
-    print('Wait for interfaces become up on Switch 2')
-    verify_turn_on_interfaces(sw2, lag_interfaces + [host_interface])
+    print("Turning on all interfaces used in this test")
+    for port in ports_sw1:
+        turn_on_interface(sw1, port)
+
+    for port in ports_sw2:
+        turn_on_interface(sw2, port)
+
+    print("Validate interfaces are turn on")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
     print('Creating VLAN (%s) on Switch 1' % test_vlan)
     create_vlan(sw1, test_vlan)
@@ -176,12 +180,15 @@ def main_setup(request, topology):
                           addr='%s/24' % hs2_addr,
                           up=True)
 
+    print("Associate interfaces to LAG in both switches")
+    for port in ports_sw1[0:2]:
+        associate_interface_to_lag(sw1, port, test_lag)
+    for port in ports_sw2[0:2]:
+        associate_interface_to_lag(sw2, port, test_lag)
+
     for switch in [sw1, sw2]:
-        # Add interfaces to LAG
-        for intf in lag_interfaces:
-            associate_interface_to_lag(switch, intf, test_lag)
         # Interface 4 is connected to one host
-        associate_vlan_to_l2_interface(switch, test_vlan, host_interface)
+        associate_vlan_to_l2_interface(switch, test_vlan, switch.ports['3'])
 
     print('Verify connectivity between hosts')
     verify_connectivity_between_hosts(hs1, hs1_addr, hs2, hs2_addr, True)
@@ -215,7 +222,7 @@ def test_lacpd_heartbeat(topology, main_setup, step):
 
         # Min percentage according heartbeats
         hb_info[lag_rate_mode]['min_percent'] = (heartbeats - 1) / heartbeats
-        hb_info[lag_rate_mode]['max_percent'] += 3 /\
+        hb_info[lag_rate_mode]['max_percent'] += 5 /\
             hb_info[lag_rate_mode]['wait_time']
 
         # Setting values for slow|fast
@@ -242,7 +249,7 @@ def test_lacpd_heartbeat(topology, main_setup, step):
         sw2_initial_diagdump_pdu = get_average_lacpd_sent_pdus(sw2, test_lag)
 
         step('Waiting for some pdus to be sent')
-        sleep(hb_info[lag_rate_mode]['wait_time'] + 2)
+        sleep(hb_info[lag_rate_mode]['wait_time'])
 
         # Get the final amount of pdus sent through the interfaces of the lag
         # using diag-dump lacp basic command.
@@ -264,7 +271,7 @@ def test_lacpd_heartbeat(topology, main_setup, step):
 
             pac_info = get_counters_from_packet_capture(tcp_data)
 
-            final_result = pac_info['received'] / len(lag_interfaces)
+            final_result = pac_info['received'] / len(port_labels[0:2])
 
             packets_avg = (final_result / heartbeats)
 
