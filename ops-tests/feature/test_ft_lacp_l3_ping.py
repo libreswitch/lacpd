@@ -55,6 +55,7 @@ TOPOLOGY = """
 # Links
 sw1:1 -- sw2:1
 sw1:2 -- sw2:2
+# Remove unused switch sw3
 """
 
 
@@ -81,6 +82,7 @@ def test_l3_dynamic_lag_ping_case_1(topology, step):
 
     ports_sw1 = list()
     ports_sw2 = list()
+    # Remove unused port 3
     port_labels = ['1', '2']
 
     step("### Mapping interfaces from Docker ###")
@@ -99,8 +101,9 @@ def test_l3_dynamic_lag_ping_case_1(topology, step):
     verify_turn_on_interfaces(sw1, ports_sw1)
     verify_turn_on_interfaces(sw2, ports_sw2)
 
-    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
-    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    # Modify hardcoded interfaces for dynamic interfaces
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface('1')['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface('1')['mac_address']
     assert mac_addr_sw1 != mac_addr_sw2,\
         'Mac address of interfaces in sw1 is equal to mac address of ' +\
         'interfaces in sw2. This is a test framework problem. Dynamic ' +\
