@@ -30,33 +30,34 @@
 #
 ###############################################################################
 
-from lacp_lib import create_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import turn_off_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import validate_turn_off_interfaces
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import verify_lag_config
-from lacp_lib import create_vlan
-from lacp_lib import verify_vlan_full_state
-from lacp_lib import check_connectivity_between_hosts
-from lacp_lib import create_lag_passive
-from lacp_lib import create_lag_active
-from lacp_lib import set_lag_rate
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import verify_lag_interface_key
-from lacp_lib import verify_lag_interface_priority
-from lacp_lib import verify_lag_interface_id
-from lacp_lib import verify_lag_interface_system_id
-from lacp_lib import verify_lag_interface_system_priority
-from lacp_lib import verify_lag_interface_lag_id
-from lacp_lib import validate_lag_state_sync
-from lacp_lib import validate_lag_state_static
-from lacp_lib import LOCAL_STATE
-from lacp_lib import REMOTE_STATE
-from lacp_lib import retry_wrapper
-import pytest
+from lacp_lib import(
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    check_connectivity_between_hosts,
+    create_lag,
+    create_lag_active,
+    create_lag_passive,
+    create_vlan,
+    LOCAL_STATE,
+    REMOTE_STATE,
+    retry_wrapper,
+    set_lag_rate,
+    turn_off_interface,
+    turn_on_interface,
+    validate_lag_state_static,
+    validate_lag_state_sync,
+    validate_turn_off_interfaces,
+    validate_turn_on_interfaces,
+    verify_lag_config,
+    verify_lag_interface_id,
+    verify_lag_interface_key,
+    verify_lag_interface_lag_id,
+    verify_lag_interface_priority,
+    verify_lag_interface_system_id,
+    verify_lag_interface_system_priority,
+    verify_vlan_full_state
+)
 
 TOPOLOGY = """
 #            +-----------------+
@@ -72,9 +73,9 @@ TOPOLOGY = """
 #     |            Switch 1           |
 #     |                               |
 #     +-------------------------------+
-#          |         |        |
-#          |         |        |
-#          |         |        |
+#               |         |
+#               |         |
+#               |         |
 #     +-------------------------------+
 #     |                               |
 #     |                               |
@@ -97,15 +98,14 @@ TOPOLOGY = """
 
 # Links
 
-sw1:1 -- hs1:1
-sw2:1 -- hs2:1
+sw1:3 -- hs1:1
+sw2:3 -- hs2:1
+sw1:1 -- sw2:1
 sw1:2 -- sw2:2
-sw1:3 -- sw2:3
-sw1:4 -- sw2:4
 """
 
 # Global variables
-SW_LBL_PORTS = ['1', '2', '3', '4']
+SW_LBL_PORTS = ['1', '2', '3']
 LAG_ID = '1'
 LAG_VLAN = 900
 NETWORK = '10.90.0.'
@@ -116,13 +116,14 @@ NUMBER_PINGS = 5
 def verify_lacp_state(
     sw1,
     sw2,
+    real_ports,
     sw1_lacp_mode='off',
-    sw2_lacp_mode='active',
+    sw2_lacp_mode='active'
 ):
     sw1_lacp_config = sw1.libs.vtysh.show_lacp_configuration()
     sw2_lacp_config = sw2.libs.vtysh.show_lacp_configuration()
     print('Verify LACP state on LAG members')
-    for port in SW_LBL_PORTS[1:]:
+    for port in real_ports[0:2]:
         sw1_lacp_state = sw1.libs.vtysh.show_lacp_interface(port)
         sw2_lacp_state = sw2.libs.vtysh.show_lacp_interface(port)
         sw_lacp_states = [sw1_lacp_state, sw2_lacp_state]
@@ -207,10 +208,10 @@ def verify_lacp_state(
                 validate_lag_state_static(sw_lacp_state, REMOTE_STATE)
 
 
-def enable_switches_interfaces(sw_list, step):
+def enable_switches_interfaces(sw_list, sw_real_ports, step):
     step('Enable switches interfaces')
     for sw in sw_list:
-        for port in SW_LBL_PORTS:
+        for port in sw_real_ports[sw]:
             turn_on_interface(sw, port)
     # Defining internal method to use decorator
 
@@ -219,16 +220,16 @@ def enable_switches_interfaces(sw_list, step):
         'Interfaces not yet ready',
         5,
         60)
-    def internal_check_interfaces(sw_list):
+    def internal_check_interfaces(sw_list, sw_real_ports):
         for sw in sw_list:
-            validate_turn_on_interfaces(sw, SW_LBL_PORTS)
-    internal_check_interfaces(sw_list)
+            validate_turn_on_interfaces(sw, sw_real_ports[sw])
+    internal_check_interfaces(sw_list, sw_real_ports)
 
 
-def disable_switches_interfaces(sw_list, step):
+def disable_switches_interfaces(sw_list, sw_real_ports, step):
     step('Disable switches interfaces')
     for sw in sw_list:
-        for port in SW_LBL_PORTS:
+        for port in sw_real_ports[sw]:
             turn_off_interface(sw, port)
     # Defining internal method to use decorator
 
@@ -237,10 +238,10 @@ def disable_switches_interfaces(sw_list, step):
         'Interfaces not yet ready',
         5,
         60)
-    def internal_check_interfaces(sw_list):
+    def internal_check_interfaces(sw_list, sw_real_ports):
         for sw in sw_list:
-            validate_turn_off_interfaces(sw, SW_LBL_PORTS)
-    internal_check_interfaces(sw_list)
+            validate_turn_off_interfaces(sw, sw_real_ports[sw])
+    internal_check_interfaces(sw_list, sw_real_ports)
 
 
 def configure_lags(sw_list, sw_real_ports, step):
@@ -249,12 +250,12 @@ def configure_lags(sw_list, sw_real_ports, step):
         create_lag(sw, LAG_ID, 'off')
         # Set LACP rate to fast
         set_lag_rate(sw, LAG_ID, 'fast')
-        for port in sw_real_ports[sw][1:]:
+        for port in sw_real_ports[sw][0:2]:
             associate_interface_to_lag(sw, port, LAG_ID)
         verify_lag_config(
             sw,
             LAG_ID,
-            sw_real_ports[sw][1:],
+            sw_real_ports[sw][0:2],
             heartbeat_rate='fast'
         )
     check_func = retry_wrapper(
@@ -266,6 +267,7 @@ def configure_lags(sw_list, sw_real_ports, step):
     check_func(
         sw_list[0],
         sw_list[1],
+        sw_real_ports[sw_list[0]],
         sw1_lacp_mode='off',
         sw2_lacp_mode='off'
     )
@@ -283,23 +285,23 @@ def configure_vlans(sw_list, sw_real_ports, step):
         associate_vlan_to_l2_interface(
             sw,
             str(LAG_VLAN),
-            sw_real_ports[sw][0]
+            sw_real_ports[sw][2]
         )
         # Verify VLAN configuration was successfully applied
         verify_vlan_full_state(
             sw,
             LAG_VLAN, interfaces=[
-                sw_real_ports[sw][0],
+                sw_real_ports[sw][2],
                 'lag{}'.format(LAG_ID)
             ]
         )
 
 
-def configure_workstations(hs_list, step):
+def configure_workstations(hs_list, ports, step):
     step('Configure workstations')
     for hs_num, hs in enumerate(hs_list):
         hs.libs.ip.interface(
-            SW_LBL_PORTS[0],
+            ports[0],
             addr='{}{}/{}'.format(NETWORK, hs_num + 1, NETMASK),
             up=True
         )
@@ -342,7 +344,7 @@ def change_lacp_mode(sw_list, sw_real_ports, step):
         verify_lag_config(
             sw,
             LAG_ID,
-            sw_real_ports[sw][1:],
+            sw_real_ports[sw][0:2],
             heartbeat_rate='fast',
             mode=mode
         )
@@ -355,12 +357,12 @@ def change_lacp_mode(sw_list, sw_real_ports, step):
     check_func(
         sw_list[0],
         sw_list[1],
+        sw_real_ports[sw_list[0]],
         sw1_lacp_mode='active',
         sw2_lacp_mode='passive'
     )
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_ft_lag_convert_to_lacp(topology, step):
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
@@ -378,7 +380,7 @@ def test_ft_lag_convert_to_lacp(topology, step):
     }
 
     # Enable switches interfaces
-    enable_switches_interfaces([sw1, sw2], step)
+    enable_switches_interfaces([sw1, sw2], sw_real_ports, step)
 
     # Configure static LAGs with members
     configure_lags([sw1, sw2], sw_real_ports, step)
@@ -387,7 +389,7 @@ def test_ft_lag_convert_to_lacp(topology, step):
     configure_vlans([sw1, sw2], sw_real_ports, step)
 
     # Configure workstations
-    configure_workstations([hs1, hs2], step)
+    configure_workstations([hs1, hs2], sw_real_ports[sw1], step)
 
     # Validate workstations can communicate
     validate_connectivity([hs1, hs2], True, step)
@@ -399,10 +401,10 @@ def test_ft_lag_convert_to_lacp(topology, step):
     validate_connectivity([hs1, hs2], False, step)
 
     # Disable switches interfaces
-    disable_switches_interfaces([sw1, sw2], step)
+    disable_switches_interfaces([sw1, sw2], sw_real_ports, step)
 
     # Enable switches interfaces
-    enable_switches_interfaces([sw1, sw2], step)
+    enable_switches_interfaces([sw1, sw2], sw_real_ports, step)
 
     # Validate workstations can communicate
     validate_connectivity([hs1, hs2], True, step, time_steps=2, timeout=4)

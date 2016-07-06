@@ -25,14 +25,14 @@
 #
 ##########################################################################
 
-import time
-from lacp_lib import create_lag
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_turn_on_interfaces
-from lacp_lib import assign_ip_to_lag
-from lacp_lib import check_connectivity_between_switches
-import pytest
+from lacp_lib import(
+    assign_ip_to_lag,
+    associate_interface_to_lag,
+    check_connectivity_between_switches,
+    create_lag,
+    turn_on_interface,
+    verify_turn_on_interfaces
+)
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -50,8 +50,7 @@ sw1:3 -- sw2:3
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
-def test_l3_static_lag_ping_case_1(topology):
+def test_l3_static_lag_ping_case_1(topology, step):
     """
     Case 1:
         Verify a simple ping works properly between 2 switches configured
@@ -76,7 +75,7 @@ def test_l3_static_lag_ping_case_1(topology):
     p22 = sw2.ports['2']
     p23 = sw2.ports['3']
 
-    print("Turning on all interfaces used in this test")
+    step("Turning on all interfaces used in this test")
     ports_sw1 = [p11, p12, p13]
     for port in ports_sw1:
         turn_on_interface(sw1, port)
@@ -85,11 +84,11 @@ def test_l3_static_lag_ping_case_1(topology):
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
-    print("Create LAG in both switches")
+    step("Create LAG in both switches")
     create_lag(sw1, sw1_lag_id, 'off')
     create_lag(sw2, sw2_lag_id, 'off')
 
-    print("Associate interfaces [1,2, 3] to lag in both switches")
+    step("Associate interfaces [1,2, 3] to lag in both switches")
     associate_interface_to_lag(sw1, p11, sw1_lag_id)
     associate_interface_to_lag(sw1, p12, sw1_lag_id)
     associate_interface_to_lag(sw1, p13, sw1_lag_id)
@@ -97,17 +96,14 @@ def test_l3_static_lag_ping_case_1(topology):
     associate_interface_to_lag(sw2, p22, sw2_lag_id)
     associate_interface_to_lag(sw2, p23, sw2_lag_id)
 
-    print("Waiting some time for the interfaces to be up")
-    time.sleep(40)
+    step("#### Validate interfaces are turn on ####")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
-    print("Verify all interface are up")
-    validate_turn_on_interfaces(sw1, ports_sw1)
-    validate_turn_on_interfaces(sw2, ports_sw2)
-
-    print("Assign IP to LAGs")
+    step("Assign IP to LAGs")
     assign_ip_to_lag(sw1, sw1_lag_id, sw1_lag_ip_address, ip_address_mask)
     assign_ip_to_lag(sw2, sw2_lag_id, sw2_lag_ip_address, ip_address_mask)
 
-    print("Ping switch2 from switch1 and viceversa")
+    step("Ping switch2 from switch1 and viceversa")
     check_connectivity_between_switches(sw1, sw1_lag_ip_address, sw2,
                                         sw2_lag_ip_address, number_pings, True)
