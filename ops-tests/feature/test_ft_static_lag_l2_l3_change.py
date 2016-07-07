@@ -84,6 +84,7 @@ sw2:1 -- hs2:1
 """
 
 
+@mark.gate
 @mark.platform_incompatible(['docker'])
 def test_l2_l3_switch_case_1(topology, step):
     """

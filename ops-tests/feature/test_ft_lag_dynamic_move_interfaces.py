@@ -33,7 +33,7 @@
 #
 ###############################################################################
 
-import pytest
+from pytest import mark
 from lacp_lib import (
     associate_interface_to_lag,
     create_lag,
@@ -52,7 +52,8 @@ TOPOLOGY = """
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
+@mark.gate
+@mark.skipif(True, reason="Skipping due to instability")
 def test_dynamic_move_interfaces(topology, step):
     sw1 = topology.get('sw1')
     assert sw1 is not None

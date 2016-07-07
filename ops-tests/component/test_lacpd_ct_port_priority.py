@@ -21,7 +21,7 @@
 # Topology:    2 switch (DUT running OpenSwitch)
 #
 ##########################################################################
-import pytest
+from pytest import mark, fixture
 from lib_test import (
     set_port_parameter,
     sw_clear_user_config,
@@ -99,7 +99,7 @@ def lacpd_switch_pre_setup(sw):
                                        'supported_speeds="1000"'))
 
 
-@pytest.fixture(scope="module")
+@fixture(scope="module")
 def main_setup(request, topology):
     sw1 = topology.get('sw1')
     sw2 = topology.get('sw2')
@@ -113,7 +113,7 @@ def main_setup(request, topology):
 
 
 # Simulate valid pluggable modules in all the modules.
-@pytest.fixture()
+@fixture()
 def setup(request, topology):
     sw1 = topology.get('sw1')
     sw2 = topology.get('sw2')
@@ -147,7 +147,8 @@ def setup(request, topology):
     request.addfinalizer(cleanup)
 
 
-@pytest.mark.skipif(True, reason="Skipping due to constant failures")
+@mark.gate
+@mark.skipif(True, reason="Skipping due to constant failures")
 def test_lacpd_lag_dynamic_port_priority(topology, step, main_setup, setup):
     """
     Case 1:
@@ -236,7 +237,8 @@ def test_lacpd_lag_dynamic_port_priority(topology, step, main_setup, setup):
     sw2("ovs-vsctl del-port lag2", shell='bash')
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
+@mark.gate
+@mark.skipif(True, reason="Skipping due to instability")
 def test_lacpd_lag_dynamic_partner_priority(topology, step, main_setup, setup):
     """
     Case 2:

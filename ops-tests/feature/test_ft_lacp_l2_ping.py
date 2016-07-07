@@ -90,6 +90,7 @@ sw2:3 -- hs2:1
 """
 
 
+@mark.gate
 @mark.platform_incompatible(['docker'])
 def test_l2_dynamic_lag_ping_case_1(topology, step):
     """

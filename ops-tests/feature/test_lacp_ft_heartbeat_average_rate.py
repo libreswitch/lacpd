@@ -18,7 +18,7 @@
 """OpenSwitch Test for LACPD heartbeat configurations."""
 
 from time import sleep
-from pytest import mark
+from pytest import mark, fixture
 from lacp_lib import (
     associate_interface_to_lag,
     associate_vlan_to_l2_interface,
@@ -36,7 +36,6 @@ from lacp_lib import (
     verify_turn_on_interfaces
 )
 
-import pytest
 
 TOPOLOGY = """
 # +-------+                                  +-------+
@@ -111,7 +110,7 @@ def get_average_lacpd_sent_pdus(sw, lag_id):
     return sent_pdus_sum/count
 
 
-@pytest.fixture(scope='module')
+@fixture(scope='module')
 def main_setup(request, topology):
     """Test Case common configuration."""
     sw1 = topology.get('sw1')
@@ -196,6 +195,7 @@ def main_setup(request, topology):
     verify_connectivity_between_hosts(hs1, hs1_addr, hs2, hs2_addr, True)
 
 
+@mark.gate
 @mark.platform_incompatible(['docker'])
 def test_lacpd_heartbeat(topology, main_setup, step):
     """Test LACP heartbeat average rate (slow/fast).

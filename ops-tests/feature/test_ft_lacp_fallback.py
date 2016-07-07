@@ -133,6 +133,7 @@ def main_setup(request, topology):
     verify_actor_state('asfncd', [sw2], ports_sw2)
 
 
+@mark.gate
 @mark.platform_incompatible(['docker'])
 def test_lag_fallback(topology, main_setup, step):
     """Test Case: LAG fallback."""

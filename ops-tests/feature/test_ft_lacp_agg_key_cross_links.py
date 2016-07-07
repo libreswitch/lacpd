@@ -61,6 +61,7 @@ sw1:7 -- sw2:5
 """
 
 
+@mark.gate
 @mark.platform_incompatible(['ostl'])
 def test_lacp_agg_key_cross_links(topology, step):
     """

@@ -555,6 +555,7 @@ def step_verify_lag_statistics(sw_list, hs_list, sw_real_ports, step):
 
 
 @mark.platform_incompatible(['docker'])
+@mark.gate
 def test_ft_lacp_statistics(topology, step):
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
