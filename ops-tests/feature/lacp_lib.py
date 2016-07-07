@@ -961,6 +961,20 @@ def verify_state_sync_lag(sw, port_list, state, lacp_mode):
     check_lag(sw, port_list, state, lacp_mode)
 
 
+def verify_state_out_of_sync_lag(sw, port_list, state):
+    @retry_wrapper(
+        'Ensure LAG is not synchronized',
+        'LAG not yet ready',
+        5,
+        80)
+    def check_lag(sw, port_list, state):
+        for interface in port_list:
+            port = find_device_label(sw, interface)
+            map_lacp = sw.libs.vtysh.show_lacp_interface(port)
+            validate_lag_state_out_of_sync(map_lacp, state)
+    check_lag(sw, port_list, state)
+
+
 def verify_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=True):
     @retry_wrapper(
         'Ensure connectivity between hosts',
