@@ -52,7 +52,12 @@ def create_lag_passive(sw, lag_id):
         ctx.lacp_mode_passive()
 
 
-def lag_no_lacp_mode_active(sw, lag_id):
+def lag_no_passive(sw, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_lacp_mode_passive()
+
+
+def lag_no_active(sw, lag_id):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         ctx.no_lacp_mode_active()
 
@@ -120,15 +125,43 @@ def disassociate_interface_to_lag(sw, interface, lag_id):
         ctx.no_lag(lag_id)
 
 
-def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access'):
+def associate_vlan_to_lag(sw, vlan_id, lag_id, vlan_type='access',
+                          no_routing=True):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
-        ctx.no_routing()
+        if no_routing:
+            ctx.no_routing()
         if vlan_type == 'access':
             ctx.vlan_access(vlan_id)
     output = sw.libs.vtysh.show_vlan(vlan_id)
     lag_name = 'lag' + lag_id
     assert lag_name in output[vlan_id]['ports'],\
         "Vlan was not properly associated to lag"
+
+
+def tagged_vlan_to_lag(sw, vlan_id, lag_id, no_routing=True):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        if no_routing:
+            ctx.no_routing()
+        for vlan in vlan_id:
+            ctx.vlan_trunk_allowed(vlan)
+
+    for vlan in vlan_id:
+        output = sw.libs.vtysh.show_vlan(vlan)
+        lag_name = 'lag' + lag_id
+        assert lag_name in output[vlan]['ports'],\
+            "Vlan was not properly tagged to lag"
+
+
+def no_tagged_vlan_to_tag(sw, vlan_id, lag_id):
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        for vlan in vlan_id:
+            ctx.no_vlan_trunk_allowed(vlan)
+
+    for vlan in vlan_id:
+        output = sw.libs.vtysh.show_vlan(vlan)
+        lag_name = 'lag' + lag_id
+        assert lag_name not in output[vlan]['ports'], \
+            "Vlan was not properly untagged to lag"
 
 
 def turn_on_interface(sw, interface):
@@ -338,10 +371,6 @@ def verify_actor_state(state, sws, intfs, any=False):
                                        intfs,
                                        validate_lag_actor_state,
                                        flags)
-
-
-def verify_actor_state_afoex(sws, intfs):
-    sw_wait_until_all_ready(sws, intfs, validate_lag_state_afoex)
 
 
 def validate_lag_state_default_neighbor(map_lacp, state):
@@ -876,7 +905,8 @@ def retry_wrapper(
     soft_err_msg,
     time_steps,
     timeout,
-    err_condition=None):
+    err_condition=None
+):
     if err_condition is None:
         err_condition = AssertionError
 

@@ -24,12 +24,10 @@
 # Topology:    2 switches connected by 2 interfaces
 #
 ##########################################################################
-import pytest
-from pytest import mark
 from lacp_lib import (
     associate_interface_to_lag,
     create_lag,
-    lag_no_lacp_mode_active,
+    lag_no_active,
     turn_on_interface,
     verify_turn_on_interfaces
 )
@@ -59,7 +57,6 @@ sw1:2 -- sw2:2
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_show_lacp_interface_case_1(topology, step):
     """
     Case 1:
@@ -94,8 +91,8 @@ def test_show_lacp_interface_case_1(topology, step):
     verify_turn_on_interfaces(sw1, ports_sw1)
     verify_turn_on_interfaces(sw2, ports_sw2)
 
-    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
-    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface('1')['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface('1')['mac_address']
     assert mac_addr_sw1 != mac_addr_sw2, \
         'Mac address of interfaces in sw1 is equal to mac address of ' + \
         'interfaces in sw2. This is a test framework problem. Dynamic ' + \
@@ -125,8 +122,8 @@ def test_show_lacp_interface_case_1(topology, step):
         "Interface 2 is not in LAG 20"
 
     step("Set lacp mode to 'off' on both switches")
-    lag_no_lacp_mode_active(sw1, lag_id)
-    lag_no_lacp_mode_active(sw2, lag_id)
+    lag_no_active(sw1, lag_id)
+    lag_no_active(sw2, lag_id)
 
     step("Verify show lacp interfaces")
     """
@@ -151,5 +148,5 @@ def test_show_lacp_interface_case_1(topology, step):
             assert output[actor_partner][intf]['system_priority'] == '',\
                 "Key system_priority should be empty"
             for flag in output[actor_partner][intf]['state']:
-                assert output[actor_partner][intf]['state'][flag] == False,\
+                assert output[actor_partner][intf]['state'][flag] is False,\
                     "Actor state shoud be false"
