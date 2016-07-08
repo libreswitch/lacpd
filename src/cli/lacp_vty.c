@@ -1969,6 +1969,13 @@ static int lag_routing(const char *port_name)
         return CMD_SUCCESS;
     }
 
+    //Clean vlan configuration
+    ovsrec_port_set_tag(port_row, NULL, 0);
+    ovsrec_port_set_trunks(port_row, NULL, 0);
+    ovsrec_port_set_vlan_mode(port_row, NULL);
+    ovsrec_port_set_vlan_tag(port_row, NULL);
+    ovsrec_port_set_vlan_trunks(port_row, NULL, 0);
+
     default_bridge_row = ovsrec_bridge_first(idl);
     ports = xmalloc(sizeof *default_bridge_row->ports *
         (default_bridge_row->n_ports - 1));
@@ -1978,9 +1985,10 @@ static int lag_routing(const char *port_name)
         }
     }
     ovsrec_bridge_set_ports(default_bridge_row, ports, n);
+    free(ports);
 
     default_vrf_row = get_default_vrf(idl);
-    xrealloc(ports, sizeof *default_vrf_row->ports *
+    ports = xmalloc(sizeof *default_vrf_row->ports *
         (default_vrf_row->n_ports + 1));
     for (i = 0; i < default_vrf_row->n_ports; i++) {
         ports[i] = default_vrf_row->ports[i];
