@@ -114,8 +114,9 @@ def test_lag_shutdown_by_default(topology, step):
     verify_turn_on_interfaces(sw1, ports_sw1)
     verify_turn_on_interfaces(sw2, ports_sw2)
 
-    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
-    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    # Changing hardcoded interfaces for dynamic assignation
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface('1')['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface('1')['mac_address']
     assert mac_addr_sw1 != mac_addr_sw2,\
         'Mac address of interfaces in sw1 is equal to mac address of ' +\
         'interfaces in sw2. This is a test framework problem. Dynamic ' +\
