@@ -280,16 +280,39 @@ register_mcast_addr(port_handle_t lport_handle)
         return;
     }
 
-    /* Create raw socket on interface to receive LACPDUs. */
-    if_idx = if_nametoindex(idp->name);
+    /* TODO: This is a temporal solution for a race condition between the initialization of the interfaces
+     * and LACP daemon trying to get the index of the member interfaces.
+     * The real solution should check if the interfaces are completely initialized before starting LACP daemon.
+     * This can be done by checking some value in OVSDB which indicates when an interface is ready to be used by the different daemons. */
+
+    /* Max number of retries to see if function if_nametoindex returns something
+     * different than zero, which means the interface has been initialized. */
+    const int MAX_NUMBER_RETRIES_NAMETOINDEX = 10;
+
+    /* Number of microseconds to wait before calling if_nametoindex again. */
+    const int SLEEP_TIME_NAMETOINDEX = 10000;
+
+    int number_retries = 0;
+    do {
+        if_idx = if_nametoindex(idp->name);
+        if (if_idx != 0) {
+            break;
+        }
+        usleep(SLEEP_TIME_NAMETOINDEX);
+        number_retries++;
+    }
+    while (number_retries < MAX_NUMBER_RETRIES_NAMETOINDEX);
+
     if (if_idx == 0) {
-        VLOG_ERR("Error getting ifindex for port %d (if_name=%s)!",
-                 port, idp->name);
+        VLOG_ERR("FATAL ERROR when getting ifindex for port %d (if_name=%s)!. "
+                  "This means that the interface was not initialized and LACP daemon cannot send LACPDUs through this interface",
+                  port, idp->name);
         return;
     }
 
     VLOG_DBG("%s: port %s, ifindex=%d\n", __FUNCTION__, idp->name, if_idx);
 
+    /* Create raw socket on interface to receive LACPDUs. */
     if ((sockfd = socket(PF_PACKET, SOCK_RAW, 0)) < 0) {
         rc = errno;
         VLOG_ERR("Failed to open datagram socket for %s, rc=%s",
