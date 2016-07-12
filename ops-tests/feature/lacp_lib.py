@@ -110,8 +110,7 @@ def associate_interface_to_lag(sw, interface, lag_id):
 
 
 def remove_interface_from_lag(sw, interface, lag_id):
-    port = find_device_label(sw, interface)
-    with sw.libs.vtysh.ConfigInterface(port) as ctx:
+    with sw.libs.vtysh.ConfigInterface(interface) as ctx:
         ctx.no_lag(lag_id)
     lag_name = "lag" + lag_id
     output = sw.libs.vtysh.show_lacp_aggregates(lag_name)
@@ -587,7 +586,7 @@ def check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
         assert ping['transmitted'] == ping['received'] == ping_num,\
             'Ping between ' + s1_ip + ' and ' + s2_ip + ' failed'
     else:
-        assert len(ping.keys()) == 0 or ping['transmitted'] == None, \
+        assert len(ping.keys()) == 0 or ping['transmitted'] is None, \
             'Ping between ' + s1_ip + ' and ' + s2_ip + ' success'
 
     ping = s2.libs.vtysh.ping_repetitions(s1_ip, ping_num)
@@ -595,7 +594,7 @@ def check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
         assert ping['transmitted'] == ping['received'] == ping_num,\
             'Ping between ' + s2_ip + ' and ' + s1_ip + ' failed'
     else:
-        assert len(ping.keys()) == 0 or ping['transmitted'] == None,\
+        assert len(ping.keys()) == 0 or ping['transmitted'] is None,\
             'Ping between ' + s2_ip + ' and ' + s1_ip + ' success'
 
 

@@ -87,6 +87,9 @@ sw2:2 -- hs2:1
 sw3:4 -- hs3:1
 """
 
+# Ports
+port_labels = ['1', '2', '3', '4']
+
 
 def test_lacp_aggregation_key_with_hosts(topology, step):
     """
@@ -121,30 +124,34 @@ def test_lacp_aggregation_key_with_hosts(topology, step):
     hs3_ip_2 = '10.0.20.2'
     mask = '/24'
 
-    p11 = sw1.ports['1']
-    p12 = sw1.ports['2']
-    p13h = sw1.ports['3']
-    p21 = sw2.ports['1']
-    p22h = sw2.ports['2']
-    p31 = sw3.ports['1']
-    p32 = sw3.ports['2']
-    p33 = sw3.ports['3']
-    p34h = sw3.ports['4']
+    ports_sw1 = list()
+    ports_sw2 = list()
+    ports_sw3 = list()
 
-    step("Turning on all interfaces used in this test")
-    ports_sw1 = [p11, p12, p13h]
+    print("Mapping interfaces")
+    for port in port_labels[0:3]:
+        ports_sw1.append(sw1.ports[port])
+    for port in port_labels[0:2]:
+        ports_sw2.append(sw2.ports[port])
+    for port in port_labels:
+        ports_sw3.append(sw3.ports[port])
+
+    p13h = ports_sw1[2]
+    p22h = ports_sw2[1]
+    p32 = ports_sw3[1]
+    p34h = ports_sw3[3]
+
+    print("Turning on all interfaces used in this test")
     for port in ports_sw1:
         turn_on_interface(sw1, port)
 
-    ports_sw2 = [p21, p22h]
     for port in ports_sw2:
         turn_on_interface(sw2, port)
 
-    ports_sw3 = [p31, p32, p33, p34h]
     for port in ports_sw3:
         turn_on_interface(sw3, port)
 
-    step("#### Validate interfaces are turn on ####")
+    print("Verify all interface are up")
     verify_turn_on_interfaces(sw1, ports_sw1)
     verify_turn_on_interfaces(sw2, ports_sw2)
     verify_turn_on_interfaces(sw3, ports_sw3)
@@ -215,13 +222,13 @@ def test_lacp_aggregation_key_with_hosts(topology, step):
                                       hs3, hs3_ip_2)
 
     step("Setting up priorities")
-    with sw1.libs.vtysh.ConfigInterface('1') as ctx:
+    with sw1.libs.vtysh.ConfigInterface(ports_sw1[0]) as ctx:
         ctx.lacp_port_priority(1)
-    with sw1.libs.vtysh.ConfigInterface('2') as ctx:
+    with sw1.libs.vtysh.ConfigInterface(ports_sw1[1]) as ctx:
         ctx.lacp_port_priority(10)
-    with sw3.libs.vtysh.ConfigInterface('1') as ctx:
+    with sw3.libs.vtysh.ConfigInterface(ports_sw3[0]) as ctx:
         ctx.lacp_port_priority(1)
-    with sw3.libs.vtysh.ConfigInterface('2') as ctx:
+    with sw3.libs.vtysh.ConfigInterface(ports_sw3[1]) as ctx:
         ctx.lacp_port_priority(10)
 
     step("Changing interface 2 from Switch 3 to LAG with Switch 2")
@@ -231,13 +238,13 @@ def test_lacp_aggregation_key_with_hosts(topology, step):
     # interface is linked with Switch 1
 
     # Only the link 2 should be get out of sync
-    verify_state_out_of_sync_lag(sw1, ['2'], LOCAL_STATE)
-    verify_state_out_of_sync_lag(sw3, ['2'], LOCAL_STATE)
+    verify_state_out_of_sync_lag(sw1, [ports_sw1[1]], LOCAL_STATE)
+    verify_state_out_of_sync_lag(sw3, [ports_sw3[1]], LOCAL_STATE)
 
-    verify_state_sync_lag(sw1, ['1'], LOCAL_STATE, 'active')
-    verify_state_sync_lag(sw2, ['1'], LOCAL_STATE, 'active')
-    verify_state_sync_lag(sw3, ['1'], LOCAL_STATE, 'active')
-    verify_state_sync_lag(sw3, ['3'], LOCAL_STATE, 'active')
+    verify_state_sync_lag(sw1, [ports_sw1[0]], LOCAL_STATE, 'active')
+    verify_state_sync_lag(sw2, [ports_sw2[0]], LOCAL_STATE, 'active')
+    verify_state_sync_lag(sw3, [ports_sw3[0]], LOCAL_STATE, 'active')
+    verify_state_sync_lag(sw3, [ports_sw3[2]], LOCAL_STATE, 'active')
 
     step("Check connectivity between Host 2 and 3 again")
     verify_connectivity_between_hosts(hs2, hs2_ip,

@@ -19,10 +19,8 @@
 # Description: Tests that a configured dynamic Link Aggregation can summarize
 #              accurate individual interfaces statistics as they change
 #
-# Author:      Jose Hernandez
-#
 # Topology:  |Host| ----- |Switch| ---------------------- |Switch| ----- |Host|
-#                                   (Dynamic LAG - 3 links)
+#                                   (Dynamic LAG - 2 links)
 #
 # Success Criteria:  PASS -> Statistics are accurate and represent the sum of
 #                            each individual member
@@ -32,31 +30,34 @@
 #
 ###############################################################################
 
-from pytest import mark
 from time import sleep
-from lacp_lib import create_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import verify_lag_config
-from lacp_lib import create_vlan
-from lacp_lib import verify_vlan_full_state
-from lacp_lib import check_connectivity_between_hosts
-from lacp_lib import associate_vlan_to_l2_interface
-from lacp_lib import associate_vlan_to_lag
-from lacp_lib import verify_lag_interface_key
-from lacp_lib import verify_lag_interface_priority
-from lacp_lib import verify_lag_interface_id
-from lacp_lib import verify_lag_interface_system_id
-from lacp_lib import verify_lag_interface_system_priority
-from lacp_lib import verify_lag_interface_lag_id
-from lacp_lib import validate_lag_state_sync
-from lacp_lib import LOCAL_STATE
-from lacp_lib import REMOTE_STATE
-from lacp_lib import retry_wrapper
-from lacp_lib import compare_lag_interface_basic_settings
-from lacp_lib import verify_turn_on_interfaces
-from re import search
-from re import DOTALL
+from lacp_lib import (
+    associate_interface_to_lag,
+    associate_vlan_to_l2_interface,
+    associate_vlan_to_lag,
+    check_connectivity_between_hosts,
+    compare_lag_interface_basic_settings,
+    create_lag,
+    create_vlan,
+    LOCAL_STATE,
+    REMOTE_STATE,
+    retry_wrapper,
+    turn_on_interface,
+    validate_lag_state_sync,
+    verify_lag_config,
+    verify_lag_interface_id,
+    verify_lag_interface_key,
+    verify_lag_interface_lag_id,
+    verify_lag_interface_priority,
+    verify_lag_interface_system_id,
+    verify_lag_interface_system_priority,
+    verify_turn_on_interfaces,
+    verify_vlan_full_state
+)
+from re import (
+    DOTALL,
+    search
+)
 
 TOPOLOGY = """
 #            +-----------------+
@@ -72,9 +73,9 @@ TOPOLOGY = """
 #     |            Switch 1           |
 #     |                               |
 #     +-------------------------------+
-#          |         |        |
-#          |         |        |
-#          |         |        |
+#                |         |
+#                |         |
+#                |         |
 #     +-------------------------------+
 #     |                               |
 #     |                               |
@@ -96,16 +97,14 @@ TOPOLOGY = """
 [type=host name="Host 2" image="openswitch/ubuntutest:latest"] hs2
 
 # Links
-
-sw1:1 -- hs1:1
-sw2:1 -- hs2:1
-sw1:2 -- sw2:2
-sw1:3 -- sw2:3
-sw1:4 -- sw2:4
+sw1:3 -- hs1:1
+sw2:3 -- hs2:1
+[rate="Ethernet-1Gb"] sw1:1 -- sw2:1
+[rate="Ethernet-1Gb"] sw1:2 -- sw2:2
 """
 
 # Global variables
-SW_LBL_PORTS = ['1', '2', '3', '4']
+SW_LBL_PORTS = ['1', '2', '3']
 LAG_ID = '1'
 LAG_VLAN = 900
 NETWORK = '10.90.0.'
@@ -182,29 +181,33 @@ def assert_verify_iperf_traffic_received_mbytes(
     compare_values(float(last_val[0]), expected_last_val, error)
 
 
-def compare_switches_counters(sw_list, stats):
+def compare_switches_counters(sw_list, stats, sw_real_ports):
     # Verify switches counters match
-    for port in SW_LBL_PORTS:
+    rx_tx = ['rx', 'tx']
+    expected_traffic = DATAGRAMS_PER_SEC * IPERF_TIME
+    traffic_threshold = 0.15 * expected_traffic
+    for port in sw_real_ports[sw_list[0]][0:2]:
         print('Compare port {} between switches'.format(port))
-        print('rx from sw1 vs tx from sw2')
-        compare_values(
-            int(stats[sw_list[0]][port]['{}_packets'.format('rx')]),
-            int(stats[sw_list[1]][port]['{}_packets'.format('tx')])
-        )
-        print('tx from sw1 vs rx from sw2')
-        compare_values(
-            int(stats[sw_list[0]][port]['{}_packets'.format('tx')]),
-            int(stats[sw_list[1]][port]['{}_packets'.format('rx')])
-        )
+        for rx1, tx1 in zip(rx_tx, reversed(rx_tx)):
+            print('{rx1} from sw1 vs {tx1} from sw2'.format(**locals()))
+            error = ERROR_TOLERANCE
+            if int(stats[sw_list[0]][port]['{}_packets'.format(rx1)]) < \
+               traffic_threshold:
+                error = 0.10
+            compare_values(
+                int(stats[sw_list[0]][port]['{}_packets'.format(rx1)]),
+                int(stats[sw_list[1]][port]['{}_packets'.format(tx1)]),
+                error=error
+            )
 
 
-def assert_verify_traffic_ranges(sw_list, stats):
+def assert_verify_traffic_ranges(sw_list, stats, sw_real_ports):
     print('Verify interface counters ranges are as expected')
     tx_sw1_val = int(
-        stats[sw_list[0]][SW_LBL_PORTS[0]]['tx_packets']
+        stats[sw_list[0]][sw_real_ports[sw_list[0]][0]]['tx_packets']
     )
     tx_sw2_val = int(
-        stats[sw_list[1]][SW_LBL_PORTS[0]]['tx_packets']
+        stats[sw_list[1]][sw_real_ports[sw_list[0]][0]]['tx_packets']
     )
     expected_traffic = DATAGRAMS_PER_SEC * IPERF_TIME
     traffic_threshold = 0.15 * expected_traffic
@@ -223,18 +226,18 @@ def assert_verify_traffic_ranges(sw_list, stats):
     'Information provided by counters is not yet reliable',
     5,
     SW_COUNTERS_DELAY)
-def assert_get_and_compare_sw_stats(sw_list, sw_stats):
+def assert_get_and_compare_sw_stats(sw_list, sw_stats, sw_real_ports):
     print('Get statistics from switches')
     for sw in sw_list:
         sw_stats[sw] = {}
-        for port in SW_LBL_PORTS:
+        for port in sw_real_ports[sw]:
             sw_stats[sw][port] = sw.libs.vtysh.show_interface(port)
         sw_stats[sw]['lag{}'.format(LAG_ID)] =\
             sw.libs.vtysh.show_interface('lag{}'.format(LAG_ID))
     print('Verify obtained information is consistent')
-    print('Compare counters between siwtches')
-    compare_switches_counters(sw_list, sw_stats)
-    assert_verify_traffic_ranges(sw_list, sw_stats)
+    print('Compare counters between switches')
+    compare_switches_counters(sw_list, sw_stats, sw_real_ports)
+    assert_verify_traffic_ranges(sw_list, sw_stats, sw_real_ports)
 
 
 def compare_values(value1, value2, error=ERROR_TOLERANCE):
@@ -269,7 +272,7 @@ def compare_lag_to_switches_counters(sw_stats, lag_stats, ports):
             total += int(sw_stats[port][param])
         print('Verifying LAG interface value for {}'.format(param))
         if param != 'speed':
-            compare_values(int(lag_stats[param]), total)
+            compare_values(int(lag_stats[param]), total, error=0.10)
         else:
             compare_values(int(lag_stats[param]), total, error=0)
     for port in ports:
@@ -284,14 +287,15 @@ def verify_lacp_state(
     sw1,
     sw2,
     sw1_lacp_mode='active',
-    sw2_lacp_mode='active'
+    sw2_lacp_mode='active',
+    ports=list()
 ):
     lacp_def_value = '1'
     lacp_def_priority = '65534'
     sw1_lacp_config = sw1.libs.vtysh.show_lacp_configuration()
     sw2_lacp_config = sw2.libs.vtysh.show_lacp_configuration()
     print('Verify LACP state on LAG members')
-    for port in SW_LBL_PORTS[1:]:
+    for port in ports[sw1][0:2]:
         sw1_lacp_state = sw1.libs.vtysh.show_lacp_interface(port)
         sw2_lacp_state = sw2.libs.vtysh.show_lacp_interface(port)
         sw_lacp_states = [sw1_lacp_state, sw2_lacp_state]
@@ -357,38 +361,54 @@ def verify_lacp_state(
 
 
 def step_enable_switches_interfaces(sw_list, step):
-    step('Enable switches interfaces')
-    for sw in sw_list:
-        for port in SW_LBL_PORTS:
-            turn_on_interface(sw, port)
-    # Verify interfaces are indeed on
-    for sw in sw_list:
-        verify_turn_on_interfaces(sw, SW_LBL_PORTS)
+    sw1 = sw_list[0]
+    sw2 = sw_list[1]
+    ports_sw1 = list()
+    ports_sw2 = list()
+    step("### Mapping interfaces ###")
+    for port in SW_LBL_PORTS:
+        ports_sw1.append(sw1.ports[port])
+
+    for port in SW_LBL_PORTS:
+        ports_sw2.append(sw2.ports[port])
+
+    step("#### Turning on interfaces in sw1 ###")
+    for port in ports_sw1:
+        turn_on_interface(sw1, port)
+
+    step("#### Turning on interfaces in sw2 ###")
+    for port in ports_sw2:
+        turn_on_interface(sw2, port)
+
+    step("#### Validate interfaces are turn on ####")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
 
 
 def step_configure_lags(sw_list, sw_real_ports, step):
     step('Create LAGs')
     for sw, mode in zip(sw_list, ['active', 'passive']):
         create_lag(sw, LAG_ID, mode)
-        for port in sw_real_ports[sw][1:]:
+        for port in sw_real_ports[sw][0:2]:
             associate_interface_to_lag(sw, port, LAG_ID)
         verify_lag_config(
             sw,
             LAG_ID,
-            sw_real_ports[sw][1:],
+            sw_real_ports[sw][0:2],
             mode=mode
         )
     check_func = retry_wrapper(
         'Verify LACP status on both devices',
         'Configuration not yet applied',
-        30,
-        60
+        10,
+        5
     )(verify_lacp_state)
     check_func(
         sw_list[0],
         sw_list[1],
         sw1_lacp_mode='active',
-        sw2_lacp_mode='passive'
+        sw2_lacp_mode='passive',
+        ports=sw_real_ports
     )
 
 
@@ -404,13 +424,13 @@ def step_configure_vlans(sw_list, sw_real_ports, step):
         associate_vlan_to_l2_interface(
             sw,
             str(LAG_VLAN),
-            sw_real_ports[sw][0]
+            sw_real_ports[sw][2]
         )
         # Verify VLAN configuration was successfully applied
         verify_vlan_full_state(
             sw,
             LAG_VLAN, interfaces=[
-                sw_real_ports[sw][0],
+                sw_real_ports[sw][2],
                 'lag{}'.format(LAG_ID)
             ]
         )
@@ -462,7 +482,7 @@ def step_verify_lag_statistics(sw_list, hs_list, sw_real_ports, step):
     print('Collect all switch ports statistics')
     for sw, mode in zip(sw_list, modes):
         sw_stats_before[sw] = {}
-        for port in SW_LBL_PORTS:
+        for port in sw_real_ports[sw]:
             sw_stats_before[sw][port] = sw.libs.vtysh.show_interface(port)
         sw_stats_before[sw]['lag{}'.format(LAG_ID)] =\
             sw.libs.vtysh.show_interface('lag{}'.format(LAG_ID))
@@ -470,14 +490,14 @@ def step_verify_lag_statistics(sw_list, hs_list, sw_real_ports, step):
         compare_lag_interface_basic_settings(
             sw_stats_before[sw]['lag{}'.format(LAG_ID)],
             LAG_ID,
-            sw_real_ports[sw][1:],
+            sw_real_ports[sw][0:2],
             mode=mode
         )
         print('Compare LAG counters vs switches interfaces')
         compare_lag_to_switches_counters(
             sw_stats_before[sw],
             sw_stats_before[sw]['lag{}'.format(LAG_ID)],
-            SW_LBL_PORTS[1:]
+            sw_real_ports[sw][0:2]
         )
     print('Start iperf servers')
     for i, hs in enumerate(hs_list):
@@ -515,25 +535,24 @@ def step_verify_lag_statistics(sw_list, hs_list, sw_real_ports, step):
             IPERF_TIME
         )
 
-    assert_get_and_compare_sw_stats(sw_list, sw_stats_after)
+    assert_get_and_compare_sw_stats(sw_list, sw_stats_after, sw_real_ports)
     print('Compare switch counters individually')
     for sw, mode in zip(sw_list, modes):
         print('Verify LAG statistic interface basic settings')
         compare_lag_interface_basic_settings(
             sw_stats_after[sw]['lag{}'.format(LAG_ID)],
             LAG_ID,
-            sw_real_ports[sw][1:],
+            sw_real_ports[sw][0:2],
             mode=mode
         )
         print('Compare LAG counters vs switches interfaces')
         compare_lag_to_switches_counters(
             sw_stats_after[sw],
             sw_stats_after[sw]['lag{}'.format(LAG_ID)],
-            SW_LBL_PORTS[1:]
+            sw_real_ports[sw][0:2]
         )
 
 
-@mark.platform_incompatible(['docker'])
 def test_ft_lacp_statistics(topology, step):
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
