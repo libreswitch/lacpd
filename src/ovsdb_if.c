@@ -2432,7 +2432,13 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
 
     portp = idp->port_datap;
 
+    if (!portp) {
+        VLOG_WARN("Interface doesn't have any port");
+        goto end;
+    }
+
     if (portp->lacp_mode == PORT_LACP_OFF) {
+        VLOG_WARN("Interface lacp mode is off");
         goto end;
     }
 
@@ -2507,7 +2513,8 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
     if (idp->partner.system_id == NULL ||
         strcmp(idp->partner.system_id, system_id) != 0) {
         if (strncmp(system_id, NO_SYSTEM_ID, strlen(NO_SYSTEM_ID))) {
-            if (log_event("LACP_PARTNER_DETECTED",
+            if (portp &&
+                log_event("LACP_PARTNER_DETECTED",
                           EV_KV("intf_id", "%s", idp->name),
                           EV_KV("lag_id", "%s",
                                 portp->name +
@@ -2589,11 +2596,12 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
     }
     ovsdb_idl_txn_destroy(txn);
 
-    if (plpinfo->lag != NULL) {
-        portp->lag_member_speed = lport_type_to_speed(ntohs(plpinfo->lag->port_type));
+    if (portp) {
+        if (plpinfo->lag != NULL) {
+            portp->lag_member_speed = lport_type_to_speed(ntohs(plpinfo->lag->port_type));
+        }
+        db_update_port_status(portp);
     }
-
-    db_update_port_status(portp);
 
 end:
     OVSDB_UNLOCK;
