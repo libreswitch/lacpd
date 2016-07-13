@@ -111,6 +111,7 @@ LAG_VLAN = 900
 NETWORK = '10.90.0.'
 NETMASK = '24'
 NUMBER_PINGS = 5
+HOST_INTERFACE = '1'
 
 
 def verify_lacp_state(
@@ -258,11 +259,12 @@ def configure_lags(sw_list, sw_real_ports, step):
             sw_real_ports[sw][0:2],
             heartbeat_rate='fast'
         )
+    # Increase max time to compensate for framework delay
     check_func = retry_wrapper(
         'Verify LACP status on both devices',
         'Configuration not yet applied',
         2,
-        4
+        6
     )(verify_lacp_state)
     check_func(
         sw_list[0],
@@ -301,7 +303,9 @@ def configure_workstations(hs_list, ports, step):
     step('Configure workstations')
     for hs_num, hs in enumerate(hs_list):
         hs.libs.ip.interface(
-            ports[0],
+            # callable function doesnt receive ports from the switch
+            # it receives the host interface
+            HOST_INTERFACE,
             addr='{}{}/{}'.format(NETWORK, hs_num + 1, NETMASK),
             up=True
         )

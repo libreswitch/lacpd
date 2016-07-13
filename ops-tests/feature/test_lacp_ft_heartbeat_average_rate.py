@@ -190,6 +190,8 @@ def main_setup(request, topology):
         # Interface 4 is connected to one host
         associate_vlan_to_l2_interface(switch, test_vlan, switch.ports['3'])
 
+    # Adding small delay to compensate for framework delay
+    sleep(10)
     print('Verify connectivity between hosts')
     verify_connectivity_between_hosts(hs1, hs1_addr, hs2, hs2_addr, True)
 
