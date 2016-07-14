@@ -30,6 +30,7 @@
 #
 ###############################################################################
 
+import pytest
 from time import sleep
 from lacp_lib import (
     associate_interface_to_lag,
@@ -99,8 +100,8 @@ TOPOLOGY = """
 # Links
 sw1:3 -- hs1:1
 sw2:3 -- hs2:1
-[rate="Ethernet-1Gb"] sw1:1 -- sw2:1
-[rate="Ethernet-1Gb"] sw1:2 -- sw2:2
+sw1:1 -- sw2:1
+sw1:2 -- sw2:2
 """
 
 # Global variables
@@ -553,6 +554,7 @@ def step_verify_lag_statistics(sw_list, hs_list, sw_real_ports, step):
         )
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 def test_ft_lacp_statistics(topology, step):
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')

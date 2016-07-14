@@ -30,7 +30,7 @@
 #
 ###############################################################################
 
-from lacp_lib import(
+from lacp_lib import (
     associate_interface_to_lag,
     associate_vlan_to_l2_interface,
     associate_vlan_to_lag,
@@ -117,16 +117,18 @@ HOST_INTERFACE = '1'
 def verify_lacp_state(
     sw1,
     sw2,
-    real_ports,
+    sw_real_ports,
     sw1_lacp_mode='off',
     sw2_lacp_mode='active'
 ):
     sw1_lacp_config = sw1.libs.vtysh.show_lacp_configuration()
     sw2_lacp_config = sw2.libs.vtysh.show_lacp_configuration()
     print('Verify LACP state on LAG members')
-    for port in real_ports[0:2]:
+    for port in sw_real_ports[sw1][0:2]:
         sw1_lacp_state = sw1.libs.vtysh.show_lacp_interface(port)
+    for port in sw_real_ports[sw2][0:2]:
         sw2_lacp_state = sw2.libs.vtysh.show_lacp_interface(port)
+    for i in range(0, len(SW_LBL_PORTS)):
         sw_lacp_states = [sw1_lacp_state, sw2_lacp_state]
         sw_lacp_configs = [sw1_lacp_config, sw2_lacp_config]
         sw_lacp_modes = [sw1_lacp_mode, sw2_lacp_mode]
@@ -269,7 +271,7 @@ def configure_lags(sw_list, sw_real_ports, step):
     check_func(
         sw_list[0],
         sw_list[1],
-        sw_real_ports[sw_list[0]],
+        sw_real_ports,
         sw1_lacp_mode='off',
         sw2_lacp_mode='off'
     )
@@ -361,7 +363,7 @@ def change_lacp_mode(sw_list, sw_real_ports, step):
     check_func(
         sw_list[0],
         sw_list[1],
-        sw_real_ports[sw_list[0]],
+        sw_real_ports,
         sw1_lacp_mode='active',
         sw2_lacp_mode='passive'
     )
