@@ -310,14 +310,22 @@ port_attached:
     return CMD_OVSDB_FAILURE;
   }
 
-  /* Remove Aggregation-key */
+  /* Remove Aggregation-key and user configuration*/
   for (intf_index=0; intf_index < lag_port_row->n_interfaces; intf_index++)
   {
       interface_row = lag_port_row->interfaces[intf_index];
 
+      /* Remove Aggregation-key */
       smap_clone(&smap, &interface_row->other_config);
       smap_remove(&smap, INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY);
       ovsrec_interface_set_other_config(interface_row, &smap);
+      smap_clear(&smap);
+
+      /* Remove User configuration */
+      smap_clone(&smap, &interface_row->user_config);
+      smap_remove(&smap, INTERFACE_USER_CONFIG_MAP_ADMIN);
+      ovsrec_interface_set_user_config(interface_row, &smap);
+      smap_clear(&smap);
   }
   smap_destroy(&smap);
 

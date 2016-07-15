@@ -1330,6 +1330,12 @@ update_member_interface_bond_status(struct port_data *portp)
 {
     struct shash_node *node, *next;
 
+    /* If the port is NULL, then return */
+    if(!portp) {
+        VLOG_WARN("Calling update_member_interface_bond_status with portp NULL.");
+        return;
+    }
+
     if (!strncmp(portp->name,
                  LAG_PORT_NAME_PREFIX,
                  LAG_PORT_NAME_PREFIX_LENGTH)) {
@@ -1457,6 +1463,12 @@ update_port_bond_status_map_entry(struct port_data *portp)
     int up_intf = 0;
     int down_intf = 0;
     char* speed_str;
+
+    /* If the port is NULL, then return */
+    if(!portp) {
+        VLOG_WARN("Calling update_port_bond_status_map_entry with portp NULL.");
+        return;
+    }
 
     /* If the port is not a LAG then return */
     if (strncmp(portp->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH)) {
@@ -2021,7 +2033,10 @@ del_old_port(struct shash_node *sh_node)
                          idp->name, portp->name);
 
                 shash_delete(&portp->cfg_member_ifs, node);
-                set_interface_lag_eligibility(portp, idp, false);
+                /* There is no need to update eligibility if we are deleting a LAG port. */
+                if (strncmp(portp->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH)) {
+                    set_interface_lag_eligibility(portp, idp, false);
+                }
                 db_clear_interface(idp);
                 idp->port_datap = NULL;
                 rc++;
