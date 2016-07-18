@@ -56,6 +56,7 @@ from lacp_lib import (
     verify_lag_interface_priority,
     verify_lag_interface_system_id,
     verify_lag_interface_system_priority,
+    verify_state_sync_lag,
     verify_vlan_full_state
 )
 
@@ -385,32 +386,33 @@ def test_ft_lag_convert_to_lacp(topology, step):
         sw2: [sw2.ports[port] for port in SW_LBL_PORTS]
     }
 
-    # Enable switches interfaces
+    step("Sorting the port list")
+    sw_real_ports[sw1].sort()
+    sw_real_ports[sw2].sort()
+
+    step("Enable switches interfaces")
     enable_switches_interfaces([sw1, sw2], sw_real_ports, step)
 
-    # Configure static LAGs with members
+    step("Configure static LAGs with members")
     configure_lags([sw1, sw2], sw_real_ports, step)
 
-    # Add VLAN configuration to LAGs and workstation interfaces
+    step("Add VLAN configuration to LAGs and workstation interfaces")
     configure_vlans([sw1, sw2], sw_real_ports, step)
 
-    # Configure workstations
+    step("Configure workstations")
     configure_workstations([hs1, hs2], sw_real_ports[sw1], step)
 
-    # Validate workstations can communicate
+    step("Validate workstations can communicate")
     validate_connectivity([hs1, hs2], True, step)
 
-    # Change LACP mode on LAGs from static to dynamic
+    step("Change LACP mode on LAGs from static to dynamic")
     change_lacp_mode([sw1, sw2], sw_real_ports, step)
 
-    # Validate workstations can communicate
-    validate_connectivity([hs1, hs2], False, step)
+    step("### Verify if LAG is synchronized")
+    verify_state_sync_lag(sw1, sw_real_ports[sw1][0:2], LOCAL_STATE,
+                          'active')
+    verify_state_sync_lag(sw1, sw_real_ports[sw1][0:2], REMOTE_STATE,
+                          'passive')
 
-    # Disable switches interfaces
-    disable_switches_interfaces([sw1, sw2], sw_real_ports, step)
-
-    # Enable switches interfaces
-    enable_switches_interfaces([sw1, sw2], sw_real_ports, step)
-
-    # Validate workstations can communicate
-    validate_connectivity([hs1, hs2], True, step, time_steps=2, timeout=4)
+    step("Validate workstations can communicate")
+    validate_connectivity([hs1, hs2], True, step)

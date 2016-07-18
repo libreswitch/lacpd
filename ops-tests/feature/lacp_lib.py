@@ -81,7 +81,7 @@ def create_lag(sw, lag_id, lag_mode):
         elif(lag_mode == 'passive'):
             ctx.lacp_mode_passive()
         elif(lag_mode == 'off'):
-            pass
+            ctx.no_shutdown()
         else:
             assert False, 'Invalid mode %s for LAG' % (lag_mode)
     lag_name = "lag" + lag_id
