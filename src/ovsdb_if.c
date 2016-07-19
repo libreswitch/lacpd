@@ -1587,7 +1587,14 @@ set_interface_lag_eligibility(struct port_data *portp, struct iface_data *idp,
                 INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED,
                 INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE);
         }
-        send_config_lport_msg(idp);
+        /* If this interface is not in the configured member list,
+         * and is in the recently added list, we do NOT need to call
+         * send_config_lport_msg because that would delete internal port data.
+         * If those 2 conditions are not met, we call send_config_lport_msg. */
+        if (shash_find_data(&portp->cfg_member_ifs, idp->name) != NULL ||
+            shash_find_data(&interfaces_recently_added, idp->name) == NULL) {
+            send_config_lport_msg(idp);
+        }
     }
 
     /* update eligible LAG member list. */
@@ -1764,6 +1771,11 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                     idp->port_datap = NULL;
                     clear_port_overrides(idp);
                     rc++;
+                } else {
+                    /* Update lag eligibility for this interface which is now part of other lag. */
+                    if (update_interface_lag_eligibility(idp)) {
+                        rc++;
+                    }
                 }
 
                 if (log_event("LAG_INTERFACE_REMOVE",
