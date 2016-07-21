@@ -287,7 +287,7 @@ register_mcast_addr(port_handle_t lport_handle)
 
     /* Max number of retries to see if function if_nametoindex returns something
      * different than zero, which means the interface has been initialized. */
-    const int MAX_NUMBER_RETRIES_NAMETOINDEX = 10;
+    const int MAX_NUMBER_RETRIES_NAMETOINDEX = 1000;
 
     /* Number of microseconds to wait before calling if_nametoindex again. */
     const int SLEEP_TIME_NAMETOINDEX = 10000;
