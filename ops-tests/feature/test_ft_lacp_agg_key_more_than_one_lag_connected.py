@@ -110,6 +110,10 @@ def test_lacp_agg_key_more_than_one_lag_connected(topology, step):
         ports_sw1.append(sw1.ports[port])
         ports_sw2.append(sw2.ports[port])
 
+    step("Sorting the port list")
+    ports_sw1.sort()
+    ports_sw2.sort()
+
     step("Turning on all interfaces used in this test")
     for port in ports_sw1:
         turn_on_interface(sw1, port)

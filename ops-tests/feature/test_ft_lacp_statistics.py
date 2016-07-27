@@ -571,6 +571,9 @@ def test_ft_lacp_statistics(topology, step):
         sw2: [sw2.ports[port] for port in SW_LBL_PORTS]
     }
 
+    step("Sorting the port list")
+    sw_real_ports[sw1].sort()
+    sw_real_ports[sw2].sort()
     # Enable switches interfaces
     step_enable_switches_interfaces([sw1, sw2], step)
 

@@ -125,6 +125,10 @@ def test_l2_l3_interface_switch_case_1(topology, step):
         ports_sw1.append(sw1.ports[port])
         ports_sw2.append(sw2.ports[port])
 
+    step("Sorting the port list")
+    ports_sw1.sort()
+    ports_sw2.sort()
+
     p11 = ports_sw1[0]
     p12 = ports_sw1[1]
     p13 = ports_sw1[2]

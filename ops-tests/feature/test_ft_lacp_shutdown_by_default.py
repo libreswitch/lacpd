@@ -103,6 +103,10 @@ def test_lag_shutdown_by_default(topology, step):
         ports_sw1.append(sw1.ports[port])
         ports_sw2.append(sw2.ports[port])
 
+    step("Sorting the port list")
+    ports_sw1.sort()
+    ports_sw2.sort()
+
     step("### Turning on all interfaces used in this test ###")
     for port in ports_sw1:
         turn_on_interface(sw1, port)

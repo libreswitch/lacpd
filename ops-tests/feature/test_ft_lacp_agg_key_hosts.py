@@ -136,6 +136,11 @@ def test_lacp_aggregation_key_with_hosts(topology, step):
     for port in port_labels:
         ports_sw3.append(sw3.ports[port])
 
+    step("Sorting the port list")
+    ports_sw1.sort()
+    ports_sw2.sort()
+    ports_sw3.sort()
+
     p13h = ports_sw1[2]
     p22h = ports_sw2[1]
     p32 = ports_sw3[1]

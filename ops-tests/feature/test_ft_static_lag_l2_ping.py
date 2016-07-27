@@ -26,7 +26,7 @@
 #
 ##########################################################################
 
-from lacp_lib import(
+from lacp_lib import (
     associate_interface_to_lag,
     associate_vlan_to_l2_interface,
     associate_vlan_to_lag,
@@ -103,12 +103,26 @@ def test_l2_static_lag_ping_case_1(topology, step):
     assert hs1 is not None
     assert hs2 is not None
 
-    p11 = sw1.ports['1']
-    p12 = sw1.ports['2']
-    p13 = sw1.ports['3']
-    p21 = sw2.ports['1']
-    p22 = sw2.ports['2']
-    p23 = sw2.ports['3']
+    ports_sw1 = list()
+    ports_sw2 = list()
+    # Remove unused port 3
+    port_labels = ['1', '2', '3']
+
+    step("### Mapping interfaces from Docker ###")
+    for port in port_labels:
+        ports_sw1.append(sw1.ports[port])
+        ports_sw2.append(sw2.ports[port])
+
+    step("Sorting the port list")
+    ports_sw1.sort()
+    ports_sw2.sort()
+
+    p11 = ports_sw1[0]
+    p12 = ports_sw1[1]
+    p13 = ports_sw1[2]
+    p21 = ports_sw2[0]
+    p22 = ports_sw2[1]
+    p23 = ports_sw2[2]
 
     step("Turning on all interfaces used in this test")
     ports_sw1 = [p11, p12, p13]
