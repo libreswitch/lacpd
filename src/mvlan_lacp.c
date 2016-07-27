@@ -885,6 +885,7 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
         if (psport_param->partner_system_priority != plag_param->partner_system_priority) {
             RDEBUG(DL_VPM, "   match_aggregator: Partner system pri field does not match.\n");
             if (PRIORITY_MATCH == match &&
+                plag_param->partner_system_priority != 0 &&
                 psport_param->partner_system_priority > plag_param->partner_system_priority) {
                 RDEBUG(DL_VPM, "match_aggregator: Priority match allows higher partner system priority.");
                 is_priority_match = TRUE;
