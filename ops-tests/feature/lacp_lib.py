@@ -936,14 +936,61 @@ def retry_wrapper(
 
 
 def verify_turn_on_interfaces(sw, intf_list):
-    @retry_wrapper(
-        'Ensure interfaces are turn on',
-        'Interfaces not yet ready',
-        5,
-        60)
-    def check_interfaces(sw):
-        validate_turn_on_interfaces(sw, intf_list)
-    check_interfaces(sw)
+    cont = 0
+    timeout = 60
+    time_steps = 5
+    err_condition = AssertionError
+    soft_err_msg = 'Interfaces not yet ready'
+    init_msg = 'Ensure interfaces are turn on'
+
+    print(init_msg)
+    while cont <= timeout:
+        try:
+            validate_turn_on_interfaces(sw, intf_list)
+            return
+        except err_condition:
+            print(soft_err_msg)
+            if cont < timeout:
+                print('Waiting {} seconds to retry'.format(
+                    time_steps
+                ))
+                sleep(time_steps)
+                cont += time_steps
+                continue
+            print('Retry time of {} seconds expired'.format(
+                timeout
+            ))
+
+            for intf in intf_list:
+                port = find_device_label(sw, intf)
+                output = sw.libs.vtysh.show_interface(port)
+                if output['interface_state'] != 'up':
+                    # Dump intf DB contents for split child
+                    print("#### DB contents for " + intf + " ####")
+                    child_intf_db = sw("list interface {}".format(intf),
+                                       shell="vsctl")
+                    print(child_intf_db)
+
+                    # Dump intf DB contents for split parent
+                    parent_intf = intf.split('-', 1)[0]
+                    print("#### DB contents for " + parent_intf + " ####")
+                    parent_intf_db = sw("list interface {}".format(
+                                        parent_intf), shell="vsctl")
+                    print(parent_intf_db)
+
+                    # Config
+                    sw("end")
+                    ru_cfg = sw("show running-config")
+                    print(ru_cfg)
+                    st_cfg = sw("show startup-config")
+                    print(st_cfg)
+
+                    # Dump system log
+                    # sw("cat /var/log/messages", shell="bash")
+
+                    break
+
+            raise
 
 
 def verify_state_sync_lag(sw, port_list, state, lacp_mode):
