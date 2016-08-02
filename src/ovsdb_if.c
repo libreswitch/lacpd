@@ -3037,6 +3037,10 @@ db_delete_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo
     }
 
     node = shash_find(&portp->participant_ifs, idp->name);
+    if (!node) {
+        VLOG_WARN("Interface %s is not in participant list for lag_id = %d", idp->name, lag_id);
+        goto end;
+    }
     shash_delete(&portp->participant_ifs, node);
 
     VLOG_DBG("Removed interface (%d) from lag (%d): %d participants",
