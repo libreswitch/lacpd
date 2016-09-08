@@ -36,7 +36,7 @@
 #                              The workstations cannot communicate.
 ###############################################################################
 
-import pytest
+from pytest import mark
 from lacp_lib import (
     associate_interface_to_lag,
     associate_vlan_to_l2_interface,
@@ -88,7 +88,8 @@ sw2:1 -- hs2:1
 """
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
+@mark.gate
+@mark.skipif(True, reason="Skipping due to instability")
 def test_dynamic_to_static(topology, step):
 
     sw1 = topology.get('sw1')

@@ -29,15 +29,18 @@
 OpenSwitch Test for LACP aggregation key functionality
 """
 
+from pytest import mark
+from lacp_lib import(
+    LOCAL_STATE,
+    associate_interface_to_lag,
+    create_lag_active,
+    set_lacp_rate_fast,
+    turn_on_interface,
+    verify_lag_config,
+    verify_state_sync_lag,
+    verify_turn_on_interfaces
+)
 import time
-from lacp_lib import create_lag_active
-from lacp_lib import associate_interface_to_lag
-from lacp_lib import turn_on_interface
-from lacp_lib import validate_lag_state_sync
-from lacp_lib import validate_lag_name
-from lacp_lib import LOCAL_STATE
-from lacp_lib import set_lacp_rate_fast
-import pytest
 
 TOPOLOGY = """
 # +-------+     +-------+
@@ -58,8 +61,10 @@ sw1:6 -- sw2:7
 sw1:7 -- sw2:5
 """
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
-def test_lacp_agg_key_cross_links(topology):
+@mark.skipif(True, reason="Skipping due to instability")
+@mark.gate
+@mark.platform_incompatible(['ostl'])
+def test_lacp_agg_key_cross_links(topology, step):
     """
     Case 3:
         Verify LAGs should be formed independent of port ids as long
@@ -88,6 +93,42 @@ def test_lacp_agg_key_cross_links(topology):
     assert sw1 is not None
     assert sw2 is not None
 
+    ports_sw1 = list()
+    ports_sw2 = list()
+    port_labels = ['1', '2', '3', '4', '5', '6', '7']
+
+    step("### Mapping interfaces from Docker ###")
+    for port in port_labels:
+        ports_sw1.append(sw1.ports[port])
+        ports_sw2.append(sw2.ports[port])
+
+    step("#### Turning on interfaces in sw1 ###")
+    for port in ports_sw1:
+        turn_on_interface(sw1, port)
+
+    step("#### Turning on interfaces in sw2 ###")
+    for port in ports_sw2:
+        turn_on_interface(sw2, port)
+
+    step("#### Validate interfaces are turn on ####")
+    verify_turn_on_interfaces(sw1, ports_sw1)
+    verify_turn_on_interfaces(sw2, ports_sw2)
+
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    assert mac_addr_sw1 != mac_addr_sw2, \
+        'Mac address of interfaces in sw1 is equal to mac address of ' + \
+        'interfaces in sw2. This is a test framework problem. Dynamic ' + \
+        'LAGs cannot work properly under this condition. Refer to Taiga ' + \
+        'issue #1251.'
+
+    step("Create LAGs (150, 250 and 350) in both switches")
+    for lag in sw_lag_id:
+        create_lag_active(sw1, lag)
+        create_lag_active(sw2, lag)
+        set_lacp_rate_fast(sw1, lag)
+        set_lacp_rate_fast(sw2, lag)
+
     p11 = sw1.ports['1']
     p12 = sw1.ports['2']
     p13 = sw1.ports['3']
@@ -101,23 +142,8 @@ def test_lacp_agg_key_cross_links(topology):
     p26 = sw2.ports['6']
     p27 = sw2.ports['7']
 
-    print("Turning on all interfaces used in this test")
-    ports_sw1 = [p11, p12, p13, p15, p16, p17]
-    for port in ports_sw1:
-        turn_on_interface(sw1, port)
-
-    ports_sw2 = [p21, p22, p23, p25, p26, p27]
-    for port in ports_sw2:
-        turn_on_interface(sw2, port)
-
-    print("Create LAGs (150, 250 and 350) in both switches")
-    for lag in sw_lag_id:
-        create_lag_active(sw1, lag)
-        create_lag_active(sw2, lag)
-        set_lacp_rate_fast(sw1, lag)
-        set_lacp_rate_fast(sw2, lag)
-
-    print("Associate interfaces with LAG in switch1")
+    step("#### Associate Interfaces to LAG ####")
+    step("Associate interfaces with LAG in switch1")
     associate_interface_to_lag(sw1, p11, lag_id_1)
     associate_interface_to_lag(sw1, p15, lag_id_1)
     associate_interface_to_lag(sw1, p12, lag_id_2)
@@ -125,7 +151,7 @@ def test_lacp_agg_key_cross_links(topology):
     associate_interface_to_lag(sw1, p13, lag_id_3)
     associate_interface_to_lag(sw1, p17, lag_id_3)
 
-    print("Associat6 interfaces with LAG in switch2")
+    step("Associate interfaces with LAG in switch2")
     associate_interface_to_lag(sw2, p21, lag_id_1)
     associate_interface_to_lag(sw2, p26, lag_id_1)
     associate_interface_to_lag(sw2, p22, lag_id_2)
@@ -133,35 +159,23 @@ def test_lacp_agg_key_cross_links(topology):
     associate_interface_to_lag(sw2, p23, lag_id_3)
     associate_interface_to_lag(sw2, p25, lag_id_3)
 
-    # Without this sleep time, we are validating temporary
-    # states in state machines
-    print("Waiting for LAG negotations between switches")
-    time.sleep(100)
+    step("#### Verify LAG configuration ####")
+    verify_lag_config(
+        sw1, lag_id_1, [p11, p15], mode='active', heartbeat_rate='fast')
+    verify_lag_config(
+        sw1, lag_id_2, [p12, p16], mode='active', heartbeat_rate='fast')
+    verify_lag_config(
+        sw1, lag_id_3, [p13, p17], mode='active', heartbeat_rate='fast')
+    verify_lag_config(
+        sw2, lag_id_1, [p21, p26], mode='active', heartbeat_rate='fast')
+    verify_lag_config(
+        sw2, lag_id_2, [p22, p27], mode='active', heartbeat_rate='fast')
+    verify_lag_config(
+        sw2, lag_id_3, [p23, p25], mode='active', heartbeat_rate='fast')
 
-    print("Get information for LAG")
-    map_lacp_sw1_5 = sw1.libs.vtysh.show_lacp_interface(p15)
-    map_lacp_sw1_6 = sw1.libs.vtysh.show_lacp_interface(p16)
-    map_lacp_sw1_7 = sw1.libs.vtysh.show_lacp_interface(p17)
-    map_lacp_sw2_5 = sw2.libs.vtysh.show_lacp_interface(p25)
-    map_lacp_sw2_6 = sw2.libs.vtysh.show_lacp_interface(p26)
-    map_lacp_sw2_7 = sw2.libs.vtysh.show_lacp_interface(p27)
-
-    print("Validate correct lag name in switch1")
-    validate_lag_name(map_lacp_sw1_5, lag_id_1)
-    validate_lag_name(map_lacp_sw1_6, lag_id_2)
-    validate_lag_name(map_lacp_sw1_7, lag_id_3)
-
-    print("Validate correct state in switch1 for interfaces 5,6,7")
-    validate_lag_state_sync(map_lacp_sw1_5, LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_6, LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw1_7, LOCAL_STATE)
-
-    print("Validate correct lag name in switch2")
-    validate_lag_name(map_lacp_sw2_5, lag_id_3)
-    validate_lag_name(map_lacp_sw2_6, lag_id_1)
-    validate_lag_name(map_lacp_sw2_7, lag_id_2)
-
-    print("Validate correct state in switch2 for interfaces 5,6,7")
-    validate_lag_state_sync(map_lacp_sw2_5, LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2_6, LOCAL_STATE)
-    validate_lag_state_sync(map_lacp_sw2_7, LOCAL_STATE)
+    ports_sw1.remove('4')
+    ports_sw2.remove('4')
+    step("Validate correct state in switch1 for interfaces")
+    verify_state_sync_lag(sw1, ports_sw1, LOCAL_STATE, 'active')
+    step("Validate correct state in switch2 for interfaces")
+    verify_state_sync_lag(sw2, ports_sw2, LOCAL_STATE, 'active')

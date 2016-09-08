@@ -32,6 +32,7 @@
 #include "mvlan_lacp.h"
 #include "lacp_ops_if.h"
 #include "mvlan_sport.h"
+#include "mlacp_fproto.h"
 
 VLOG_DEFINE_THIS_MODULE(receive_fsm);
 
@@ -163,6 +164,7 @@ static void update_Default_Selected(lacp_per_port_variables_t *);
 static void start_current_while_timer(lacp_per_port_variables_t *, int);
 static void generate_mux_event_from_recordPdu(lacp_per_port_variables_t *);
 static void format_state(state_parameters_t, char *);
+static void update_max_port_priority(lacp_per_port_variables_t *);
 
 /*----------------------------------------------------------------------
  * Function: LACP_receive_fsm(event, current_state, recvd_lacpdu, plpinfo)
@@ -377,6 +379,7 @@ defaulted_state_action(lacp_per_port_variables_t *plpinfo)
         RDBG("%s : lport_handle 0x%llx\n", __FUNCTION__, plpinfo->lport_handle);
     }
 
+    update_max_port_priority(plpinfo);
     update_Default_Selected(plpinfo);
     recordDefault(plpinfo);
 
@@ -1080,16 +1083,6 @@ generate_mux_event_from_recordPdu(lacp_per_port_variables_t *plpinfo)
                      plpinfo);
     }
 
-    // HACK: If the partner's aggregation is set to individual, then set
-    //       selected to UNSELECTED and generate a mux event.  This hack
-    //       is required to make an individual link not Tx/Rx data traffic.
-    if (plpinfo->partner_oper_port_state.aggregation == INDIVIDUAL) {
-        plpinfo->lacp_control.selected = UNSELECTED;
-        LACP_mux_fsm(E2,
-                     plpinfo->mux_fsm_state,
-                     plpinfo);
-    }
-
     if (plpinfo->debug_level & DBG_RX_FSM) {
         RDBG("%s : exit\n", __FUNCTION__);
     }
@@ -1441,3 +1434,48 @@ format_state(state_parameters_t state, char *result)
         strcat(result,"X");
     }
 } /* format_state */
+
+/*----------------------------------------------------------------------
+ * Function: update_max_port_priority(plpinfo)
+ * Synopsis: Updates the max port priority in the super port
+ * Input  :
+ *           plpinfo = pointer to lport data
+ * Returns:  void
+ *----------------------------------------------------------------------*/
+static void
+update_max_port_priority(lacp_per_port_variables_t *plpinfo)
+{
+    super_port_t *psport;
+    lacp_int_sport_params_t *placp_sport_params;
+    int status = R_SUCCESS;
+    int max_port_priority = MAX_PORT_PRIORITY;
+    lacp_per_port_variables_t *plpinfo_priority;
+    struct MLt_vpm_api__lacp_sport_params pmsg;
+    int current_port_priority;
+
+    status = mvlan_get_sport(plpinfo->sport_handle, &psport,
+                             MLm_vpm_api__get_sport);
+
+    if (R_SUCCESS == status) {
+        placp_sport_params = psport->placp_params;
+        plpinfo_priority = LACP_AVL_FIRST(lacp_per_port_vars_tree);
+        current_port_priority = placp_sport_params->lacp_params.actor_max_port_priority;
+
+        while (plpinfo_priority) {
+            if (plpinfo_priority->sport_handle == psport->handle &&
+                plpinfo_priority->recv_fsm_state != RECV_FSM_DEFAULTED_STATE &&
+                max_port_priority > plpinfo_priority->actor_oper_port_priority) {
+
+                max_port_priority = plpinfo_priority->actor_oper_port_priority;
+            }
+            plpinfo_priority = LACP_AVL_NEXT(plpinfo_priority->avlnode);
+        }
+        // If max_port_priority changed, we need to reselect all interfaces
+        if (current_port_priority != max_port_priority) {
+            placp_sport_params->lacp_params.actor_max_port_priority = max_port_priority;
+            pmsg.flags = placp_sport_params->lacp_params.flags;
+            pmsg.sport_handle = psport->handle;
+            mlacpVapiSportParamsChange(MLm_vpm_api__set_lacp_sport_params, &pmsg);
+        }
+    }
+} /* update_max_port_priority */

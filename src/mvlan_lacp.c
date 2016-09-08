@@ -543,35 +543,6 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
                placp_match_params->local_port_number,
                placp_match_params->flags);
 
-        // If incoming local_port_number is set and our aggr_type is
-        // Aggregateable or vice versa, reject right away.
-
-        // Block individual link being added to aggregator, even though it is
-        // allowed by 802.3ad for consistency of modeling. Functionally a LAG
-        // with single link is the same with non-lag port.
-        if ((ptemp_lacp_sport_params->lacp_params.aggr_type ==
-             LACP_LAG_AGGRTYPE_AGGREGATABLE) &&
-            ((placp_match_params->actor_aggr_type == LACP_LAG_AGGRTYPE_INDIVIDUAL)||
-             (placp_match_params->partner_aggr_type == LACP_LAG_AGGRTYPE_INDIVIDUAL))) {
-            // failed
-            RDEBUG(DL_VPM, ">>>actor or partner aggr_type is individual. "
-                   "Failed, actor=%d partner=%d",
-                   placp_match_params->actor_aggr_type,
-                   placp_match_params->partner_aggr_type);
-            goto nextone;
-        }
-
-        // This condition will never true as aggregator aggr_type is read only
-        // It can never be individual.
-        if ((ptemp_lacp_sport_params->lacp_params.aggr_type ==
-             LACP_LAG_AGGRTYPE_INDIVIDUAL) &&
-            ((placp_match_params->actor_aggr_type == LACP_LAG_AGGRTYPE_AGGREGATABLE) ||
-             (placp_match_params->partner_aggr_type == LACP_LAG_AGGRTYPE_AGGREGATABLE))) {
-            // failed
-            RDEBUG(DL_VPM, ">>>LAG aggr_type is individual.  SHOULD NEVER SEE THIS!\n");
-            goto nextone;
-        }
-
         if (mvlan_match_aggregator(&(ptemp_lacp_sport_params->lacp_params),
                                    placp_match_params, match)) {
             found_match = TRUE;
@@ -668,7 +639,6 @@ mvlan_select_aggregator(struct MLt_vpm_api__lacp_match_params *placp_match_param
             break;
         }
 
-    nextone:
         plist = N_LIST_NEXT(plist);
 
         if (plist == (void *) plist_start) {
@@ -915,6 +885,7 @@ mvlan_match_aggregator(lacp_sport_params_t *psport_param,
         if (psport_param->partner_system_priority != plag_param->partner_system_priority) {
             RDEBUG(DL_VPM, "   match_aggregator: Partner system pri field does not match.\n");
             if (PRIORITY_MATCH == match &&
+                plag_param->partner_system_priority != 0 &&
                 psport_param->partner_system_priority > plag_param->partner_system_priority) {
                 RDEBUG(DL_VPM, "match_aggregator: Priority match allows higher partner system priority.");
                 is_priority_match = TRUE;

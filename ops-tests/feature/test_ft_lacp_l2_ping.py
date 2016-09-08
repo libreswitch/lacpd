@@ -83,13 +83,14 @@ TOPOLOGY = """
 [type=host name="Host 2"] hs2
 
 # Links
-hs1:1 -- sw1:1
+hs1:1 -- sw1:3
+sw1:1 -- sw2:1
 sw1:2 -- sw2:2
-sw1:3 -- sw2:3
-sw2:1 -- hs2:1
+sw2:3 -- hs2:1
 """
 
 
+@mark.gate
 @mark.platform_incompatible(['docker'])
 def test_l2_dynamic_lag_ping_case_1(topology, step):
     """
@@ -123,6 +124,10 @@ def test_l2_dynamic_lag_ping_case_1(topology, step):
     for port in port_labels:
         ports_sw1.append(sw1.ports[port])
         ports_sw2.append(sw2.ports[port])
+
+    step("Sorting the port list")
+    ports_sw1.sort()
+    ports_sw2.sort()
 
     step("Turning on all interfaces used in this test")
     for port in ports_sw1:

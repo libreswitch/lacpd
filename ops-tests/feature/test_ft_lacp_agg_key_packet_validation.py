@@ -40,6 +40,7 @@ from lacp_lib import ACTOR
 from lacp_lib import PARTNER
 from lacp_lib import set_lacp_rate_fast
 from lacp_lib import validate_turn_on_interfaces
+import time
 import pytest
 
 TOPOLOGY = """
@@ -54,11 +55,6 @@ TOPOLOGY = """
 # Links
 sw1:1 -- sw2:1
 sw1:2 -- sw2:2
-sw1:3 -- sw2:3
-sw1:4 -- sw2:4
-sw1:5 -- sw2:6
-sw1:6 -- sw2:7
-sw1:7 -- sw2:5
 """
 
 
@@ -108,7 +104,6 @@ def lacp_aggregation_key_packet_validation(topology):
     associate_interface_to_lag(sw2, p22, sw2_lag_id)
 
     sw1_mac = get_device_mac_address(sw1, p11)
-    sw2_mac = get_device_mac_address(sw2, p21)
 
     print("Take capture from interface 1 in switch 1")
     capture = tcpdump_capture_interface(sw1, p11, 80)

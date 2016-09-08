@@ -45,6 +45,7 @@ include_directories (${INCL_DIR}
 # CLI libraries source files
 set (SOURCES_CLI ${PROJECT_SOURCE_DIR}/lacp_vty.c
                  ${PROJECT_SOURCE_DIR}/qos_lag.c
+                 ${PROJECT_SOURCE_DIR}/mstp_lag.c
                  ${PROJECT_SOURCE_DIR}/vtysh_ovsdb_intf_lag_context.c)
 
 add_library (${LIBLACPCLI} SHARED ${SOURCES_CLI})

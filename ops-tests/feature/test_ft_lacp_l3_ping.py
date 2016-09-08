@@ -59,6 +59,7 @@ sw1:2 -- sw2:2
 """
 
 
+@mark.gate
 @mark.platform_incompatible(['docker'])
 def test_l3_dynamic_lag_ping_case_1(topology, step):
     """
@@ -89,6 +90,10 @@ def test_l3_dynamic_lag_ping_case_1(topology, step):
     for port in port_labels:
         ports_sw1.append(sw1.ports[port])
         ports_sw2.append(sw2.ports[port])
+
+    step("Sorting the port list")
+    ports_sw1.sort()
+    ports_sw2.sort()
 
     step("### Turning on all interfaces used in this test ###")
     for port in ports_sw1:

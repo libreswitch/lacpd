@@ -97,6 +97,15 @@ port table
       -> user configuration: specifies the time in seconds during which
          fallback is active.
 
+  port:bond_status
+    -> Key-value pairs that report bond-specific port status (both static and
+       dynamic)
+    state
+      -> Enumeration summarizing the forwarding state of the bond. Values are:
+         "up", "blocked" or "down".
+    bond_speed
+      -> link speed in bps of interfaces operating in LAG.
+
 interface table
   interface:name
     -> the name of the interface
@@ -148,6 +157,12 @@ interface table
       -> user configuration: port identifier override
     lacp-port-priority
       -> user configuration: port priority override
+  interface:bond_status
+    -> Key-value pairs that report the status of a bond (both static and
+       dynamic)
+    state
+      -> Enumeration indicating the forwarding state of the interface when it is
+         configured as a member of a LAG. Values are: "up", "blocked" or "down".
 ```
 
 Internal structure

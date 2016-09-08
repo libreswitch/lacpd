@@ -310,14 +310,22 @@ port_attached:
     return CMD_OVSDB_FAILURE;
   }
 
-  /* Remove Aggregation-key */
+  /* Remove Aggregation-key and user configuration*/
   for (intf_index=0; intf_index < lag_port_row->n_interfaces; intf_index++)
   {
       interface_row = lag_port_row->interfaces[intf_index];
 
+      /* Remove Aggregation-key */
       smap_clone(&smap, &interface_row->other_config);
       smap_remove(&smap, INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY);
       ovsrec_interface_set_other_config(interface_row, &smap);
+      smap_clear(&smap);
+
+      /* Remove User configuration */
+      smap_clone(&smap, &interface_row->user_config);
+      smap_remove(&smap, INTERFACE_USER_CONFIG_MAP_ADMIN);
+      ovsrec_interface_set_user_config(interface_row, &smap);
+      smap_clear(&smap);
   }
   smap_destroy(&smap);
 
@@ -1409,6 +1417,12 @@ lacp_remove_intf_from_lag(const char *if_name, const char *lag_number)
    smap_clone(&smap, &interface_row->other_config);
    smap_remove(&smap, INTERFACE_OTHER_CONFIG_MAP_LACP_AGGREGATION_KEY);
    ovsrec_interface_set_other_config(interface_row, &smap);
+   smap_clear(&smap);
+
+   /* Remove User config */
+   smap_clone(&smap, &interface_row->user_config);
+   smap_remove(&smap, INTERFACE_USER_CONFIG_MAP_ADMIN);
+   ovsrec_interface_set_user_config(interface_row, &smap);
    smap_destroy(&smap);
 
    /* Unlink the interface from the Port row found*/
@@ -1689,7 +1703,7 @@ lacp_show_interfaces_all()
 
    OVSREC_PORT_FOR_EACH(lag_port, idl)
    {
-      if(strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
+      if (strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
       {
          for (k = 0; k < lag_port->n_interfaces; k++)
          {
@@ -1758,7 +1772,7 @@ lacp_show_interfaces_all()
 
    OVSREC_PORT_FOR_EACH(lag_port, idl)
    {
-      if(strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
+      if (strncmp(lag_port->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH) == 0)
       {
          for (k = 0; k < lag_port->n_interfaces; k++)
          {
@@ -1990,9 +2004,10 @@ static int lag_routing(const char *port_name)
         }
     }
     ovsrec_bridge_set_ports(default_bridge_row, ports, n);
+    free(ports);
 
     default_vrf_row = get_default_vrf(idl);
-    xrealloc(ports, sizeof *default_vrf_row->ports *
+    ports = xmalloc(sizeof *default_vrf_row->ports *
         (default_vrf_row->n_ports + 1));
     for (i = 0; i < default_vrf_row->n_ports; i++) {
         ports[i] = default_vrf_row->ports[i];
@@ -2320,17 +2335,18 @@ DEFUN (cli_lag_intf_del_ip4,
     const struct ovsrec_port *port_row = NULL;
     struct ovsdb_idl_txn *status_txn = NULL;
     enum ovsdb_idl_txn_status status;
-    bool port_found = false;
     const char *if_name = (char*)vty->index;
     char ip4[IP_ADDRESS_LENGTH];
     char **secondary_ip4_addresses;
     size_t i, n;
+    bool ip4_address_match = false;
+    bool secondary = argv[1] != NULL ? true : false;
+
+    status_txn = cli_do_config_start();
 
     if (NULL != argv[0]) {
         sprintf(ip4,"%s",argv[0]);
     }
-
-    status_txn = cli_do_config_start ();
 
     if (status_txn == NULL) {
         VLOG_ERR(OVSDB_TXN_CREATE_ERROR);
@@ -2338,77 +2354,90 @@ DEFUN (cli_lag_intf_del_ip4,
         return CMD_OVSDB_FAILURE;
     }
 
-    OVSREC_PORT_FOR_EACH(port_row, idl) {
-        if (strcmp(port_row->name, if_name) == 0) {
-            port_found = true;
-            break;
-        }
-    }
+    port_row = port_check_and_add(if_name, false, false, status_txn);
 
-    if (!port_found) {
+    if (!port_row) {
         vty_out(vty,"Port %s not found.%s", if_name, VTY_NEWLINE);
+        cli_do_config_abort(status_txn);
         return CMD_OVSDB_FAILURE;
     }
 
-    port_row = port_check_and_add (if_name, false, false, status_txn);
-
-    if (!port_row->ip4_address) {
-        vty_out(vty,"No IPv4 address configured on interface %s.%s", if_name, VTY_NEWLINE);
-        VLOG_DBG ("%s No IPv4 address configured on interface \"%s\".%s",
-                  __func__, if_name, VTY_NEWLINE);
-        cli_do_config_abort (status_txn);
+    if (check_port_in_bridge (if_name)) {
+        vty_out(vty, "Port %s is not L3.%s", if_name, VTY_NEWLINE);
+        VLOG_DBG("%s Port \"%s\" is not attached to any VRF. "
+                  "It is attached to default bridge",
+                  __func__, if_name);
+        cli_do_config_abort(status_txn);
         return CMD_SUCCESS;
     }
-    if (!(argv[1] != NULL)) {
-        if ((NULL != ip4) && (NULL != port_row->ip4_address)
-            && (strncmp (port_row->ip4_address, ip4, IP_ADDRESS_LENGTH) != 0)) {
-            vty_out (vty, "IPv4 address %s not configured.%s", ip4, VTY_NEWLINE);
-            VLOG_DBG ("%s IPv4 address \"%s\" not configured on interface "
-                      "\"%s\".%s", __func__, ip4, if_name, VTY_NEWLINE);
-            cli_do_config_abort (status_txn);
+
+    if (!secondary) {
+        if (!port_row->ip4_address) {
+            vty_out(vty, "No IP address configured on port %s.%s", if_name,
+                    VTY_NEWLINE);
+            VLOG_DBG("%s No IP address configured on port \"%s\".",
+                     __func__, if_name);
+            cli_do_config_abort(status_txn);
             return CMD_SUCCESS;
-       }
+        }
 
-       ovsrec_port_set_ip4_address (port_row, NULL);
-    } else {
-          if (!port_row->n_ip4_address_secondary) {
-              vty_out (vty, "No secondary IP address configured on"
-                       " interface %s.%s",
-                       if_name, VTY_NEWLINE);
-              VLOG_DBG ("%s No secondary IP address configured on interface "
-                        "\"%s\".",
-                        __func__, if_name);
-              cli_do_config_abort (status_txn);
-              return CMD_SUCCESS;
-          }
-          bool ip4_address_match = false;
-          for (i = 0; i < port_row->n_ip4_address_secondary; i++) {
-              if (strncmp (ip4, port_row->ip4_address_secondary[i],
-                  strlen(port_row->ip4_address_secondary[i])) == 0) {
-                  ip4_address_match = true;
-                  break;
-              }
-          }
+        if (port_row->n_ip4_address_secondary) {
+            vty_out(vty, "Delete all secondary IP addresses before deleting"
+                    " primary.%s",
+                    VTY_NEWLINE);
+            VLOG_DBG("%s Port \"%s\" has secondary IP addresses"
+                     " assigned to it. Delete them before deleting primary.",
+                     __func__, if_name);
+            cli_do_config_abort(status_txn);
+            return CMD_SUCCESS;
+        }
 
-          if (!ip4_address_match) {
-              vty_out(vty, "IP address %s not found.%s", ip4, VTY_NEWLINE);
-              VLOG_DBG("%s IP address \"%s\" not configured on interface lag"
-                       "\"%s\".",
-                       __func__, ip4, if_name);
-              cli_do_config_abort(status_txn);
-              return CMD_SUCCESS;
-          }
-          secondary_ip4_addresses = xmalloc(
-              IP_ADDRESS_LENGTH * (port_row->n_ip4_address_secondary - 1));
-          for (i = n = 0; i < port_row->n_ip4_address_secondary; i++) {
-              if (strncmp(ip4, port_row->ip4_address_secondary[i],
-                  strlen(port_row->ip4_address_secondary[i])) != 0) {
-                  secondary_ip4_addresses[n++] = port_row->ip4_address_secondary[i];
-              }
-          }
-          ovsrec_port_set_ip4_address_secondary(port_row,
-                                                secondary_ip4_addresses, n);
-          free (secondary_ip4_addresses);
+        if (strncmp(port_row->ip4_address, ip4, IP_ADDRESS_LENGTH) != 0) {
+            vty_out(vty, "IP address %s not found.%s", ip4, VTY_NEWLINE);
+            VLOG_DBG("%s IP address \"%s\" not configured on interface "
+                     "\"%s\".",
+                     __func__, ip4, if_name);
+            cli_do_config_abort(status_txn);
+            return CMD_SUCCESS;
+        }
+        ovsrec_port_set_ip4_address(port_row, NULL);
+    }
+    else {
+        if (!port_row->n_ip4_address_secondary) {
+            vty_out(vty, "No secondary IP address configured on"
+                    " port %s.%s",
+                    if_name, VTY_NEWLINE);
+            VLOG_DBG("%s No secondary IP address configured on port"
+                     " \"%s\".",
+                     __func__, if_name);
+            cli_do_config_abort(status_txn);
+            return CMD_SUCCESS;
+        }
+        for (i = 0; i < port_row->n_ip4_address_secondary; i++) {
+            if (strncmp(ip4, port_row->ip4_address_secondary[i],
+                        IP_ADDRESS_LENGTH) == 0) {
+                ip4_address_match = true;
+                break;
+            }
+        }
+
+        if (!ip4_address_match) {
+            vty_out(vty, "IP address %s not found.%s", ip4, VTY_NEWLINE);
+            VLOG_DBG("%s IP address \"%s\" not configured on port \"%s\".",
+                     __func__, ip4, if_name);
+            cli_do_config_abort(status_txn);
+            return CMD_SUCCESS;
+        }
+        secondary_ip4_addresses = xmalloc(
+           IP_ADDRESS_LENGTH * (port_row->n_ip4_address_secondary - 1));
+        for (i = n = 0; i < port_row->n_ip4_address_secondary; i++) {
+            if (strncmp(ip4, port_row->ip4_address_secondary[i],
+                        IP_ADDRESS_LENGTH) != 0) {
+                secondary_ip4_addresses[n++] = port_row->ip4_address_secondary[i];
+            }
+        }
+        ovsrec_port_set_ip4_address_secondary(port_row, secondary_ip4_addresses, n);
+        free(secondary_ip4_addresses);
     }
 
     status = cli_do_config_finish(status_txn);
@@ -2416,10 +2445,9 @@ DEFUN (cli_lag_intf_del_ip4,
     if ((status == TXN_SUCCESS) || (status == TXN_UNCHANGED)) {
         return CMD_SUCCESS;
     } else {
-          VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
-          return CMD_OVSDB_FAILURE;
+        VLOG_ERR (OVSDB_TXN_COMMIT_ERROR);
+        return CMD_OVSDB_FAILURE;
     }
-    return CMD_SUCCESS;
 }
 
 DEFUN (cli_lag_intf_config_ipv6,

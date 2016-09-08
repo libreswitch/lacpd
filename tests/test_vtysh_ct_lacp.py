@@ -862,6 +862,7 @@ class Test_lacp_cli:
 #   Allowed MAX number 256
 #
 ###############################################################################
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 class LACPMaxNumberOfLags(OpsVsiTest):
     def setupNet(self):
         host_opts = self.getHostOpts()

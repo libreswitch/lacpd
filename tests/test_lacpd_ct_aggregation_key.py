@@ -15,6 +15,7 @@
 #    under the License.
 #
 
+import pytest
 import time
 
 from opsvsi.docker import *
@@ -730,6 +731,7 @@ class LacpdAggregationKeyTest(OpsVsiTest):
         s2.ovscmd("ovs-vsctl del-port lag60")
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 class TestLacpAggrKey:
 
     def setup(self):
@@ -747,6 +749,7 @@ class TestLacpAggrKey:
     def test_LAG_created_with_only_one_LAG(self):
         self.test.test_LAG_created_with_only_one_LAG()
 
+    @pytest.mark.skipif(True, reason="Skipping due to instability")
     def test_LAG_with_cross_links(self):
         self.test.test_LAG_with_cross_links()
 

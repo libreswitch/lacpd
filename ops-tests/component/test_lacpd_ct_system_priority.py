@@ -22,18 +22,19 @@ Objective:   Verify test cases for system priority functionality
 Topology:    3 switch (DUT running OpenSwitch)
 """
 
+from pytest import mark, fixture
 from lib_test import (
     print_header,
     set_port_parameter,
     sw_clear_user_config,
     sw_create_bond,
+    sw_set_intf_pm_info,
     sw_delete_lag,
     sw_set_intf_user_config,
     sw_set_system_lacp_config,
     sw_wait_until_all_sm_ready
 )
 
-import pytest
 
 TOPOLOGY = """
 #
@@ -71,6 +72,8 @@ sw2_intf_end = 2
 sw3_intf_start = 1
 sw3_intf_end = 2
 
+
+
 sw1_port_labels = ['1', '2', '3', '4']
 sw2_port_labels = ['1', '2']
 sw3_port_labels = ['1', '2']
@@ -85,8 +88,26 @@ sm_col_and_dist = '"Activ:1,TmOut:1,Aggr:1,Sync:1,Col:1,Dist:1,Def:0,Exp:0"'
 sm_out_sync = '"Activ:1,TmOut:1,Aggr:1,Sync:0,Col:0,Dist:0,Def:0,Exp:0"'
 sm_in_sync = '"Activ:1,TmOut:1,Aggr:1,Sync:1,Col:0,Dist:0,Def:0,Exp:0"'
 
+###############################################################################
+#
+#                       ACTOR STATE STATE MACHINES VARIABLES
+#
+###############################################################################
+# Everything is working and 'Collecting and Distributing'
+active_ready = '"Activ:1,TmOut:\d,Aggr:1,Sync:1,Col:1,Dist:1,Def:0,Exp:0"'
+# Interfaces configured in different lag
+active_different_lag_intf = \
+    '"Activ:1,TmOut:\d,Aggr:1,Sync:\d,Col:0,Dist:0,Def:0,Exp:0"'
 
-@pytest.fixture(scope='module')
+def lacpd_switch_pre_setup(sw, start, end):
+    for intf in range(start, end):
+        sw_set_intf_pm_info(sw, intf, ('connector="SFP_RJ45"',
+                                       'connector_status=supported',
+                                       'max_speed="1000"',
+                                       'supported_speeds="1000"'))
+
+
+@fixture(scope="module")
 def main_setup(request, topology):
     """Test Suite Setup."""
     sw1 = topology.get('sw1')
@@ -107,7 +128,7 @@ def main_setup(request, topology):
         sw3_intfs.append(sw3.ports[port])
 
 
-@pytest.fixture()
+@fixture()
 def setup(request, topology):
     """Test Case Setup."""
     sw1 = topology.get('sw1')
@@ -117,6 +138,18 @@ def setup(request, topology):
     assert sw1 is not None
     assert sw2 is not None
     assert sw3 is not None
+
+    mac_addr_sw1 = sw1.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw2 = sw2.libs.vtysh.show_interface(1)['mac_address']
+    mac_addr_sw3 = sw3.libs.vtysh.show_interface(1)['mac_address']
+    assert (
+        mac_addr_sw1 != mac_addr_sw2 and
+        mac_addr_sw1 != mac_addr_sw3 and
+        mac_addr_sw2 != mac_addr_sw3,
+        'Mac address of interfaces in sw1 is equal to mac address of ' +
+        'interfaces in sw2. This is a test framework problem. Dynamic ' +
+        'LAGs cannot work properly under this condition. Refer to Taiga ' +
+        'issue #1251.')
 
     def cleanup():
         print('Clear the user_config of all the Interfaces.\n'
@@ -134,7 +167,8 @@ def setup(request, topology):
     request.addfinalizer(cleanup)
 
 
-@pytest.mark.skipif(True, reason="Skipping due to instability")
+@mark.gate
+@mark.skipif(True, reason="Skipping due to instability")
 def test_lacpd_lag_dynamic_system_priority(topology, step, main_setup, setup):
     """Dynamic System Priority Test Case.
 

@@ -320,6 +320,7 @@ class vrfCLITest(OpsVsiTest):
         s1.cmdCLI('exit')
 
 
+@pytest.mark.skipif(True, reason="Skipping due to instability")
 class Test_vtysh_vrf:
 
     def setup_class(cls):

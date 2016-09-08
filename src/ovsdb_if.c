@@ -1197,6 +1197,7 @@ update_interface_cache(void)
                 idp->duplex = new_duplex;
                 if (idp->port_datap != NULL) {
                     update_member_interface_bond_status(idp->port_datap);
+                    update_port_bond_status_map_entry(idp->port_datap);
                     rc++;
                 }
 
@@ -1329,6 +1330,12 @@ update_member_interface_bond_status(struct port_data *portp)
 {
     struct shash_node *node, *next;
 
+    /* If the port is NULL, then return */
+    if(!portp) {
+        VLOG_WARN("Calling update_member_interface_bond_status with portp NULL.");
+        return;
+    }
+
     if (!strncmp(portp->name,
                  LAG_PORT_NAME_PREFIX,
                  LAG_PORT_NAME_PREFIX_LENGTH)) {
@@ -1455,6 +1462,18 @@ update_port_bond_status_map_entry(struct port_data *portp)
     int blocked_intf = 0;
     int up_intf = 0;
     int down_intf = 0;
+    char* speed_str;
+
+    /* If the port is NULL, then return */
+    if(!portp) {
+        VLOG_WARN("Calling update_port_bond_status_map_entry with portp NULL.");
+        return;
+    }
+
+    /* If the port is not a LAG then return */
+    if (strncmp(portp->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH)) {
+        return;
+    }
 
     smap_init(&smap);
 
@@ -1496,6 +1515,16 @@ update_port_bond_status_map_entry(struct port_data *portp)
         smap_replace(&smap,
                      PORT_BOND_STATUS_UP,
                      PORT_BOND_STATUS_ENABLED_TRUE);
+    }
+
+    /* Update bond_speed */
+    /* If the LAG has no member interfaces, then bond_speed is empty. */
+    if (total_intf == 0) {
+        smap_remove(&smap, PORT_BOND_STATUS_MAP_BOND_SPEED);
+    } else {
+        long speed_in_bps = (long)portp->lag_member_speed * MEGA_BITS_PER_SEC;
+        asprintf(&speed_str, "%ld", speed_in_bps);
+        smap_replace(&smap, PORT_BOND_STATUS_MAP_BOND_SPEED, speed_str);
     }
 
     ovsrec_port_set_bond_status(portp->cfg, &smap);
@@ -1558,7 +1587,14 @@ set_interface_lag_eligibility(struct port_data *portp, struct iface_data *idp,
                 INTERFACE_HW_BOND_CONFIG_MAP_TX_ENABLED,
                 INTERFACE_HW_BOND_CONFIG_MAP_ENABLED_FALSE);
         }
-        send_config_lport_msg(idp);
+        /* If this interface is not in the configured member list,
+         * and is in the recently added list, we do NOT need to call
+         * send_config_lport_msg because that would delete internal port data.
+         * If those 2 conditions are not met, we call send_config_lport_msg. */
+        if (shash_find_data(&portp->cfg_member_ifs, idp->name) != NULL ||
+            shash_find_data(&interfaces_recently_added, idp->name) == NULL) {
+            send_config_lport_msg(idp);
+        }
     }
 
     /* update eligible LAG member list. */
@@ -1736,6 +1772,11 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
                     idp->port_datap = NULL;
                     clear_port_overrides(idp);
                     rc++;
+                } else {
+                    /* Update lag eligibility for this interface which is now part of other lag. */
+                    if (update_interface_lag_eligibility(idp)) {
+                        rc++;
+                    }
                 }
 
                 if (log_event("LAG_INTERFACE_REMOVE",
@@ -1839,15 +1880,11 @@ handle_port_config(const struct ovsrec_port *row, struct port_data *portp)
 
                 /* clear interface lacp_status */
                 SHASH_FOR_EACH_SAFE(node, next, &portp->cfg_member_ifs) {
-                    struct ovsrec_interface *ifrow =
-                        shash_find_data(&sh_idl_port_intfs, node->name);
-                    if (ifrow) {
-                        struct iface_data *idp =
-                            shash_find_data(&all_interfaces, node->name);
-                        if (idp) {
-                            db_clear_interface(idp);
-                            clear_port_overrides(idp);
-                        }
+                    struct iface_data *idp =
+                           shash_find_data(&all_interfaces, node->name);
+                    if (idp) {
+                        db_clear_interface(idp);
+                        clear_port_overrides(idp);
                     }
                 }
 
@@ -2008,7 +2045,10 @@ del_old_port(struct shash_node *sh_node)
                          idp->name, portp->name);
 
                 shash_delete(&portp->cfg_member_ifs, node);
-                set_interface_lag_eligibility(portp, idp, false);
+                /* There is no need to update eligibility if we are deleting a LAG port. */
+                if (strncmp(portp->name, LAG_PORT_NAME_PREFIX, LAG_PORT_NAME_PREFIX_LENGTH)) {
+                    set_interface_lag_eligibility(portp, idp, false);
+                }
                 db_clear_interface(idp);
                 idp->port_datap = NULL;
                 rc++;
@@ -2419,6 +2459,16 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
 
     portp = idp->port_datap;
 
+    if (!portp) {
+        VLOG_WARN("Interface doesn't have any port");
+        goto end;
+    }
+
+    if (portp->lacp_mode == PORT_LACP_OFF) {
+        VLOG_WARN("Interface lacp mode is off");
+        goto end;
+    }
+
     idp->local_state = plpinfo->actor_oper_port_state;
 
     ifrow = idp->cfg;
@@ -2490,7 +2540,8 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
     if (idp->partner.system_id == NULL ||
         strcmp(idp->partner.system_id, system_id) != 0) {
         if (strncmp(system_id, NO_SYSTEM_ID, strlen(NO_SYSTEM_ID))) {
-            if (log_event("LACP_PARTNER_DETECTED",
+            if (portp &&
+                log_event("LACP_PARTNER_DETECTED",
                           EV_KV("intf_id", "%s", idp->name),
                           EV_KV("lag_id", "%s",
                                 portp->name +
@@ -2572,11 +2623,12 @@ db_update_interface(lacp_per_port_variables_t *plpinfo)
     }
     ovsdb_idl_txn_destroy(txn);
 
-    if (plpinfo->lag != NULL) {
-        portp->lag_member_speed = lport_type_to_speed(ntohs(plpinfo->lag->port_type));
+    if (portp) {
+        if (plpinfo->lag != NULL) {
+            portp->lag_member_speed = lport_type_to_speed(ntohs(plpinfo->lag->port_type));
+        }
+        db_update_port_status(portp);
     }
-
-    db_update_port_status(portp);
 
 end:
     OVSDB_UNLOCK;
@@ -2900,6 +2952,7 @@ db_update_port_status(struct port_data *portp)
         txn = ovsdb_idl_txn_create(idl);
 
         ovsrec_port_set_lacp_status(prow, &smap);
+        update_port_bond_status_map_entry(portp);
 
         ovsdb_idl_txn_commit_block(txn);
         ovsdb_idl_txn_destroy(txn);
@@ -2987,6 +3040,10 @@ db_delete_lag_port(uint16_t lag_id, int port, lacp_per_port_variables_t *plpinfo
     }
 
     node = shash_find(&portp->participant_ifs, idp->name);
+    if (!node) {
+        VLOG_WARN("Interface %s is not in participant list for lag_id = %d", idp->name, lag_id);
+        goto end;
+    }
     shash_delete(&portp->participant_ifs, node);
 
     VLOG_DBG("Removed interface (%d) from lag (%d): %d participants",

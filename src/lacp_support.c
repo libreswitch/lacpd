@@ -643,19 +643,6 @@ set_actor_admin_parms_2_oper(lacp_per_port_variables_t *plpinfo,
             plpinfo->actor_admin_port_state.aggregation;
     }
 
-    /***************************************************************************
-     *   HACK:  If the actor's aggregation is set to individual, then set
-     *          selected to UNSELECTED and generate a mux event.
-     *          This hack is required to make an individual link not Tx/Rx data
-     *          traffic.
-     ***************************************************************************/
-    if (plpinfo->actor_oper_port_state.aggregation == INDIVIDUAL) {
-        plpinfo->lacp_control.selected = UNSELECTED;
-        LACP_mux_fsm(E2,
-                     plpinfo->mux_fsm_state,
-                     plpinfo);
-    }
-
 } /* set_actor_admin_parms_2_oper */
 
 /*----------------------------------------------------------------------

@@ -81,7 +81,7 @@ def create_lag(sw, lag_id, lag_mode):
         elif(lag_mode == 'passive'):
             ctx.lacp_mode_passive()
         elif(lag_mode == 'off'):
-            pass
+            ctx.no_shutdown()
         else:
             assert False, 'Invalid mode %s for LAG' % (lag_mode)
     lag_name = "lag" + lag_id
@@ -263,6 +263,114 @@ def validate_lag_state_static(map_lacp, state):
     for key in map_lacp[state]:
         assert map_lacp[state][key] is False,\
             "LAG state for {} should be False".format(key)
+
+
+def validate_lag_actor_state(map_lacp, actor_state_flags, state=LOCAL_STATE):
+    success = True
+
+    for flag in actor_state_flags:
+        if not map_lacp[state][flag]:
+            success = False
+
+    return success
+
+
+def sw_wait_until_all_ready(sws, intfs, func, flags, max_retries=30):
+    all_intfs = []
+    retries = 0
+
+    for sw in sws:
+        all_intfs += [[sw, intf, False] for intf in intfs]
+
+    # All arrays shall be True
+    while not all(intf[2] for intf in all_intfs):
+        # Retrieve all arrays that have False
+        not_ready = filter(lambda intf: not intf[2], all_intfs)
+
+        assert retries is not max_retries, \
+            'Max retires achieved! Test cannot continue from here!'
+
+        for sm in not_ready:
+            map_lacp = sw.libs.vtysh.show_lacp_interface(sm[1])
+            sm[2] = func(map_lacp, flags)
+
+        retries += 1
+        sleep(1)
+
+
+def sw_wait_until_any_ready(sws, intfs, func, flags, max_retries=30):
+    all_intfs = []
+    retries = 0
+    intf_fallback_enabled = 0
+
+    for sw in sws:
+        all_intfs += [[sw, intf, False] for intf in intfs]
+
+    # One array shall be True
+    while not any(intf[2] for intf in all_intfs):
+        # Retrieve all arrays that have False
+        not_ready = filter(lambda intf: not intf[2], all_intfs)
+
+        assert retries is not max_retries, \
+            'Max retires achieved! Test cannot continue from here!'
+
+        for sm in not_ready:
+            map_lacp = sw.libs.vtysh.show_lacp_interface(sm[1])
+            sm[2] = func(map_lacp, flags)
+
+            if sm[2]:
+                intf_fallback_enabled = sm[1]
+
+        retries += 1
+        sleep(1)
+
+    return intf_fallback_enabled
+
+
+def verify_actor_state(state, sws, intfs, any=False):
+    flags = []
+
+    # Keep all chars
+    tmp = list(state)
+
+    for flag in tmp:
+        if flag == 'a':
+            flags.append('active')
+        elif flag == 'p':
+            flags.append('passive')
+        elif flag == 'f':
+            flags.append('aggregable')
+        elif flag == 'n':
+            flags.append('in_sync')
+        elif flag == 'o':
+            flags.append('out_sync')
+        elif flag == 'c':
+            flags.append('collecting')
+        elif flag == 'x':
+            flags.append('state_expired')
+        elif flag == 'd':
+            flags.append('distributing')
+        elif flag == 'e':
+            flags.append('neighbor_state')
+        elif flag == 's':
+            flags.append('short_time')
+        elif flag == 'l':
+            flags.append('long_timeout')
+        elif flag == 'i':
+            flags.append('individual')
+        else:
+            assert False, 'Unknown flag, aborting!'
+
+    if any:
+        return sw_wait_until_any_ready(sws,
+                                       intfs,
+                                       validate_lag_actor_state,
+                                       flags)
+    else:
+        return sw_wait_until_all_ready(sws,
+                                       intfs,
+                                       validate_lag_actor_state,
+                                       flags)
 
 
 def validate_lag_state_default_neighbor(map_lacp, state):
@@ -479,7 +587,7 @@ def check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
         assert ping['transmitted'] == ping['received'] == ping_num,\
             'Ping between ' + s1_ip + ' and ' + s2_ip + ' failed'
     else:
-        assert len(ping.keys()) == 0, \
+        assert len(ping.keys()) == 0 or ping['transmitted'] is None, \
             'Ping between ' + s1_ip + ' and ' + s2_ip + ' success'
 
     ping = s2.libs.vtysh.ping_repetitions(s1_ip, ping_num)
@@ -487,7 +595,7 @@ def check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
         assert ping['transmitted'] == ping['received'] == ping_num,\
             'Ping between ' + s2_ip + ' and ' + s1_ip + ' failed'
     else:
-        assert len(ping.keys()) == 0,\
+        assert len(ping.keys()) == 0 or ping['transmitted'] is None,\
             'Ping between ' + s2_ip + ' and ' + s1_ip + ' success'
 
 
@@ -532,6 +640,24 @@ def assign_ip_to_lag(sw, lag_id, ip_address, ip_address_mask):
     with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         ctx.routing()
         ctx.ip_address(ip_address_complete)
+
+
+def assign_secondary_ip_to_lag(sw, lag_id, ip_address, ip_address_mask):
+    ip_address_complete = ip_address + "/" + ip_address_mask
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.ip_address_secondary(ip_address_complete)
+
+
+def delete_ip_from_lag(sw, lag_id, ip_address, ip_address_mask):
+    ip_address_complete = ip_address + "/" + ip_address_mask
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_ip_address(ip_address_complete)
+
+
+def delete_secondary_ip_from_lag(sw, lag_id, ip_address, ip_address_mask):
+    ip_address_complete = ip_address + "/" + ip_address_mask
+    with sw.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
+        ctx.no_ip_address_secondary(ip_address_complete)
 
 
 def config_lacp_rate(sw, lag_id, lacp_rate_fast=False):
@@ -811,6 +937,62 @@ def retry_wrapper(
         return wrapper
     return actual_retry_wrapper
 
+
+def verify_state_sync_lag(sw, port_list, state, lacp_mode):
+    @retry_wrapper(
+        'Ensure LAG is synchronized',
+        'LAG not yet ready',
+        5,
+        80)
+    def check_lag(sw, port_list, state, lacp_mode):
+        for interface in port_list:
+            port = find_device_label(sw, interface)
+            map_lacp = sw.libs.vtysh.show_lacp_interface(port)
+            validate_lag_state_sync(map_lacp, state, lacp_mode)
+    check_lag(sw, port_list, state, lacp_mode)
+
+
+def verify_state_out_of_sync_lag(sw, port_list, state):
+    @retry_wrapper(
+        'Ensure LAG is not synchronized',
+        'LAG not yet ready',
+        5,
+        80)
+    def check_lag(sw, port_list, state):
+        for interface in port_list:
+            port = find_device_label(sw, interface)
+            map_lacp = sw.libs.vtysh.show_lacp_interface(port)
+            validate_lag_state_out_of_sync(map_lacp, state)
+    check_lag(sw, port_list, state)
+
+
+def verify_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=True):
+    @retry_wrapper(
+        'Ensure connectivity between hosts',
+        'LAG not yet ready',
+        5,
+        40)
+    def check_ping(h1, h1_ip, h2, h2_ip, success):
+        check_connectivity_between_hosts(h1, h1_ip, h2, h2_ip, success=success)
+    check_ping(h1, h1_ip, h2, h2_ip, success=success)
+
+
+def verify_connectivity_between_switches(s1, s1_ip, s2, s2_ip, success=True):
+    @retry_wrapper(
+        'Ensure connectivity between switches',
+        'LAG not yet ready',
+        5,
+        40)
+    def check_ping(s1, s1_ip, s2, s2_ip, success):
+        check_connectivity_between_switches(s1, s1_ip, s2, s2_ip,
+                                            success=success)
+    check_ping(s1, s1_ip, s2, s2_ip, success=success)
+
+
+def verify_show_lacp_aggregates(sw, lag_name, lag_mode):
+    lacp_map = sw.libs.vtysh.show_lacp_aggregates()
+    assert lacp_map[lag_name]['mode'] == lag_mode,\
+        'LACP mode is not %s' % lag_mode
 
 def verify_turn_on_interfaces(sw, intf_list):
     @retry_wrapper(

@@ -176,11 +176,11 @@ def test_lacp_fallback_timeout_vtysh(topology, step):
     with sw1.libs.vtysh.ConfigInterfaceLag(lag_id) as ctx:
         try:
             ctx.no_lacp_fallback_timeout(2)
-        except exceptions.TcamResourcesException:
+        except exceptions.FailedCommandException:
             success = True
     assert success, ('no lacp_fallback_timeout(2) expected to raise ' +
                      'exception ' +
-                     str(exceptions.TcamResourcesException))
+                     str(exceptions.FailedCommandException))
 
     step('Verify fallback_timeout is still ' + str(valid_values[-1]))
     verify_port_fallback_key(sw1, lag_name, fallback_timeout_key,

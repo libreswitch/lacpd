@@ -263,61 +263,65 @@ def test_lacp_bond_status(topology, step):
     step("Add partner interface back to LAG")
     add_intf_to_bond(sw2, lag_name, p22)
 
+    '''
+        Falbback functionality is still not merge in rel/dill, so we need to
+        disable cases 6 and 7.
+    '''
     ###########################################################################
     # 6. When lacp_status = defaulted and fallback = false.
     ###########################################################################
 
-    step('Disabling Fallback on both switches')
-    set_port_parameter(sw1, lag_name, disable_fallback)
-    set_port_parameter(sw2, lag_name, disable_fallback)
+    # step('Disabling Fallback on both switches')
+    # set_port_parameter(sw1, lag_name, disable_fallback)
+    # set_port_parameter(sw2, lag_name, disable_fallback)
 
-    step('Shutting down LAG1 on sw2')
-    set_port_parameter(sw2, lag_name, disable_lag)
-    step('Verify that all sw1 SMs are in "Defaulted and Expired"')
-    sw_wait_until_all_sm_ready([sw1], ports_sw1, active_no_fallback)
+    # step('Shutting down LAG1 on sw2')
+    # set_port_parameter(sw2, lag_name, disable_lag)
+    # step('Verify that all sw1 SMs are in "Defaulted and Expired"')
+    # sw_wait_until_all_sm_ready([sw1], ports_sw1, active_no_fallback)
 
-    step("Verify LAG bond status is BLOCKED")
-    verify_port_bond_status(sw1, lag_name, "blocked", "Expected the LAG "
-                            "to have bond status BLOCKED")
+    # step("Verify LAG bond status is BLOCKED")
+    # verify_port_bond_status(sw1, lag_name, "blocked", "Expected the LAG "
+                            # "to have bond status BLOCKED")
 
-    step('Turning on LAG1 on sw2')
-    set_port_parameter(sw2, lag_name, active_lag)
+    # step('Turning on LAG1 on sw2')
+    # set_port_parameter(sw2, lag_name, active_lag)
 
-    step('Verify state machines from interfaces on Switch 1')
-    sw_wait_until_all_sm_ready([sw1], ports_sw1, sm_col_and_dist)
+    # step('Verify state machines from interfaces on Switch 1')
+    # sw_wait_until_all_sm_ready([sw1], ports_sw1, sm_col_and_dist)
 
-    step('Verify state machines from interfaces on Switch 2')
-    sw_wait_until_all_sm_ready([sw2], ports_sw2, sm_col_and_dist)
+    # step('Verify state machines from interfaces on Switch 2')
+    # sw_wait_until_all_sm_ready([sw2], ports_sw2, sm_col_and_dist)
 
     ###########################################################################
     # 7. When lacp_status = defaulted and fallback = true.
     ###########################################################################
 
-    step('Enabling Fallback on both switches')
-    set_port_parameter(sw1, lag_name, enable_fallback)
-    set_port_parameter(sw2, lag_name, enable_fallback)
+    # step('Enabling Fallback on both switches')
+    # set_port_parameter(sw1, lag_name, enable_fallback)
+    # set_port_parameter(sw2, lag_name, enable_fallback)
 
-    step('Shutting down LAG1 on sw2')
-    set_port_parameter(sw2, lag_name, disable_lag)
-    step('Verify that all sw1 SMs are in "Defaulted and Expired"')
-    sw_wait_until_all_sm_ready([sw1], ports_sw1, active_fallback)
+    # step('Shutting down LAG1 on sw2')
+    # set_port_parameter(sw2, lag_name, disable_lag)
+    # step('Verify that all sw1 SMs are in "Defaulted and Expired"')
+    # sw_wait_until_all_sm_ready([sw1], ports_sw1, active_fallback)
 
-    step("Verify LAG bond status is UP")
-    verify_port_bond_status(sw1, lag_name, "up", "Expected the LAG "
-                            "to have bond status UP")
+    # step("Verify LAG bond status is UP")
+    # verify_port_bond_status(sw1, lag_name, "up", "Expected the LAG "
+                            # "to have bond status UP")
 
-    step('Turning on LAG1 on sw2')
-    set_port_parameter(sw2, lag_name, active_lag)
+    # step('Turning on LAG1 on sw2')
+    # set_port_parameter(sw2, lag_name, active_lag)
 
-    step('Disabling Fallback on both switches')
-    set_port_parameter(sw1, lag_name, disable_fallback)
-    set_port_parameter(sw2, lag_name, disable_fallback)
+    # step('Disabling Fallback on both switches')
+    # set_port_parameter(sw1, lag_name, disable_fallback)
+    # set_port_parameter(sw2, lag_name, disable_fallback)
 
-    step('Verify state machines from interfaces on Switch 1')
-    sw_wait_until_all_sm_ready([sw1], ports_sw1, sm_col_and_dist)
+    # step('Verify state machines from interfaces on Switch 1')
+    # sw_wait_until_all_sm_ready([sw1], ports_sw1, sm_col_and_dist)
 
-    step('Verify state machines from interfaces on Switch 2')
-    sw_wait_until_all_sm_ready([sw2], ports_sw2, sm_col_and_dist)
+    # step('Verify state machines from interfaces on Switch 2')
+    # sw_wait_until_all_sm_ready([sw2], ports_sw2, sm_col_and_dist)
 
     ###########################################################################
     # 8. When LAG has no member interfaces.
